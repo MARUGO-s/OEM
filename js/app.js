@@ -1,47 +1,81 @@
 // メインアプリケーション
 
+// 重複初期化を防ぐフラグ
+let appInitialized = false;
+
 // すべてのデータを読み込む
 async function loadAllData() {
-    // Supabaseからデータを読み込み
-    await loadTasks();
-    await loadComments();
-    await loadNotifications();
-    if (typeof loadMeetings === 'function') {
-        await loadMeetings();
+    if (appInitialized) {
+        console.log('アプリケーションは既に初期化済みです');
+        return;
     }
     
-    // リアルタイム更新を開始
-    subscribeToTasks();
-    subscribeToComments();
-    subscribeToNotifications();
-    if (typeof subscribeToMeetings === 'function') {
-        subscribeToMeetings();
+    try {
+        // Supabaseからデータを読み込み（エラーハンドリング付き）
+        await Promise.allSettled([
+            loadTasks().catch(err => console.error('タスク読み込みエラー:', err)),
+            loadComments().catch(err => console.error('コメント読み込みエラー:', err)),
+            loadNotifications().catch(err => console.error('通知読み込みエラー:', err)),
+            typeof loadMeetings === 'function' ? loadMeetings().catch(err => console.error('会議読み込みエラー:', err)) : Promise.resolve()
+        ]);
+        
+        // リアルタイム更新を開始（エラーハンドリング付き）
+        try {
+            subscribeToTasks();
+            subscribeToComments();
+            subscribeToNotifications();
+            if (typeof subscribeToMeetings === 'function') {
+                subscribeToMeetings();
+            }
+        } catch (error) {
+            console.error('リアルタイム購読エラー:', error);
+        }
+        
+        // ブラウザ通知の許可をリクエスト（エラーハンドリング付き）
+        try {
+            requestNotificationPermission();
+        } catch (error) {
+            console.error('通知許可リクエストエラー:', error);
+        }
+        
+        // Service Workerの登録（PWA対応、エラーハンドリング付き）
+        try {
+            registerServiceWorker();
+        } catch (error) {
+            console.error('Service Worker登録エラー:', error);
+        }
+        
+        appInitialized = true;
+        console.log('アプリケーション初期化完了');
+        
+    } catch (error) {
+        console.error('データ読み込み全体エラー:', error);
     }
-    
-    // ブラウザ通知の許可をリクエスト
-    requestNotificationPermission();
-    
-    // Service Workerの登録（PWA対応）
-    registerServiceWorker();
 }
 
 // Service Workerの登録
 function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('./sw.js')
             .then((registration) => {
                 console.log('Service Worker登録成功:', registration);
             })
             .catch((error) => {
                 console.log('Service Worker登録失敗:', error);
+                // Service Worker登録失敗はアプリケーションの動作を阻害しない
             });
     }
 }
 
-// モーダル外クリックで閉じる
-document.getElementById('task-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'task-modal') {
-        closeModal();
+// モーダル外クリックで閉じる（要素が存在する場合のみ）
+document.addEventListener('DOMContentLoaded', () => {
+    const taskModal = document.getElementById('task-modal');
+    if (taskModal) {
+        taskModal.addEventListener('click', (e) => {
+            if (e.target.id === 'task-modal') {
+                closeModal();
+            }
+        });
     }
 });
 
