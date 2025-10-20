@@ -2,7 +2,7 @@
 
 // Supabaseでは有効なドメイン形式のメールアドレスが必要なため、
 // 実際のメール入力が無い場合はこのドメインを付けて擬似アドレスを生成する。
-const AUTH_EMAIL_DOMAIN = 'example.com';
+const AUTH_EMAIL_DOMAIN = 'hotmail.com';
 const USERNAME_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 // loadAllData 安全呼び出しラッパー（読み込み順の差異に強い）
