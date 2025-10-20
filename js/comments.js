@@ -85,17 +85,25 @@ async function postComment(content) {
 
             // プロファイルが存在しない場合は作成
             if (!existingProfile) {
-                const { error: insertError } = await supabase
-                    .from('user_profiles')
-                    .upsert({
-                        id: appState.currentUser.id,
-                        username: appState.currentUser.username,
-                        display_name: appState.currentUser.username,
-                        email: appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`
-                    });
+                try {
+                    const { error: insertError } = await supabase
+                        .from('user_profiles')
+                        .upsert({
+                            id: appState.currentUser.id,
+                            username: appState.currentUser.username,
+                            display_name: appState.currentUser.username,
+                            email: appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`
+                        }, {
+                            onConflict: 'username'
+                        });
 
-                if (insertError) {
-                    console.error('ユーザープロファイル作成エラー:', insertError);
+                    if (insertError) {
+                        console.error('ユーザープロファイル作成エラー:', insertError);
+                        // エラーが発生してもコメント投稿を続行
+                    }
+                } catch (profileError) {
+                    console.error('プロファイル自動作成エラー:', profileError);
+                    // エラーが発生してもコメント投稿を続行
                 }
             }
         }
