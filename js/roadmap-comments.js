@@ -54,7 +54,11 @@ function generateRoadmapCommentId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
     }
-    return `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // より堅牢なID生成（タイムスタンプ + ランダム文字列 + カウンター）
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substr(2, 9);
+    const counter = (window.roadmapCommentIdCounter = (window.roadmapCommentIdCounter || 0) + 1);
+    return `roadmap_comment_${timestamp}_${random}_${counter}`;
 }
 
 let roadmapCommentCache = [];
@@ -142,6 +146,12 @@ async function submitRoadmapComment() {
         username: 'anonymous'
     };
 
+    // ユーザー情報のバリデーション
+    if (!currentUser || !currentUser.username) {
+        alert('コメントを投稿するにはログインが必要です。');
+        return;
+    }
+
     try {
         // ユーザープロファイルの確実な存在保証（upsertを使用して競合を回避）
         if (currentUser.username !== 'anonymous') {
@@ -193,8 +203,11 @@ async function submitRoadmapComment() {
             return;
         }
 
-        // コメント入力欄をクリア
-        document.getElementById('roadmap-comment-input').value = '';
+        // コメント入力欄をクリア（要素が存在する場合のみ）
+        const roadmapCommentInput = document.getElementById('roadmap-comment-input');
+        if (roadmapCommentInput) {
+            roadmapCommentInput.value = '';
+        }
         
         // コメント一覧を再読み込み
         await loadRoadmapComments(taskId);
@@ -204,8 +217,13 @@ async function submitRoadmapComment() {
             renderTasks();
         }
         
-        // 通知を表示
-        showNotification('コメントを投稿しました', 'success');
+        // 通知を表示（エラーが発生してもコメント投稿は成功とする）
+        try {
+            showNotification('コメントを投稿しました', 'success');
+        } catch (notificationError) {
+            console.error('通知表示エラー:', notificationError);
+            // 通知エラーはコメント投稿を阻害しない
+        }
         
         console.log('コメント投稿完了:', data);
         

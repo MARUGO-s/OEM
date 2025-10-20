@@ -73,17 +73,23 @@ function updateNotificationBadge() {
 // 通知作成
 async function createNotification(notificationData) {
     try {
+        const notification = {
+            ...notificationData,
+            created_by: appState.currentUser?.id || null
+        };
+
         const { error } = await supabase
             .from('notifications')
-            .insert([{
-                ...notificationData,
-                created_by: appState.currentUser.id
-            }]);
+            .insert([notification]);
 
-        if (error) throw error;
+        if (error) {
+            console.error('通知作成エラー:', error);
+            // 通知作成エラーはコメント投稿を阻害しない
+        }
         
     } catch (error) {
         console.error('通知作成エラー:', error);
+        // 通知作成エラーはコメント投稿を阻害しない
     }
 }
 

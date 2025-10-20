@@ -65,12 +65,22 @@ function generateCommentId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
     }
-    return `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // より堅牢なID生成（タイムスタンプ + ランダム文字列 + カウンター）
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substr(2, 9);
+    const counter = (window.commentIdCounter = (window.commentIdCounter || 0) + 1);
+    return `comment_${timestamp}_${random}_${counter}`;
 }
 
 // コメント投稿
 async function postComment(content) {
     try {
+        // ユーザー情報のバリデーション
+        if (!appState.currentUser || !appState.currentUser.username) {
+            alert('コメントを投稿するにはログインが必要です。');
+            return;
+        }
+
         // ユーザープロファイルの確実な存在保証（upsertを使用して競合を回避）
         if (appState.currentUser && appState.currentUser.username !== 'anonymous') {
             const email = appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`;
@@ -124,15 +134,23 @@ async function postComment(content) {
         // コメントを再読み込み
         await loadComments();
 
-        // 通知を送信
-        await createNotification({
-            type: 'new_comment',
-            message: `${appState.currentUser.username}さんがコメントしました: ${content.substring(0, 50)}...`,
-            related_id: newComment.id
-        });
+        // 通知を送信（エラーが発生してもコメント投稿は成功とする）
+        try {
+            await createNotification({
+                type: 'new_comment',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがコメントしました: ${content.substring(0, 50)}...`,
+                related_id: newComment.id
+            });
+        } catch (notificationError) {
+            console.error('通知送信エラー:', notificationError);
+            // 通知エラーはコメント投稿を阻害しない
+        }
 
-        // 入力欄をクリア
-        document.getElementById('comment-input').value = '';
+        // 入力欄をクリア（要素が存在する場合のみ）
+        const commentInput = document.getElementById('comment-input');
+        if (commentInput) {
+            commentInput.value = '';
+        }
         
         console.log('コメント投稿完了:', data);
         
