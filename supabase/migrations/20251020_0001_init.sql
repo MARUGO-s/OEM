@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE TABLE IF NOT EXISTS comments (
     id TEXT PRIMARY KEY,
     task_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
-    author_id TEXT,
-    author_username TEXT REFERENCES user_profiles(username) ON DELETE SET NULL,
+    author_id UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
+    author_username TEXT,
     content TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
@@ -61,7 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_created_by ON tasks(created_by);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON tasks(deadline);
 CREATE INDEX IF NOT EXISTS idx_comments_task_id ON comments(task_id);
-CREATE INDEX IF NOT EXISTS idx_comments_author_username ON comments(author_username);
+CREATE INDEX IF NOT EXISTS idx_comments_author_id ON comments(author_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_start_time ON meetings(start_time);
 
 -- RLS（Row Level Security）の有効化
@@ -109,21 +109,21 @@ INSERT INTO tasks (id, title, description, status, priority, deadline, created_b
 ('task-10', '最終品質確認・納品開始', '最終品質確認と顧客への納品開始', 'pending', 'high', '2025-12-10', 'final', '2025-10-10 09:00:00+00', '2025-10-10 09:00:00+00')
 ON CONFLICT (id) DO NOTHING;
 
--- サンプルコメントの挿入
+-- サンプルコメントの挿入（author_idは実際のuser_profilesのidを使用）
 INSERT INTO comments (id, task_id, author_id, author_username, content, created_at) VALUES
-('comment-1', 'task-1', 'user-1', 'manager', '市場調査が完了しました。ターゲット顧客のニーズが明確になりました。', '2025-10-15 10:30:00+00'),
-('comment-2', 'task-1', 'user-2', 'manager', '競合他社の分析結果を共有します。差別化ポイントが見えてきました。', '2025-10-15 14:20:00+00'),
-('comment-3', 'task-2', 'user-3', 'procurement', '原材料のサンプルを複数業者から取得しました。品質比較を開始します。', '2025-10-20 09:15:00+00'),
-('comment-4', 'task-2', 'user-4', 'quality', '原材料の品質基準を設定しました。コストと品質のバランスを検討中です。', '2025-10-21 11:45:00+00'),
-('comment-5', 'task-3', 'user-5', 'chef', 'レシピの第一版が完成しました。試作品の味見を実施予定です。', '2025-10-22 16:30:00+00'),
-('comment-6', 'task-3', 'user-6', 'chef', '試作品の味見結果を共有します。調整が必要な点がいくつかあります。', '2025-10-23 13:20:00+00'),
-('comment-7', 'task-4', 'user-7', 'quality', '品質管理基準の草案を作成しました。レビューをお願いします。', '2025-10-24 10:00:00+00'),
-('comment-8', 'task-5', 'user-8', 'production', '製造ラインの設計図を作成中です。効率性を重視したレイアウトを検討しています。', '2025-10-25 14:15:00+00'),
-('comment-9', 'task-6', 'user-9', 'design', 'パッケージデザインのコンセプトを検討中です。ブランドイメージを重視します。', '2025-10-26 09:30:00+00'),
-('comment-10', 'task-7', 'user-10', 'testing', '品質テストの計画を策定しました。包括的なテスト項目を準備中です。', '2025-10-27 11:45:00+00'),
-('comment-11', 'task-8', 'user-11', 'logistics', '出荷プロセスの効率化を検討中です。自動化できる部分を特定しています。', '2025-10-28 15:20:00+00'),
-('comment-12', 'task-9', 'user-12', 'marketing', 'ブランド戦略の方向性を検討中です。差別化ポイントを明確にします。', '2025-10-29 10:30:00+00'),
-('comment-13', 'task-10', 'user-13', 'final', '納品スケジュールの調整を行っています。顧客の要求に柔軟に対応します。', '2025-11-09 09:30:00+00')
+('comment-1', 'task-1', (SELECT id FROM user_profiles WHERE username = 'manager'), 'manager', '市場調査が完了しました。ターゲット顧客のニーズが明確になりました。', '2025-10-15 10:30:00+00'),
+('comment-2', 'task-1', (SELECT id FROM user_profiles WHERE username = 'manager'), 'manager', '競合他社の分析結果を共有します。差別化ポイントが見えてきました。', '2025-10-15 14:20:00+00'),
+('comment-3', 'task-2', (SELECT id FROM user_profiles WHERE username = 'procurement'), 'procurement', '原材料のサンプルを複数業者から取得しました。品質比較を開始します。', '2025-10-20 09:15:00+00'),
+('comment-4', 'task-2', (SELECT id FROM user_profiles WHERE username = 'quality'), 'quality', '原材料の品質基準を設定しました。コストと品質のバランスを検討中です。', '2025-10-21 11:45:00+00'),
+('comment-5', 'task-3', (SELECT id FROM user_profiles WHERE username = 'chef'), 'chef', 'レシピの第一版が完成しました。試作品の味見を実施予定です。', '2025-10-22 16:30:00+00'),
+('comment-6', 'task-3', (SELECT id FROM user_profiles WHERE username = 'chef'), 'chef', '試作品の味見結果を共有します。調整が必要な点がいくつかあります。', '2025-10-23 13:20:00+00'),
+('comment-7', 'task-4', (SELECT id FROM user_profiles WHERE username = 'quality'), 'quality', '品質管理基準の草案を作成しました。レビューをお願いします。', '2025-10-24 10:00:00+00'),
+('comment-8', 'task-5', (SELECT id FROM user_profiles WHERE username = 'production'), 'production', '製造ラインの設計図を作成中です。効率性を重視したレイアウトを検討しています。', '2025-10-25 14:15:00+00'),
+('comment-9', 'task-6', (SELECT id FROM user_profiles WHERE username = 'design'), 'design', 'パッケージデザインのコンセプトを検討中です。ブランドイメージを重視します。', '2025-10-26 09:30:00+00'),
+('comment-10', 'task-7', (SELECT id FROM user_profiles WHERE username = 'testing'), 'testing', '品質テストの計画を策定しました。包括的なテスト項目を準備中です。', '2025-10-27 11:45:00+00'),
+('comment-11', 'task-8', (SELECT id FROM user_profiles WHERE username = 'logistics'), 'logistics', '出荷プロセスの効率化を検討中です。自動化できる部分を特定しています。', '2025-10-28 15:20:00+00'),
+('comment-12', 'task-9', (SELECT id FROM user_profiles WHERE username = 'marketing'), 'marketing', 'ブランド戦略の方向性を検討中です。差別化ポイントを明確にします。', '2025-10-29 10:30:00+00'),
+('comment-13', 'task-10', (SELECT id FROM user_profiles WHERE username = 'final'), 'final', '納品スケジュールの調整を行っています。顧客の要求に柔軟に対応します。', '2025-11-09 09:30:00+00')
 ON CONFLICT (id) DO NOTHING;
 
 -- サンプル会議の挿入
