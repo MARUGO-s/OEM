@@ -165,11 +165,11 @@ async function submitRoadmapComment() {
             }
         }
 
-        // 新しいコメントを作成
+        // 新しいコメントを作成（author_idを確実に設定）
         const newComment = {
             id: generateRoadmapCommentId(),
             task_id: taskId,
-            author_id: currentUser.id,
+            author_id: currentUser.id || null,
             author_username: currentUser.username,
             content: content,
             created_at: new Date().toISOString()

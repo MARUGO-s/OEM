@@ -93,11 +93,11 @@ async function postComment(content) {
             }
         }
 
-        // 新しいコメントを作成
+        // 新しいコメントを作成（author_idを確実に設定）
         const newComment = {
             id: generateCommentId(),
             content: content,
-            author_id: appState.currentUser.id,
+            author_id: appState.currentUser.id || null,
             author_username: appState.currentUser.username,
             task_id: null,
             created_at: new Date().toISOString()
