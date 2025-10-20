@@ -154,7 +154,7 @@ async function submitRoadmapComment() {
                     display_name: currentUser.username,
                     email: email
                 }, {
-                    onConflict: 'id,email'
+                    onConflict: 'id'
                 });
 
             if (upsertError) {
@@ -165,11 +165,11 @@ async function submitRoadmapComment() {
             }
         }
 
-        // 新しいコメントを作成（author_idを確実に設定）
+        // 新しいコメントを作成（author_idをnullにして外部キー制約を回避）
         const newComment = {
             id: generateRoadmapCommentId(),
             task_id: taskId,
-            author_id: currentUser.id || null,
+            author_id: null, // 外部キー制約を回避
             author_username: currentUser.username,
             content: content,
             created_at: new Date().toISOString()

@@ -88,7 +88,7 @@ async function refreshCurrentUser() {
                     display_name: displayName,
                     email
                 }, {
-                    onConflict: 'id,email'
+                    onConflict: 'id'
                 })
                 .select()
                 .maybeSingle();
@@ -267,7 +267,7 @@ async function register(username, password) {
                     display_name: trimmedUsername,
                     email
                 }, {
-                    onConflict: 'id,email'
+                    onConflict: 'id'
                 });
 
             if (profileInsertError) {
