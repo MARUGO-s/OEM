@@ -19,10 +19,15 @@ ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
 
--- 会議テーブルの拡張列
-ALTER TABLE meetings ADD COLUMN IF NOT EXISTS meeting_code TEXT;
-ALTER TABLE meetings ADD COLUMN IF NOT EXISTS calendar_event_id TEXT;
-ALTER TABLE meetings ADD COLUMN IF NOT EXISTS created_by UUID;
+-- 会議テーブルの拡張列（テーブルが存在する場合のみ）
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'meetings') THEN
+        ALTER TABLE meetings ADD COLUMN IF NOT EXISTS meeting_code TEXT;
+        ALTER TABLE meetings ADD COLUMN IF NOT EXISTS calendar_event_id TEXT;
+        ALTER TABLE meetings ADD COLUMN IF NOT EXISTS created_by UUID;
+    END IF;
+END $$;
 
 
 
