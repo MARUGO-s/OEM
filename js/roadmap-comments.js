@@ -171,7 +171,10 @@ async function submitRoadmapComment() {
 
                     if (insertError) {
                         console.error('ユーザープロファイル作成エラー:', insertError);
-                        // エラーが発生してもコメント投稿を続行
+                        // 409エラーの場合は無視（既に存在する可能性）
+                        if (insertError.code !== '23505' && !insertError.message.includes('409')) {
+                            console.log('プロファイル作成をスキップします');
+                        }
                     }
                 } catch (profileError) {
                     console.error('プロファイル自動作成エラー:', profileError);
@@ -191,16 +194,39 @@ async function submitRoadmapComment() {
         };
 
         // Supabaseに保存（競合を回避するためupsertを使用）
-        const { data, error } = await supabase
-            .from('comments')
-            .upsert([newComment], {
-                onConflict: 'id'
-            })
-            .select();
+        try {
+            const { data, error } = await supabase
+                .from('comments')
+                .upsert([newComment], {
+                    onConflict: 'id'
+                })
+                .select();
 
-        if (error) {
-            console.error('コメント投稿エラー:', error);
-            // エラーが発生しても処理を続行
+            if (error) {
+                console.error('コメント投稿エラー:', error);
+                // 409エラーの場合は再試行
+                if (error.code === '23505' || error.message.includes('409')) {
+                    console.log('競合エラーが発生しました。再試行します...');
+                    // 少し待ってから再試行
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    const { data: retryData, error: retryError } = await supabase
+                        .from('comments')
+                        .insert([newComment])
+                        .select();
+                    
+                    if (retryError) {
+                        console.error('再試行でもエラー:', retryError);
+                        alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
+                        return;
+                    }
+                } else {
+                    alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
+                    return;
+                }
+            }
+        } catch (insertError) {
+            console.error('コメント投稿例外:', insertError);
             alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
             return;
         }
