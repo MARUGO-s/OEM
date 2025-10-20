@@ -319,13 +319,19 @@ async function submitRoadmapComment() {
 // コメント詳細ポップアップの表示
 window.showCommentPopup = function(commentId) {
     try {
+        // commentIdの検証
+        if (!commentId) {
+            console.error('commentIdが指定されていません');
+            return;
+        }
+        
         // 既存のポップアップがあれば削除
         const existingPopup = document.querySelector('.comment-popup');
         if (existingPopup) {
             existingPopup.remove();
         }
         
-        // ローカルストレージからコメントを取得
+        // キャッシュからコメントを取得
         const comment = roadmapCommentCache.find(c => c.id === commentId);
         
         if (!comment) {
@@ -333,7 +339,8 @@ window.showCommentPopup = function(commentId) {
             return;
         }
         
-        const date = new Date(comment.created_at);
+        // created_atが存在しない場合のフォールバック
+        const date = comment.created_at ? new Date(comment.created_at) : new Date();
         const formattedDate = date.toLocaleDateString('ja-JP', {
             year: 'numeric',
             month: '2-digit',
@@ -353,10 +360,10 @@ window.showCommentPopup = function(commentId) {
                     <button class="comment-popup-close" onclick="closeCommentPopup()">&times;</button>
                 </div>
                 <div class="comment-popup-body">
-                    <div class="comment-content">${escapeHtml(comment.content)}</div>
+                    <div class="comment-content">${escapeHtml(comment.content || '')}</div>
                     <div class="comment-meta">
                         <div class="comment-author">投稿者: ${escapeHtml(comment.author_username || comment.author_email || '匿名')}</div>
-                        <div class="comment-date">投稿日時: ${formattedDate}</div>
+                        <div class="comment-date">投稿日時: ${escapeHtml(formattedDate)}</div>
                     </div>
                 </div>
             </div>
@@ -655,6 +662,12 @@ style.textContent = `
 
 // ロードマップコメントの削除
 async function deleteRoadmapComment(commentId) {
+    // commentIdの検証
+    if (!commentId) {
+        console.error('commentIdが指定されていません');
+        return;
+    }
+    
     if (!confirm('このコメントを削除しますか？')) {
         return;
     }
@@ -673,8 +686,9 @@ async function deleteRoadmapComment(commentId) {
         
         // モーダル内のコメント一覧を再読み込み
         const modal = document.getElementById('roadmap-item-modal');
-        const taskId = modal.dataset.taskId;
-        await loadRoadmapComments(taskId);
+        if (modal && modal.dataset.taskId) {
+            await loadRoadmapComments(modal.dataset.taskId);
+        }
         
         // タイムラインを再描画
         if (typeof renderTasks === 'function') {
