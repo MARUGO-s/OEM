@@ -154,7 +154,7 @@ async function submitRoadmapComment() {
                     display_name: currentUser.username,
                     email: email
                 }, {
-                    onConflict: 'id'
+                    onConflict: 'id,email'
                 });
 
             if (upsertError) {

@@ -82,7 +82,7 @@ async function postComment(content) {
                     display_name: appState.currentUser.username,
                     email: email
                 }, {
-                    onConflict: 'id'
+                    onConflict: 'id,email'
                 });
 
             if (upsertError) {
