@@ -72,9 +72,34 @@ function generateCommentId() {
     return `comment_${timestamp}_${random}_${counter}`;
 }
 
+// HTMLエスケープ（XSS対策）
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // コメント投稿
 async function postComment(content) {
     try {
+        // 入力値のサニタイゼーション
+        if (!content || typeof content !== 'string') {
+            alert('コメント内容を入力してください。');
+            return;
+        }
+        
+        content = content.trim();
+        if (content.length === 0) {
+            alert('コメント内容を入力してください。');
+            return;
+        }
+        
+        if (content.length > 1000) {
+            alert('コメントは1000文字以内で入力してください。');
+            return;
+        }
+        
         // ユーザー情報のバリデーション
         if (!appState.currentUser || !appState.currentUser.username) {
             alert('コメントを投稿するにはログインが必要です。');

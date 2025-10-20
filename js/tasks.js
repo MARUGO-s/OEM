@@ -244,16 +244,16 @@ function renderTasks() {
                     
                     return `
                         <div class="roadmap-comment-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
-                            <div class="roadmap-comment-bullet comment" onclick="showCommentPopup('${comment ? comment.id : ''}')" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
+                            <div class="roadmap-comment-bullet comment" data-comment-id="${escapeHtml(comment ? comment.id : '')}" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
                                 <span class="comment-bullet">・</span>
                                 <div class="comment-content">
                                     <div class="comment-text">${escapeHtml(entry.text)}</div>
                                     <div class="comment-meta">
-                                        <span class="comment-author">${escapeHtml(authorName)} ${formattedDate}</span>
+                                        <span class="comment-author">${escapeHtml(authorName)} ${escapeHtml(formattedDate)}</span>
                                     </div>
                                 </div>
                             </div>
-                            <button onclick="deleteRoadmapComment('${comment ? comment.id : ''}')" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
+                            <button data-comment-id="${escapeHtml(comment ? comment.id : '')}" class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
                                 削除
                             </button>
                         </div>
@@ -295,6 +295,26 @@ function renderTasks() {
                item.addEventListener('click', () => {
                    const taskId = item.dataset.taskId;
                    showRoadmapItemModal(taskId);
+               });
+           });
+           
+           // コメント関連のイベントリスナーを安全に追加（XSS対策）
+           container.querySelectorAll('.roadmap-comment-bullet.comment').forEach(element => {
+               element.addEventListener('click', () => {
+                   const commentId = element.dataset.commentId;
+                   if (commentId) {
+                       showCommentPopup(commentId);
+                   }
+               });
+           });
+           
+           container.querySelectorAll('.delete-comment-btn').forEach(button => {
+               button.addEventListener('click', (e) => {
+                   e.stopPropagation();
+                   const commentId = button.dataset.commentId;
+                   if (commentId) {
+                       deleteRoadmapComment(commentId);
+                   }
                });
            });
 }

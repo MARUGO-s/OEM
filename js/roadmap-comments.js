@@ -61,6 +61,14 @@ function generateRoadmapCommentId() {
     return `roadmap_comment_${timestamp}_${random}_${counter}`;
 }
 
+// HTMLエスケープ（XSS対策）
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 let roadmapCommentCache = [];
 
 // ロードマップコメントの読み込み
@@ -116,27 +124,66 @@ function renderRoadmapComments(comments) {
         
         return `
             <div class="roadmap-comment-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
-                <div class="roadmap-comment-bullet" onclick="showCommentPopup('${comment.id}')" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
+                <div class="roadmap-comment-bullet" data-comment-id="${escapeHtml(comment.id)}" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
                     <span class="comment-bullet">・</span>
                     <span class="comment-text">${escapeHtml(comment.content)}</span>
-                    <span class="comment-date">${escapeHtml(authorName)} ${formattedDate}</span>
+                    <span class="comment-date">${escapeHtml(authorName)} ${escapeHtml(formattedDate)}</span>
                 </div>
-                <button onclick="deleteRoadmapComment('${comment.id}')" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
+                <button data-comment-id="${escapeHtml(comment.id)}" class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
                     削除
                 </button>
             </div>
         `;
     }).join('');
+    
+    // イベントリスナーを安全に追加（XSS対策）
+    container.querySelectorAll('.roadmap-comment-bullet').forEach(element => {
+        element.addEventListener('click', () => {
+            const commentId = element.dataset.commentId;
+            if (commentId) {
+                showCommentPopup(commentId);
+            }
+        });
+    });
+    
+    container.querySelectorAll('.delete-comment-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const commentId = button.dataset.commentId;
+            if (commentId) {
+                deleteRoadmapComment(commentId);
+            }
+        });
+    });
 }
 
 // ロードマップコメントの投稿
 async function submitRoadmapComment() {
     const modal = document.getElementById('roadmap-item-modal');
     const taskId = modal.dataset.taskId;
-    const content = document.getElementById('roadmap-comment-input').value.trim();
+    const contentInput = document.getElementById('roadmap-comment-input');
     
-    if (!content) {
-        alert('コメントを入力してください');
+    if (!contentInput) {
+        console.error('コメント入力欄が見つかりません');
+        return;
+    }
+    
+    let content = contentInput.value;
+    
+    // 入力値のサニタイゼーション
+    if (!content || typeof content !== 'string') {
+        alert('コメント内容を入力してください。');
+        return;
+    }
+    
+    content = content.trim();
+    if (content.length === 0) {
+        alert('コメント内容を入力してください。');
+        return;
+    }
+    
+    if (content.length > 1000) {
+        alert('コメントは1000文字以内で入力してください。');
         return;
     }
     
