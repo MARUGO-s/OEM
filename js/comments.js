@@ -71,78 +71,25 @@ function generateCommentId() {
 // コメント投稿
 async function postComment(content) {
     try {
-        // ユーザープロファイルの存在確認と作成
+        // ユーザープロファイルの確実な存在保証（upsertを使用して競合を回避）
         if (appState.currentUser && appState.currentUser.username !== 'anonymous') {
-            try {
-                // まずメールアドレスで確認
-                const email = appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`;
-                const { data: existingByEmail, error: emailError } = await supabase
-                    .from('user_profiles')
-                    .select('id, username')
-                    .eq('email', email)
-                    .maybeSingle();
-
-                // ユーザー名で確認
-                const { data: existingByUsername, error: usernameError } = await supabase
-                    .from('user_profiles')
-                    .select('id, email')
-                    .eq('username', appState.currentUser.username)
-                    .maybeSingle();
-
-                // 既存のプロファイルがない場合のみ作成
-                if (!existingByEmail && !existingByUsername) {
-                    const { error: insertError } = await supabase
-                        .from('user_profiles')
-                        .insert({
-                            id: appState.currentUser.id,
-                            username: appState.currentUser.username,
-                            display_name: appState.currentUser.username,
-                            email: email
-                        });
-
-                    if (insertError) {
-                        console.error('ユーザープロファイル作成エラー:', insertError);
-                        // エラーが発生してもコメント投稿を続行
-                    } else {
-                        console.log('ユーザープロファイルを作成しました:', appState.currentUser.username);
-                    }
-                } else {
-                    console.log('ユーザープロファイルは既に存在します:', appState.currentUser.username);
-                }
-            } catch (profileError) {
-                console.error('プロファイル処理エラー:', profileError);
-                // エラーが発生してもコメント投稿を続行
-            }
-        }
-
-        // コメント投稿前にユーザープロファイルの存在を最終確認
-        if (appState.currentUser && appState.currentUser.username !== 'anonymous') {
-            const { data: finalCheck, error: finalError } = await supabase
+            const email = appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`;
+            const { error: upsertError } = await supabase
                 .from('user_profiles')
-                .select('id')
-                .eq('username', appState.currentUser.username)
-                .maybeSingle();
+                .upsert({
+                    id: appState.currentUser.id,
+                    username: appState.currentUser.username,
+                    display_name: appState.currentUser.username,
+                    email: email
+                }, {
+                    onConflict: 'id'
+                });
 
-            if (finalError) {
-                console.error('最終確認エラー:', finalError);
-            }
-
-            if (!finalCheck) {
-                console.log('ユーザープロファイルが存在しないため、強制作成します:', appState.currentUser.username);
-                const { error: forceInsertError } = await supabase
-                    .from('user_profiles')
-                    .insert({
-                        id: appState.currentUser.id,
-                        username: appState.currentUser.username,
-                        display_name: appState.currentUser.username,
-                        email: appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`
-                    });
-
-                if (forceInsertError) {
-                    console.error('強制作成エラー:', forceInsertError);
-                    alert('ユーザープロファイルの作成に失敗しました。ログインし直してください。');
-                    return;
-                }
+            if (upsertError) {
+                console.error('ユーザープロファイル確保エラー:', upsertError);
+                // エラーが発生してもコメント投稿を続行（プロファイルが既に存在する可能性）
+            } else {
+                console.log('ユーザープロファイルを確保しました:', appState.currentUser.username);
             }
         }
 
@@ -156,7 +103,7 @@ async function postComment(content) {
             created_at: new Date().toISOString()
         };
 
-        // Supabaseに保存（insertを使用して外部キー制約を確実にチェック）
+        // Supabaseに保存
         try {
             const { data, error } = await supabase
                 .from('comments')
@@ -165,40 +112,8 @@ async function postComment(content) {
 
             if (error) {
                 console.error('コメント投稿エラー:', error);
-                
-                // 外部キー制約エラーの場合は特別処理
-                if (error.code === '23503') {
-                    console.log('外部キー制約エラーが発生しました。ユーザープロファイルを再確認します...');
-                    
-                    // ユーザープロファイルを強制作成
-                    const { error: profileError } = await supabase
-                        .from('user_profiles')
-                        .insert({
-                            id: appState.currentUser.id,
-                            username: appState.currentUser.username,
-                            display_name: appState.currentUser.username,
-                            email: appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`
-                        });
-
-                    if (profileError) {
-                        console.error('プロファイル強制作成エラー:', profileError);
-                    }
-
-                    // 再度コメント投稿を試行
-                    const { data: retryData, error: retryError } = await supabase
-                        .from('comments')
-                        .insert([newComment])
-                        .select();
-
-                    if (retryError) {
-                        console.error('再試行でもエラー:', retryError);
-                        alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
-                        return;
-                    }
-                } else {
-                    alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
-                    return;
-                }
+                alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
+                return;
             }
         } catch (insertError) {
             console.error('コメント投稿例外:', insertError);
