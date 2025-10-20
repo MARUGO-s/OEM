@@ -187,6 +187,37 @@ async function submitRoadmapComment() {
             }
         }
 
+        // コメント投稿前にユーザープロファイルの存在を最終確認
+        if (currentUser.username !== 'anonymous') {
+            const { data: finalCheck, error: finalError } = await supabase
+                .from('user_profiles')
+                .select('id')
+                .eq('username', currentUser.username)
+                .maybeSingle();
+
+            if (finalError) {
+                console.error('最終確認エラー:', finalError);
+            }
+
+            if (!finalCheck) {
+                console.log('ユーザープロファイルが存在しないため、強制作成します:', currentUser.username);
+                const { error: forceInsertError } = await supabase
+                    .from('user_profiles')
+                    .insert({
+                        id: currentUser.id,
+                        username: currentUser.username,
+                        display_name: currentUser.username,
+                        email: currentUser.email || `${currentUser.username}@hotmail.com`
+                    });
+
+                if (forceInsertError) {
+                    console.error('強制作成エラー:', forceInsertError);
+                    alert('ユーザープロファイルの作成に失敗しました。ログインし直してください。');
+                    return;
+                }
+            }
+        }
+
         // 新しいコメントを作成
         const newComment = {
             id: generateRoadmapCommentId(),
@@ -197,28 +228,40 @@ async function submitRoadmapComment() {
             created_at: new Date().toISOString()
         };
 
-        // Supabaseに保存（競合を回避するためupsertを使用）
+        // Supabaseに保存（insertを使用して外部キー制約を確実にチェック）
         try {
             const { data, error } = await supabase
                 .from('comments')
-                .upsert([newComment], {
-                    onConflict: 'id'
-                })
+                .insert([newComment])
                 .select();
 
             if (error) {
                 console.error('コメント投稿エラー:', error);
-                // 409エラーの場合は再試行
-                if (error.code === '23505' || error.message.includes('409')) {
-                    console.log('競合エラーが発生しました。再試行します...');
-                    // 少し待ってから再試行
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // 外部キー制約エラーの場合は特別処理
+                if (error.code === '23503') {
+                    console.log('外部キー制約エラーが発生しました。ユーザープロファイルを再確認します...');
                     
+                    // ユーザープロファイルを強制作成
+                    const { error: profileError } = await supabase
+                        .from('user_profiles')
+                        .insert({
+                            id: currentUser.id,
+                            username: currentUser.username,
+                            display_name: currentUser.username,
+                            email: currentUser.email || `${currentUser.username}@hotmail.com`
+                        });
+
+                    if (profileError) {
+                        console.error('プロファイル強制作成エラー:', profileError);
+                    }
+
+                    // 再度コメント投稿を試行
                     const { data: retryData, error: retryError } = await supabase
                         .from('comments')
                         .insert([newComment])
                         .select();
-                    
+
                     if (retryError) {
                         console.error('再試行でもエラー:', retryError);
                         alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
