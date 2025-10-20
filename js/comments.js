@@ -71,6 +71,35 @@ function generateCommentId() {
 // コメント投稿
 async function postComment(content) {
     try {
+        // ユーザープロファイルの存在確認
+        if (appState.currentUser && appState.currentUser.username !== 'anonymous') {
+            const { data: existingProfile, error: profileError } = await supabase
+                .from('user_profiles')
+                .select('id')
+                .eq('username', appState.currentUser.username)
+                .maybeSingle();
+
+            if (profileError && profileError.code !== 'PGRST116') {
+                console.error('ユーザープロファイル確認エラー:', profileError);
+            }
+
+            // プロファイルが存在しない場合は作成
+            if (!existingProfile) {
+                const { error: insertError } = await supabase
+                    .from('user_profiles')
+                    .upsert({
+                        id: appState.currentUser.id,
+                        username: appState.currentUser.username,
+                        display_name: appState.currentUser.username,
+                        email: appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`
+                    });
+
+                if (insertError) {
+                    console.error('ユーザープロファイル作成エラー:', insertError);
+                }
+            }
+        }
+
         // 新しいコメントを作成
         const newComment = {
             id: generateCommentId(),

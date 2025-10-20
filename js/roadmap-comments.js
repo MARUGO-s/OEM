@@ -140,6 +140,35 @@ async function submitRoadmapComment() {
     };
 
     try {
+        // ユーザープロファイルの存在確認
+        if (currentUser.username !== 'anonymous') {
+            const { data: existingProfile, error: profileError } = await supabase
+                .from('user_profiles')
+                .select('id')
+                .eq('username', currentUser.username)
+                .maybeSingle();
+
+            if (profileError && profileError.code !== 'PGRST116') {
+                console.error('ユーザープロファイル確認エラー:', profileError);
+            }
+
+            // プロファイルが存在しない場合は作成
+            if (!existingProfile) {
+                const { error: insertError } = await supabase
+                    .from('user_profiles')
+                    .upsert({
+                        id: currentUser.id,
+                        username: currentUser.username,
+                        display_name: currentUser.username,
+                        email: currentUser.email || `${currentUser.username}@hotmail.com`
+                    });
+
+                if (insertError) {
+                    console.error('ユーザープロファイル作成エラー:', insertError);
+                }
+            }
+        }
+
         // 新しいコメントを作成
         const newComment = {
             id: generateRoadmapCommentId(),
