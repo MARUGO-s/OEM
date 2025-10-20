@@ -147,9 +147,14 @@ async function login(username, password) {
 
         if (error) {
             console.error('Supabaseログインエラー:', error);
-            const message = error.message === 'Invalid login credentials'
-                ? 'ユーザー名またはパスワードが正しくありません。'
-                : `ログインに失敗しました: ${error.message}`;
+            let message;
+            if (error.message === 'Invalid login credentials') {
+                message = 'ユーザー名またはパスワードが正しくありません。';
+            } else if (error.message === 'Email not confirmed') {
+                message = 'メール確認が完了していません。しばらく待ってから再度お試しください。';
+            } else {
+                message = `ログインに失敗しました: ${error.message}`;
+            }
             showError(message);
             return;
         }
@@ -238,7 +243,9 @@ async function register(username, password) {
                 data: {
                     username: normalizedUsername,
                     display_name: trimmedUsername
-                }
+                },
+                emailRedirectTo: undefined,
+                captchaToken: undefined
             }
         });
 
@@ -270,8 +277,29 @@ async function register(username, password) {
             await callLoadAllDataSafely();
             showError('登録とログインが完了しました！', 'success');
         } else {
-            showError('登録が完了しました！ログインしてください。', 'success');
-            showLoginForm();
+            // メール確認が必要な場合は、自動的にログインを試行
+            console.log('メール確認が必要な場合、自動ログインを試行します');
+            try {
+                const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                });
+                
+                if (loginError) {
+                    console.log('自動ログイン失敗:', loginError.message);
+                    showError('登録が完了しました！ログインしてください。', 'success');
+                    showLoginForm();
+                } else {
+                    await refreshCurrentUser();
+                    showMainScreen();
+                    await callLoadAllDataSafely();
+                    showError('登録とログインが完了しました！', 'success');
+                }
+            } catch (autoLoginError) {
+                console.log('自動ログイン例外:', autoLoginError.message);
+                showError('登録が完了しました！ログインしてください。', 'success');
+                showLoginForm();
+            }
         }
         
     } catch (error) {
