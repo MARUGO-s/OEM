@@ -143,43 +143,47 @@ async function submitRoadmapComment() {
     };
 
     try {
-        // ユーザープロファイルの存在確認
+        // ユーザープロファイルの存在確認と作成
         if (currentUser.username !== 'anonymous') {
-            const { data: existingProfile, error: profileError } = await supabase
-                .from('user_profiles')
-                .select('id')
-                .eq('username', currentUser.username)
-                .maybeSingle();
+            try {
+                // まずメールアドレスで確認
+                const email = currentUser.email || `${currentUser.username}@hotmail.com`;
+                const { data: existingByEmail, error: emailError } = await supabase
+                    .from('user_profiles')
+                    .select('id, username')
+                    .eq('email', email)
+                    .maybeSingle();
 
-            if (profileError && profileError.code !== 'PGRST116') {
-                console.error('ユーザープロファイル確認エラー:', profileError);
-            }
+                // ユーザー名で確認
+                const { data: existingByUsername, error: usernameError } = await supabase
+                    .from('user_profiles')
+                    .select('id, email')
+                    .eq('username', currentUser.username)
+                    .maybeSingle();
 
-            // プロファイルが存在しない場合は作成
-            if (!existingProfile) {
-                try {
+                // 既存のプロファイルがない場合のみ作成
+                if (!existingByEmail && !existingByUsername) {
                     const { error: insertError } = await supabase
                         .from('user_profiles')
-                        .upsert({
+                        .insert({
                             id: currentUser.id,
                             username: currentUser.username,
                             display_name: currentUser.username,
-                            email: currentUser.email || `${currentUser.username}@hotmail.com`
-                        }, {
-                            onConflict: 'username'
+                            email: email
                         });
 
                     if (insertError) {
                         console.error('ユーザープロファイル作成エラー:', insertError);
-                        // 409エラーの場合は無視（既に存在する可能性）
-                        if (insertError.code !== '23505' && !insertError.message.includes('409')) {
-                            console.log('プロファイル作成をスキップします');
-                        }
+                        // エラーが発生してもコメント投稿を続行
+                    } else {
+                        console.log('ユーザープロファイルを作成しました:', currentUser.username);
                     }
-                } catch (profileError) {
-                    console.error('プロファイル自動作成エラー:', profileError);
-                    // エラーが発生してもコメント投稿を続行
+                } else {
+                    console.log('ユーザープロファイルは既に存在します:', currentUser.username);
                 }
+            } catch (profileError) {
+                console.error('プロファイル処理エラー:', profileError);
+                // エラーが発生してもコメント投稿を続行
             }
         }
 
