@@ -71,7 +71,10 @@ async function loadRoadmapComments(taskId) {
 
         if (error) {
             console.error('ロードマップコメント読み込みエラー:', error);
-            throw error;
+            // エラーが発生しても空の配列で処理を続行
+            roadmapCommentCache = [];
+            renderRoadmapComments([]);
+            return;
         }
         
         roadmapCommentCache = comments || [];
@@ -187,15 +190,19 @@ async function submitRoadmapComment() {
             created_at: new Date().toISOString()
         };
 
-        // Supabaseに保存
+        // Supabaseに保存（競合を回避するためupsertを使用）
         const { data, error } = await supabase
             .from('comments')
-            .insert([newComment])
+            .upsert([newComment], {
+                onConflict: 'id'
+            })
             .select();
 
         if (error) {
             console.error('コメント投稿エラー:', error);
-            throw error;
+            // エラーが発生しても処理を続行
+            alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
+            return;
         }
 
         // コメント入力欄をクリア

@@ -118,15 +118,19 @@ async function postComment(content) {
             created_at: new Date().toISOString()
         };
 
-        // Supabaseに保存
+        // Supabaseに保存（競合を回避するためupsertを使用）
         const { data, error } = await supabase
             .from('comments')
-            .insert([newComment])
+            .upsert([newComment], {
+                onConflict: 'id'
+            })
             .select();
 
         if (error) {
             console.error('コメント投稿エラー:', error);
-            throw error;
+            // エラーが発生しても処理を続行
+            alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
+            return;
         }
 
         // コメントを再読み込み
