@@ -217,15 +217,21 @@ document.getElementById('post-comment-btn').addEventListener('click', async () =
     await postComment(content);
 });
 
-// Enterキーで投稿（Shift+Enterで改行）
-document.getElementById('comment-input').addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        const content = e.target.value.trim();
-        
-        if (content) {
-            await postComment(content);
-        }
+// Enterキーで投稿（Shift+Enterで改行）（DOMContentLoaded後に登録、重複防止）
+document.addEventListener('DOMContentLoaded', () => {
+    const commentInput = document.getElementById('comment-input');
+    if (commentInput && !commentInput.dataset.listenerAttached) {
+        commentInput.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                const content = e.target.value.trim();
+                
+                if (content) {
+                    await postComment(content);
+                }
+            }
+        });
+        commentInput.dataset.listenerAttached = 'true';
     }
 });
 

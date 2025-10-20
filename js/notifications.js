@@ -124,11 +124,22 @@ function toggleNotificationPanel() {
     }
 }
 
-// イベントリスナー
-document.getElementById('notification-bell').addEventListener('click', toggleNotificationPanel);
-
-document.getElementById('close-notifications').addEventListener('click', () => {
-    document.getElementById('notification-panel').classList.remove('open');
+// イベントリスナー（DOMContentLoaded後に登録、重複防止）
+document.addEventListener('DOMContentLoaded', () => {
+    const notificationBell = document.getElementById('notification-bell');
+    const closeNotifications = document.getElementById('close-notifications');
+    
+    if (notificationBell && !notificationBell.dataset.listenerAttached) {
+        notificationBell.addEventListener('click', toggleNotificationPanel);
+        notificationBell.dataset.listenerAttached = 'true';
+    }
+    
+    if (closeNotifications && !closeNotifications.dataset.listenerAttached) {
+        closeNotifications.addEventListener('click', () => {
+            document.getElementById('notification-panel').classList.remove('open');
+        });
+        closeNotifications.dataset.listenerAttached = 'true';
+    }
 });
 
 // リアルタイム更新のサブスクリプション

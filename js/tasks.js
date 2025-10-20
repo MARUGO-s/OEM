@@ -468,32 +468,53 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// イベントリスナー
-document.getElementById('add-task-btn').addEventListener('click', () => {
-    currentEditingTask = null;
-    document.getElementById('task-form').reset();
-    document.getElementById('modal-title').textContent = '新規タスク追加';
-    openModal();
-});
+// イベントリスナー（DOMContentLoaded後に登録、重複防止）
+document.addEventListener('DOMContentLoaded', () => {
+    const addTaskBtn = document.getElementById('add-task-btn');
+    const closeModalBtn = document.getElementById('close-modal');
+    const cancelTaskBtn = document.getElementById('cancel-task');
+    const taskForm = document.getElementById('task-form');
+    
+    if (addTaskBtn && !addTaskBtn.dataset.listenerAttached) {
+        addTaskBtn.addEventListener('click', () => {
+            currentEditingTask = null;
+            if (taskForm) taskForm.reset();
+            const modalTitle = document.getElementById('modal-title');
+            if (modalTitle) modalTitle.textContent = '新規タスク追加';
+            openModal();
+        });
+        addTaskBtn.dataset.listenerAttached = 'true';
+    }
+    
+    if (closeModalBtn && !closeModalBtn.dataset.listenerAttached) {
+        closeModalBtn.addEventListener('click', closeModal);
+        closeModalBtn.dataset.listenerAttached = 'true';
+    }
+    
+    if (cancelTaskBtn && !cancelTaskBtn.dataset.listenerAttached) {
+        cancelTaskBtn.addEventListener('click', closeModal);
+        cancelTaskBtn.dataset.listenerAttached = 'true';
+    }
+    
+    if (taskForm && !taskForm.dataset.listenerAttached) {
+        taskForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-document.getElementById('close-modal').addEventListener('click', closeModal);
-document.getElementById('cancel-task').addEventListener('click', closeModal);
+            const taskData = {
+                title: document.getElementById('task-title').value,
+                description: document.getElementById('task-description').value,
+                status: document.getElementById('task-status').value,
+                priority: document.getElementById('task-priority').value,
+                deadline: document.getElementById('task-deadline').value || null
+            };
 
-document.getElementById('task-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const taskData = {
-        title: document.getElementById('task-title').value,
-        description: document.getElementById('task-description').value,
-        status: document.getElementById('task-status').value,
-        priority: document.getElementById('task-priority').value,
-        deadline: document.getElementById('task-deadline').value || null
-    };
-
-    if (currentEditingTask) {
-        await updateTask(currentEditingTask.id, taskData);
-    } else {
-        await addTask(taskData);
+            if (currentEditingTask) {
+                await updateTask(currentEditingTask.id, taskData);
+            } else {
+                await addTask(taskData);
+            }
+        });
+        taskForm.dataset.listenerAttached = 'true';
     }
 });
 
