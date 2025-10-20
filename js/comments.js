@@ -41,13 +41,21 @@ async function loadComments() {
 function renderComments() {
     const container = document.getElementById('comments-container');
     
-    if (appState.comments.length === 0) {
+    // コンテナが存在しない場合は処理を中断
+    if (!container) {
+        console.error('comments-container要素が見つかりません');
+        return;
+    }
+    
+    if (!appState.comments || appState.comments.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">まだコメントがありません。最初のコメントを投稿してください。</p>';
         return;
     }
 
     container.innerHTML = appState.comments.map(comment => {
-        const timeAgo = getTimeAgo(new Date(comment.created_at));
+        // created_atが存在しない場合のフォールバック
+        const createdAt = comment.created_at ? new Date(comment.created_at) : new Date();
+        const timeAgo = getTimeAgo(createdAt);
         
         return `
             <div class="comment-item">
@@ -55,7 +63,7 @@ function renderComments() {
                     <span class="comment-author">${escapeHtml(comment.author_username || 'anonymous')}</span>
                     <span class="comment-time">${timeAgo}</span>
                 </div>
-                <div class="comment-text">${escapeHtml(comment.content)}</div>
+                <div class="comment-text">${escapeHtml(comment.content || '')}</div>
             </div>
         `;
     }).join('');
@@ -191,8 +199,19 @@ async function postComment(content) {
 
 // 相対時間の取得
 function getTimeAgo(date) {
+    // dateが無効な場合のフォールバック
+    if (!date || isNaN(date.getTime())) {
+        return '不明';
+    }
+    
     const now = new Date();
     const diff = now - date;
+    
+    // 未来の日付の場合
+    if (diff < 0) {
+        return '今';
+    }
+    
     const seconds = Math.floor(diff / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);

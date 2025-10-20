@@ -104,14 +104,21 @@ async function loadRoadmapComments(taskId) {
 function renderRoadmapComments(comments) {
     const container = document.getElementById('roadmap-comments-list');
     
-    if (comments.length === 0) {
+    // コンテナが存在しない場合は処理を中断
+    if (!container) {
+        console.error('roadmap-comments-list要素が見つかりません');
+        return;
+    }
+    
+    if (!comments || comments.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: #64748b; padding: 1rem;">まだコメントがありません。</p>';
         return;
     }
 
     // 画像のような箇条書き形式で表示（日時付き、クリック可能、削除ボタン付き）
     container.innerHTML = comments.map(comment => {
-        const date = new Date(comment.created_at);
+        // created_atが存在しない場合のフォールバック
+        const date = comment.created_at ? new Date(comment.created_at) : new Date();
         const formattedDate = date.toLocaleDateString('ja-JP', {
             year: 'numeric',
             month: '2-digit',
@@ -123,44 +130,73 @@ function renderRoadmapComments(comments) {
             (comment.author_email ? comment.author_email.split('@')[0] : '匿名');
         
         return `
-            <div class="roadmap-comment-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
-                <div class="roadmap-comment-bullet" data-comment-id="${escapeHtml(comment.id)}" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
+            <div class="roadmap-comment-item" data-comment-id="${escapeHtml(comment.id || '')}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
+                <div class="roadmap-comment-bullet" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
                     <span class="comment-bullet">・</span>
-                    <span class="comment-text">${escapeHtml(comment.content)}</span>
+                    <span class="comment-text">${escapeHtml(comment.content || '')}</span>
                     <span class="comment-date">${escapeHtml(authorName)} ${escapeHtml(formattedDate)}</span>
                 </div>
-                <button data-comment-id="${escapeHtml(comment.id)}" class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
+                <button class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
                     削除
                 </button>
             </div>
         `;
     }).join('');
     
-    // イベントリスナーを安全に追加（XSS対策）
-    container.querySelectorAll('.roadmap-comment-bullet').forEach(element => {
-        element.addEventListener('click', () => {
-            const commentId = element.dataset.commentId;
-            if (commentId) {
-                showCommentPopup(commentId);
-            }
-        });
-    });
-    
-    container.querySelectorAll('.delete-comment-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const commentId = button.dataset.commentId;
-            if (commentId) {
-                deleteRoadmapComment(commentId);
-            }
-        });
+    // イベントリスナーを安全に追加（XSS対策、重複防止）
+    container.querySelectorAll('.roadmap-comment-item').forEach(item => {
+        const commentId = item.dataset.commentId;
+        if (!commentId) return;
+        
+        // クリックイベント（コメント詳細表示）
+        const bullet = item.querySelector('.roadmap-comment-bullet');
+        if (bullet && !bullet.dataset.listenerAttached) {
+            bullet.addEventListener('click', () => {
+                if (typeof window.showCommentPopup === 'function') {
+                    window.showCommentPopup(commentId);
+                } else {
+                    console.warn('showCommentPopup関数が定義されていません');
+                }
+            });
+            bullet.dataset.listenerAttached = 'true';
+        }
+        
+        // 削除ボタンのイベント
+        const deleteBtn = item.querySelector('.delete-comment-btn');
+        if (deleteBtn && !deleteBtn.dataset.listenerAttached) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (typeof window.deleteRoadmapComment === 'function') {
+                    window.deleteRoadmapComment(commentId);
+                } else {
+                    console.warn('deleteRoadmapComment関数が定義されていません');
+                }
+            });
+            deleteBtn.dataset.listenerAttached = 'true';
+        }
     });
 }
 
 // ロードマップコメントの投稿
 async function submitRoadmapComment() {
     const modal = document.getElementById('roadmap-item-modal');
+    
+    // モーダルが存在しない場合は処理を中断
+    if (!modal) {
+        console.error('roadmap-item-modal要素が見つかりません');
+        alert('モーダルが見つかりません。ページをリロードしてください。');
+        return;
+    }
+    
     const taskId = modal.dataset.taskId;
+    
+    // taskIdが存在しない場合は処理を中断
+    if (!taskId) {
+        console.error('taskIdが設定されていません');
+        alert('タスクIDが見つかりません。');
+        return;
+    }
+    
     const contentInput = document.getElementById('roadmap-comment-input');
     
     if (!contentInput) {
