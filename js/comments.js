@@ -128,17 +128,18 @@ async function postComment(content) {
             }
         }
 
-        // 新しいコメントを作成（author_idをnullにして外部キー制約を回避）
+        // 新しいコメントを作成
         const newComment = {
             id: generateCommentId(),
             content: content,
-            author_id: null, // 外部キー制約を回避
+            author_id: appState.currentUser.id || null,
             author_username: appState.currentUser.username,
             task_id: null,
             created_at: new Date().toISOString()
         };
 
         // Supabaseに保存
+        let insertedData = null;
         try {
             const { data, error } = await supabase
                 .from('comments')
@@ -150,6 +151,9 @@ async function postComment(content) {
                 alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
                 return;
             }
+            
+            insertedData = data;
+            console.log('コメント投稿成功:', insertedData);
         } catch (insertError) {
             console.error('コメント投稿例外:', insertError);
             alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
@@ -177,7 +181,7 @@ async function postComment(content) {
             commentInput.value = '';
         }
         
-        console.log('コメント投稿完了:', data);
+        console.log('コメント投稿完了:', insertedData);
         
     } catch (error) {
         console.error('コメント投稿エラー:', error);
@@ -205,21 +209,27 @@ function getTimeAgo(date) {
     }
 }
 
-// イベントリスナー
-document.getElementById('post-comment-btn').addEventListener('click', async () => {
-    const content = document.getElementById('comment-input').value.trim();
-    
-    if (!content) {
-        alert('コメントを入力してください');
-        return;
-    }
-
-    await postComment(content);
-});
-
-// Enterキーで投稿（Shift+Enterで改行）（DOMContentLoaded後に登録、重複防止）
+// イベントリスナー（DOMContentLoaded後に登録、重複防止）
 document.addEventListener('DOMContentLoaded', () => {
+    const postCommentBtn = document.getElementById('post-comment-btn');
     const commentInput = document.getElementById('comment-input');
+    
+    // 投稿ボタンのイベントリスナー
+    if (postCommentBtn && !postCommentBtn.dataset.listenerAttached) {
+        postCommentBtn.addEventListener('click', async () => {
+            const content = commentInput ? commentInput.value.trim() : '';
+            
+            if (!content) {
+                alert('コメントを入力してください');
+                return;
+            }
+
+            await postComment(content);
+        });
+        postCommentBtn.dataset.listenerAttached = 'true';
+    }
+    
+    // Enterキーで投稿（Shift+Enterで改行）
     if (commentInput && !commentInput.dataset.listenerAttached) {
         commentInput.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {

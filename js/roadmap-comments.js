@@ -187,17 +187,13 @@ async function submitRoadmapComment() {
         return;
     }
     
-    // 現在のユーザー情報を取得（ログインしていない場合はデフォルト）
-    const currentUser = appState.currentUser || {
-        id: 'anonymous',
-        username: 'anonymous'
-    };
-
     // ユーザー情報のバリデーション
-    if (!currentUser || !currentUser.username) {
+    if (!appState.currentUser || !appState.currentUser.username) {
         alert('コメントを投稿するにはログインが必要です。');
         return;
     }
+    
+    const currentUser = appState.currentUser;
 
     try {
         // ユーザープロファイルの確実な存在保証（upsertを使用して競合を回避）
@@ -222,17 +218,18 @@ async function submitRoadmapComment() {
             }
         }
 
-        // 新しいコメントを作成（author_idをnullにして外部キー制約を回避）
+        // 新しいコメントを作成
         const newComment = {
             id: generateRoadmapCommentId(),
             task_id: taskId,
-            author_id: null, // 外部キー制約を回避
+            author_id: currentUser.id || null,
             author_username: currentUser.username,
             content: content,
             created_at: new Date().toISOString()
         };
 
         // Supabaseに保存
+        let insertedData = null;
         try {
             const { data, error } = await supabase
                 .from('comments')
@@ -244,6 +241,9 @@ async function submitRoadmapComment() {
                 alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
                 return;
             }
+            
+            insertedData = data;
+            console.log('コメント投稿成功:', insertedData);
         } catch (insertError) {
             console.error('コメント投稿例外:', insertError);
             alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
@@ -272,7 +272,7 @@ async function submitRoadmapComment() {
             // 通知エラーはコメント投稿を阻害しない
         }
         
-        console.log('コメント投稿完了:', data);
+        console.log('コメント投稿完了:', insertedData);
         
     } catch (error) {
         console.error('コメント投稿エラー:', error);
