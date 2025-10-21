@@ -232,51 +232,9 @@ async function submitRoadmapComment() {
     const currentUser = appState.currentUser;
 
     try {
-        // ユーザープロファイルの確実な存在保証（email重複回避）
-        if (currentUser.username !== 'anonymous') {
-            try {
-                const email = currentUser.email || `${currentUser.username}@hotmail.com`;
-                
-                // 既存のemailチェック
-                const { data: existingEmail, error: emailCheckError } = await supabase
-                    .from('user_profiles')
-                    .select('id, username')
-                    .eq('email', email)
-                    .maybeSingle();
-
-                let finalEmail = email;
-                if (existingEmail && existingEmail.id !== currentUser.id) {
-                    // emailが重複している場合は、一意のemailを生成
-                    finalEmail = `${currentUser.username}_${currentUser.id.slice(0, 8)}@hotmail.com`;
-                    console.log('コメント投稿時Email重複を回避:', { original: email, new: finalEmail });
-                }
-
-                const { error: upsertError } = await supabase
-                    .from('user_profiles')
-                    .upsert({
-                        id: currentUser.id,
-                        username: currentUser.username,
-                        display_name: currentUser.username,
-                        email: finalEmail
-                    }, {
-                        onConflict: 'id'
-                    });
-
-                if (upsertError) {
-                    // 409 Conflict は無視してコメント投稿を続行
-                    if (upsertError.code === 'PGRST301' || upsertError.message?.includes('409')) {
-                        console.log('ユーザープロファイルは既に存在します（409無視）:', currentUser.username);
-                    } else {
-                        console.error('ユーザープロファイル確保エラー（非409）:', upsertError);
-                    }
-                } else {
-                    console.log('ユーザープロファイルを確保しました:', currentUser.username);
-                }
-            } catch (profileError) {
-                // プロファイルエラーは無視してコメント投稿を続行
-                console.log('ユーザープロファイル処理をスキップ:', currentUser.username);
-            }
-        }
+        // ユーザープロファイル作成を完全にスキップ（競合回避）
+        // コメント投稿のみに集中し、プロファイル作成は別途処理
+        console.log('コメント投稿に集中: プロファイル作成をスキップ', currentUser.username);
 
         // 新しいコメントを作成
         const newComment = {
