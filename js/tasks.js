@@ -249,10 +249,13 @@ async function loadTasks() {
     try {
         console.log('Supabaseからタスクを読み込み中...');
         
-        // Supabaseからタスクを読み込み
+        // Supabaseからタスクを読み込み（ユーザープロファイルとJOIN）
         const { data: tasks, error } = await supabase
             .from('tasks')
-            .select('*')
+            .select(`
+                *,
+                user_profiles!tasks_created_by_fkey(username, display_name)
+            `)
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -371,7 +374,11 @@ function renderTasks() {
             month: '2-digit',
             day: '2-digit'
         });
-        const taskCreatedBy = task.created_by || 'システム';
+        // ユーザー名を取得（JOINしたデータから）
+        const taskCreatedBy = task.user_profiles?.username || 
+                              task.user_profiles?.display_name || 
+                              task.created_by || 
+                              'システム';
 
         return `
             <div class="roadmap-item ${task.status}" data-task-id="${task.id}">
