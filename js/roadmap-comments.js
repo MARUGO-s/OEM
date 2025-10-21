@@ -232,25 +232,34 @@ async function submitRoadmapComment() {
     const currentUser = appState.currentUser;
 
     try {
-        // ユーザープロファイルの確実な存在保証（upsertを使用して競合を回避）
+        // ユーザープロファイルの確実な存在保証（409エラーを無視してコメント投稿を優先）
         if (currentUser.username !== 'anonymous') {
-            const email = currentUser.email || `${currentUser.username}@hotmail.com`;
-            const { error: upsertError } = await supabase
-                .from('user_profiles')
-                .upsert({
-                    id: currentUser.id,
-                    username: currentUser.username,
-                    display_name: currentUser.username,
-                    email: email
-                }, {
-                    onConflict: 'id'
-                });
+            try {
+                const email = currentUser.email || `${currentUser.username}@hotmail.com`;
+                const { error: upsertError } = await supabase
+                    .from('user_profiles')
+                    .upsert({
+                        id: currentUser.id,
+                        username: currentUser.username,
+                        display_name: currentUser.username,
+                        email: email
+                    }, {
+                        onConflict: 'id'
+                    });
 
-            if (upsertError) {
-                console.error('ユーザープロファイル確保エラー:', upsertError);
-                // エラーが発生してもコメント投稿を続行（プロファイルが既に存在する可能性）
-            } else {
-                console.log('ユーザープロファイルを確保しました:', currentUser.username);
+                if (upsertError) {
+                    // 409 Conflict は無視してコメント投稿を続行
+                    if (upsertError.code === 'PGRST301' || upsertError.message?.includes('409')) {
+                        console.log('ユーザープロファイルは既に存在します（409無視）:', currentUser.username);
+                    } else {
+                        console.error('ユーザープロファイル確保エラー（非409）:', upsertError);
+                    }
+                } else {
+                    console.log('ユーザープロファイルを確保しました:', currentUser.username);
+                }
+            } catch (profileError) {
+                // プロファイルエラーは無視してコメント投稿を続行
+                console.log('ユーザープロファイル処理をスキップ:', currentUser.username);
             }
         }
 
