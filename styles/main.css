@@ -2884,10 +2884,77 @@ body {
     }
 }
 
+/* ロードマップ項目編集フォーム */
+.roadmap-item-edit-form {
+    padding: 1rem 0;
+}
+
+.roadmap-item-edit-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.roadmap-item-edit-form .form-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.roadmap-item-edit-form .form-row .form-group {
+    flex: 1;
+}
+
+.roadmap-item-edit-form .form-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.roadmap-item-edit-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.roadmap-item-edit-form input,
+.roadmap-item-edit-form textarea,
+.roadmap-item-edit-form select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    transition: border-color 0.2s ease;
+}
+
+.roadmap-item-edit-form input:focus,
+.roadmap-item-edit-form textarea:focus,
+.roadmap-item-edit-form select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.roadmap-item-edit-form textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
 /* ローディング画面のレスポンシブ対応 */
 @media (max-width: 768px) {
     .loading-container {
         margin: 1rem;
         padding: 1.5rem;
+    }
+    
+    .roadmap-item-edit-form .form-row {
+        flex-direction: column;
+        gap: 0;
+    }
+    
+    .roadmap-item-edit-form .form-actions {
+        flex-direction: column;
     }
 }

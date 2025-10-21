@@ -171,13 +171,15 @@
                                 <div class="roadmap-item-modal-header">
                                     <h3 id="roadmap-item-title">タスクタイトル</h3>
                                     <div class="roadmap-item-modal-actions">
+                                        <button id="roadmap-item-edit-btn" class="btn btn-secondary" style="margin-right: 0.5rem; display: none;">✏️ 編集</button>
                                         <button id="roadmap-item-delete-btn" class="btn btn-danger" style="margin-right: 0.5rem; display: none;">🗑️ 削除</button>
                                         <button class="roadmap-item-modal-close" onclick="closeRoadmapItemModal()">×</button>
                                     </div>
                                 </div>
                                 
                                 <div class="roadmap-item-modal-body">
-                                    <div class="roadmap-item-info">
+                                    <!-- 表示モード -->
+                                    <div id="roadmap-item-display-mode" class="roadmap-item-info">
                                         <div class="roadmap-item-description" id="roadmap-item-description">
                                             タスクの詳細説明がここに表示されます。
                                         </div>
@@ -195,6 +197,46 @@
                                                 <span class="meta-value" id="roadmap-item-deadline">未設定</span>
                                             </div>
                                         </div>
+                                    </div>
+                                    
+                                    <!-- 編集モード -->
+                                    <div id="roadmap-item-edit-mode" class="roadmap-item-edit-form" style="display: none;">
+                                        <form id="roadmap-item-edit-form">
+                                            <div class="form-group">
+                                                <label for="roadmap-edit-title">タイトル</label>
+                                                <input type="text" id="roadmap-edit-title" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="roadmap-edit-description">詳細説明</label>
+                                                <textarea id="roadmap-edit-description" rows="4"></textarea>
+                                            </div>
+                                            <div class="form-row">
+                                                <div class="form-group">
+                                                    <label for="roadmap-edit-status">ステータス</label>
+                                                    <select id="roadmap-edit-status">
+                                                        <option value="pending">未着手</option>
+                                                        <option value="in_progress">進行中</option>
+                                                        <option value="completed">完了</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="roadmap-edit-priority">優先度</label>
+                                                    <select id="roadmap-edit-priority">
+                                                        <option value="low">低</option>
+                                                        <option value="medium">中</option>
+                                                        <option value="high">高</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="roadmap-edit-deadline">期限</label>
+                                                <input type="date" id="roadmap-edit-deadline">
+                                            </div>
+                                            <div class="form-actions">
+                                                <button type="submit" class="btn btn-primary">保存</button>
+                                                <button type="button" id="roadmap-edit-cancel" class="btn btn-secondary">キャンセル</button>
+                                            </div>
+                                        </form>
                                     </div>
                                     
                                     <div class="roadmap-item-comments">

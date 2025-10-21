@@ -1,5 +1,113 @@
 // ロードマップ項目ごとのコメント機能
 
+// 編集モードを有効にする
+function enableEditMode(taskId) {
+    const task = appState.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    // 表示モードを非表示、編集モードを表示
+    document.getElementById('roadmap-item-display-mode').style.display = 'none';
+    document.getElementById('roadmap-item-edit-mode').style.display = 'block';
+    
+    // フォームに現在の値を設定
+    document.getElementById('roadmap-edit-title').value = task.title;
+    document.getElementById('roadmap-edit-description').value = task.description || '';
+    document.getElementById('roadmap-edit-status').value = task.status || 'pending';
+    document.getElementById('roadmap-edit-priority').value = task.priority || 'medium';
+    document.getElementById('roadmap-edit-deadline').value = task.deadline || '';
+    
+    // 編集ボタンを非表示
+    document.getElementById('roadmap-item-edit-btn').style.display = 'none';
+}
+
+// 編集モードを無効にする
+function disableEditMode() {
+    // 編集モードを非表示、表示モードを表示
+    document.getElementById('roadmap-item-edit-mode').style.display = 'none';
+    document.getElementById('roadmap-item-display-mode').style.display = 'block';
+    
+    // 編集ボタンを表示
+    document.getElementById('roadmap-item-edit-btn').style.display = 'inline-block';
+}
+
+// タスクを更新する
+async function updateTask(taskId) {
+    const form = document.getElementById('roadmap-item-edit-form');
+    const formData = new FormData(form);
+    
+    const taskData = {
+        title: document.getElementById('roadmap-edit-title').value,
+        description: document.getElementById('roadmap-edit-description').value,
+        status: document.getElementById('roadmap-edit-status').value,
+        priority: document.getElementById('roadmap-edit-priority').value,
+        deadline: document.getElementById('roadmap-edit-deadline').value || null
+    };
+    
+    try {
+        // Supabaseでタスクを更新
+        const { error } = await supabase
+            .from('tasks')
+            .update(taskData)
+            .eq('id', taskId);
+        
+        if (error) throw error;
+        
+        // ローカル状態を更新
+        const taskIndex = appState.tasks.findIndex(t => t.id === taskId);
+        if (taskIndex !== -1) {
+            appState.tasks[taskIndex] = { ...appState.tasks[taskIndex], ...taskData };
+        }
+        
+        // 表示を更新
+        updateTaskDisplay(taskId);
+        
+        // 編集モードを無効にする
+        disableEditMode();
+        
+        console.log('タスクが正常に更新されました');
+        
+        // 成功メッセージを表示
+        showNotification('タスクが正常に更新されました', 'success');
+        
+    } catch (error) {
+        console.error('タスク更新エラー:', error);
+        showNotification('タスクの更新に失敗しました', 'error');
+    }
+}
+
+// タスクの表示を更新する
+function updateTaskDisplay(taskId) {
+    const task = appState.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    // モーダル内の表示を更新
+    document.getElementById('roadmap-item-title').textContent = task.title;
+    document.getElementById('roadmap-item-description').textContent = task.description || '説明がありません';
+    
+    // ステータス
+    const statusElement = document.getElementById('roadmap-item-status');
+    statusElement.textContent = getStatusLabel(task.status);
+    statusElement.className = `meta-value status-${task.status}`;
+    
+    // 優先度
+    const priorityElement = document.getElementById('roadmap-item-priority');
+    priorityElement.textContent = getPriorityLabel(task.priority);
+    priorityElement.className = `meta-value priority-${task.priority}`;
+    
+    // 期限
+    if (task.deadline) {
+        document.getElementById('roadmap-item-deadline').textContent = 
+            new Date(task.deadline).toLocaleDateString('ja-JP');
+    } else {
+        document.getElementById('roadmap-item-deadline').textContent = '未設定';
+    }
+    
+    // ロードマップの表示も更新
+    if (window.loadRoadmap) {
+        window.loadRoadmap();
+    }
+}
+
 // ロードマップ項目詳細モーダルの表示
 window.showRoadmapItemModal = function(taskId) {
     const task = appState.tasks.find(t => t.id === taskId);
@@ -29,13 +137,24 @@ window.showRoadmapItemModal = function(taskId) {
         document.getElementById('roadmap-item-deadline').textContent = '未設定';
     }
     
-    // 削除ボタンの表示制御（誰でも削除可能）
+    // 編集・削除ボタンの表示制御（誰でも編集・削除可能）
+    const editBtn = document.getElementById('roadmap-item-edit-btn');
     const deleteBtn = document.getElementById('roadmap-item-delete-btn');
+    
+    // ログインユーザーなら誰でも編集・削除可能
+    const canEdit = appState.currentUser && appState.currentUser.username;
+    
+    if (editBtn) {
+        if (canEdit) {
+            editBtn.style.display = 'inline-block';
+            editBtn.onclick = () => enableEditMode(taskId);
+        } else {
+            editBtn.style.display = 'none';
+        }
+    }
+    
     if (deleteBtn) {
-        // ログインユーザーなら誰でも削除可能
-        const canDelete = appState.currentUser && appState.currentUser.username;
-        
-        if (canDelete) {
+        if (canEdit) {
             deleteBtn.style.display = 'inline-block';
             deleteBtn.onclick = () => deleteTask(taskId);
         } else {
@@ -50,9 +169,31 @@ window.showRoadmapItemModal = function(taskId) {
     // コメントを読み込み
     loadRoadmapComments(taskId);
     
+    // 編集フォームのイベントリスナーを設定
+    setupEditFormListeners(taskId);
+    
     // 現在のタスクIDを保存
     modal.dataset.taskId = taskId;
 };
+
+// 編集フォームのイベントリスナーを設定
+function setupEditFormListeners(taskId) {
+    const editForm = document.getElementById('roadmap-item-edit-form');
+    const cancelBtn = document.getElementById('roadmap-edit-cancel');
+    
+    if (editForm) {
+        editForm.onsubmit = (e) => {
+            e.preventDefault();
+            updateTask(taskId);
+        };
+    }
+    
+    if (cancelBtn) {
+        cancelBtn.onclick = () => {
+            disableEditMode();
+        };
+    }
+}
 
 // ロードマップ項目詳細モーダルを閉じる
 window.closeRoadmapItemModal = function() {
