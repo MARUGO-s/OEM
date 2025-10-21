@@ -479,7 +479,10 @@ async function addTask(taskData) {
         const { data, error } = await supabase
             .from('tasks')
             .insert([newTask])
-            .select();
+            .select(`
+                *,
+                user_profiles!tasks_created_by_fkey(username, display_name)
+            `);
 
         if (error) {
             console.error('Supabaseタスク追加エラー:', error);
@@ -488,11 +491,17 @@ async function addTask(taskData) {
 
         console.log('タスク追加成功:', data);
         
+        // 追加されたタスクをローカル状態に追加（ユーザープロファイル情報付き）
+        if (data && data.length > 0) {
+            appState.tasks.unshift(data[0]);
+            renderTasks();
+            updateSummary();
+        }
+        
         // 通知を表示
         showNotification('タスクが正常に追加されました！', 'success');
         
-        // タスクを再読み込みしてモーダルを閉じる
-        await loadTasks();
+        // モーダルを閉じる
         closeTaskModal();
         
     } catch (error) {
