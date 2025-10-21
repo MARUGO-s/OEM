@@ -301,8 +301,7 @@ function renderTasks() {
 
         const comments = appState.comments
             .filter(comment => comment.task_id === task.id)
-            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-            .slice(0, 6);
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
         const descriptionLines = (task.description || '')
             .split(/\r?\n|・|\u30fb/)
@@ -313,40 +312,18 @@ function renderTasks() {
         const taskSideClass = isLeft ? 'left' : 'right';
         const commentsSideClass = isLeft ? 'right' : 'left';
 
-        const detailEntries = [];
-
-        const maxItems = 6;
-        const maxDescriptions = 3;
-        let commentIndex = 0;
-        let descriptionIndex = 0;
-
-        while (detailEntries.length < maxItems) {
-            if (commentIndex < comments.length) {
-                detailEntries.push({
-                    type: 'comment',
-                    text: comments[commentIndex].content
-                });
-                commentIndex += 1;
-            }
-
-            if (descriptionIndex < descriptionLines.length && detailEntries.length < maxItems && descriptionIndex < maxDescriptions) {
-                detailEntries.push({
-                    type: 'description',
-                    text: descriptionLines[descriptionIndex]
-                });
-                descriptionIndex += 1;
-            }
-
-            if (commentIndex >= comments.length && (descriptionIndex >= descriptionLines.length || descriptionIndex >= maxDescriptions)) {
-                break;
-            }
-        }
+        // すべてのコメントを表示（制限なし）
+        const detailEntries = comments.map(comment => ({
+            type: 'comment',
+            text: comment.content,
+            comment: comment
+        }));
 
         const commentsList = detailEntries.length > 0
             ? detailEntries.map(entry => {
                 if (entry.type === 'comment') {
-                    const comment = comments.find(c => c.content === entry.text);
-                    const date = comment ? new Date(comment.created_at) : new Date();
+                    const comment = entry.comment;
+                    const date = new Date(comment.created_at);
                     const formattedDate = date.toLocaleDateString('ja-JP', {
                         year: 'numeric',
                         month: '2-digit',
@@ -354,16 +331,14 @@ function renderTasks() {
                     });
                     
                     // 投稿者名を取得
-                    const authorName = comment && comment.author_username 
-                        ? comment.author_username
-                        : '匿名';
+                    const authorName = comment.author_username || '匿名';
                     
                     // 削除ボタンの表示判定（ログインユーザーなら誰でも削除可能）
                     const canDelete = appState.currentUser && appState.currentUser.username;
                     
                     return `
                         <div class="roadmap-comment-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
-                            <div class="roadmap-comment-bullet comment" data-comment-id="${escapeHtml(comment ? comment.id : '')}" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
+                            <div class="roadmap-comment-bullet comment" data-comment-id="${escapeHtml(comment.id)}" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
                                 <span class="comment-bullet">・</span>
                                 <div class="comment-content">
                                     <div class="comment-text">${escapeHtml(entry.text)}</div>
@@ -372,7 +347,7 @@ function renderTasks() {
                                     </div>
                                 </div>
                             </div>
-                            ${canDelete ? `<button data-comment-id="${escapeHtml(comment ? comment.id : '')}" class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
+                            ${canDelete ? `<button data-comment-id="${escapeHtml(comment.id)}" class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
                                 削除
                             </button>` : ''}
                         </div>
@@ -383,6 +358,20 @@ function renderTasks() {
                 }
             }).join('')
             : '<div class="roadmap-comment-empty">まだコメントがありません。</div>';
+
+        // タスクの詳細情報を準備
+        const taskDescription = task.description ? escapeHtml(task.description) : '';
+        const taskDeadline = task.deadline ? new Date(task.deadline).toLocaleDateString('ja-JP', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }) : '';
+        const taskCreatedAt = new Date(task.created_at).toLocaleDateString('ja-JP', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const taskCreatedBy = task.created_by || 'システム';
 
         return `
             <div class="roadmap-item ${task.status}" data-task-id="${task.id}">
@@ -397,6 +386,11 @@ function renderTasks() {
                         <div class="roadmap-task-badges">
                             <span class="status-badge ${task.status}">${getStatusLabel(task.status)}</span>
                             <span class="priority-badge ${task.priority}">${getPriorityLabel(task.priority)}</span>
+                        </div>
+                        ${taskDescription ? `<div class="roadmap-task-description">${taskDescription}</div>` : ''}
+                        <div class="roadmap-task-meta">
+                            <div class="roadmap-task-date">作成: ${taskCreatedAt} | 作成者: ${escapeHtml(taskCreatedBy)}</div>
+                            ${taskDeadline ? `<div class="roadmap-task-deadline">期限: ${taskDeadline}</div>` : ''}
                         </div>
                     </div>
                 </div>
