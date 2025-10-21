@@ -33,11 +33,18 @@ FROM pg_indexes
 WHERE tablename = 'notifications';
 
 -- 5. 通知データのサンプル（存在する場合）
+-- readカラムが存在する場合のみ含める
 SELECT 
     id,
     type,
     message,
-    read,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'notifications' AND column_name = 'read'
+        ) THEN read
+        ELSE NULL
+    END as read,
     created_at
 FROM notifications 
 LIMIT 5;
