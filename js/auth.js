@@ -1,9 +1,7 @@
-// 認証管理（Supabaseベース）
+// 認証管理（ローカルストレージベース - Supabase完全回避）
 
-// Supabaseでは有効なドメイン形式のメールアドレスが必要なため、
-// 実際のメール入力が無い場合はこのドメインを付けて擬似アドレスを生成する。
-const AUTH_EMAIL_DOMAIN = 'hotmail.com';
 const USERNAME_PATTERN = /^[a-zA-Z0-9._-]+$/;
+const AUTH_EMAIL_DOMAIN = 'hotmail.com';
 
 // loadAllData 安全呼び出しラッパー（読み込み順の差異に強い）
 function callLoadAllDataSafely(maxRetries = 20, intervalMs = 100) {
@@ -48,99 +46,38 @@ function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
+// ローカルストレージからユーザー情報を取得
 async function refreshCurrentUser() {
     try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (error) {
-            console.error('ユーザー情報取得エラー:', error);
+        // セッションストレージからユーザー情報を取得
+        const sessionData = sessionStorage.getItem('local_auth_session');
+        if (!sessionData) {
             appState.currentUser = null;
             return null;
         }
 
-        if (!user) {
+        const session = JSON.parse(sessionData);
+        
+        // セッションの有効期限をチェック
+        if (session.expires && session.expires < Date.now()) {
+            sessionStorage.removeItem('local_auth_session');
             appState.currentUser = null;
             return null;
         }
 
-        const { data: profileData, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('id, username, display_name, email')
-            .eq('id', user.id)
-            .maybeSingle();
-
-        if (profileError && profileError.code !== 'PGRST116') {
-            console.error('プロファイル取得エラー:', profileError);
-        }
-
-        let profile = profileData || null;
-        const fallbackUsername = user.user_metadata?.username || (user.email ? user.email.split('@')[0] : 'user');
-        const username = (profile && profile.username) ? profile.username : fallbackUsername;
-        const displayName = (profile && profile.display_name) ? profile.display_name : username;
-        const email = (profile && profile.email) ? profile.email : (user.email || buildEmailFromUsername(username));
-
-        // プロファイルが無ければ作成（コメントFK対策）
-        if (!profile) {
-            try {
-                // まず既存のemailチェック
-                const { data: existingEmail, error: emailCheckError } = await supabase
-                    .from('user_profiles')
-                    .select('id, username')
-                    .eq('email', email)
-                    .maybeSingle();
-
-                let finalEmail = email;
-                if (existingEmail && existingEmail.id !== user.id) {
-                    // emailが重複している場合は、一意のemailを生成
-                    finalEmail = `${username.toLowerCase()}_${user.id.slice(0, 8)}@${AUTH_EMAIL_DOMAIN}`;
-                    console.log('Email重複を回避:', { original: email, new: finalEmail });
-                }
-
-                const { data: upserted, error: upsertError } = await supabase
-                    .from('user_profiles')
-                    .upsert({
-                        id: user.id,
-                        username: username.toLowerCase(),
-                        display_name: displayName,
-                        email: finalEmail
-                    }, {
-                        onConflict: 'id'
-                    })
-                    .select()
-                    .maybeSingle();
-                
-                if (upsertError) {
-                    console.error('プロファイル自動作成エラー:', upsertError);
-                    // エラーが発生してもフォールバックでプロファイルを作成
-                    profile = { id: user.id, username, display_name: displayName, email: finalEmail };
-                } else {
-                    profile = upserted || { id: user.id, username, display_name: displayName, email: finalEmail };
-                }
-            } catch (profileError) {
-                console.error('プロファイル作成例外:', profileError);
-                // 例外が発生してもフォールバックでプロファイルを作成
-                profile = { id: user.id, username, display_name: displayName, email };
-            }
-        }
-
-        appState.currentUser = {
-            id: user.id,
-            username,
-            display_name: displayName,
-            email,
-            rawUser: user
-        };
-
-        return appState.currentUser;
+        appState.currentUser = session.user;
+        console.log('ローカルユーザー情報取得:', session.user);
+        return session.user;
     } catch (error) {
-        console.error('ユーザー情報更新エラー:', error);
+        console.error('ローカルユーザー情報取得エラー:', error);
         appState.currentUser = null;
         return null;
     }
 }
 
-// ログイン処理（Supabaseベース）
+// ログイン処理（ローカルストレージベース）
 async function login(username, password) {
-    console.log('ログイン処理開始:', { username });
+    console.log('ローカルログイン処理開始:', { username });
     
     try {
         if (!username || !password) {
@@ -148,58 +85,57 @@ async function login(username, password) {
             return;
         }
 
-        const trimmedIdentifier = username.trim();
-        let email;
-
-        if (trimmedIdentifier.includes('@')) {
-            if (!isValidEmail(trimmedIdentifier)) {
-                showError('有効なメールアドレスを入力してください');
-                return;
-            }
-            email = trimmedIdentifier.toLowerCase();
-        } else {
-            if (!USERNAME_PATTERN.test(trimmedIdentifier)) {
-                showError('ユーザー名は英数字と._-のみ使用できます');
-                return;
-            }
-            email = buildEmailFromUsername(trimmedIdentifier);
-        }
-
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
-
-        if (error) {
-            console.error('Supabaseログインエラー:', error);
-            let message;
-            if (error.message === 'Invalid login credentials') {
-                message = 'ユーザー名またはパスワードが正しくありません。';
-            } else if (error.message === 'Email not confirmed') {
-                message = 'メール確認が完了していません。しばらく待ってから再度お試しください。';
-            } else {
-                message = `ログインに失敗しました: ${error.message}`;
-            }
-            showError(message);
+        const trimmedUsername = username.trim();
+        
+        if (!USERNAME_PATTERN.test(trimmedUsername)) {
+            showError('ユーザー名は英数字と._-のみ使用できます');
             return;
         }
 
-        console.log('ログイン成功:', data);
-        await refreshCurrentUser();
+        // ローカルストレージからユーザー情報を取得
+        const usersData = localStorage.getItem('local_users');
+        const users = usersData ? JSON.parse(usersData) : {};
+        
+        const userKey = trimmedUsername.toLowerCase();
+        const storedUser = users[userKey];
+        
+        if (!storedUser || storedUser.password !== password) {
+            showError('ユーザー名またはパスワードが正しくありません。');
+            return;
+        }
+
+        // セッションを作成
+        const user = {
+            id: storedUser.id,
+            username: storedUser.username,
+            display_name: storedUser.display_name,
+            email: storedUser.email,
+            created_at: storedUser.created_at
+        };
+
+        const session = {
+            user: user,
+            expires: Date.now() + (24 * 60 * 60 * 1000) // 24時間
+        };
+
+        sessionStorage.setItem('local_auth_session', JSON.stringify(session));
+        appState.currentUser = user;
+
+        console.log('ローカルログイン成功:', user);
         console.log('メイン画面に切り替え中...');
         showMainScreen();
         console.log('データ読み込み中...');
         await callLoadAllDataSafely();
         
     } catch (error) {
-        console.error('ログインエラー:', error);
+        console.error('ローカルログインエラー:', error);
         showError('ログインに失敗しました: ' + error.message);
     }
 }
 
-// 新規登録処理（Supabaseベース）
+// 新規登録処理（ローカルストレージベース）
 async function register(username, password) {
-    console.log('新規登録処理開始:', { username });
+    console.log('ローカル登録処理開始:', { username });
     
     try {
         // ユーザー名のバリデーション
@@ -208,7 +144,6 @@ async function register(username, password) {
             return;
         }
         
-        // ユーザー名の文字数チェック（日本語対応）
         if (username.length > 20) {
             showError('ユーザー名は20文字以内で入力してください');
             return;
@@ -227,146 +162,67 @@ async function register(username, password) {
             return;
         }
 
-        const emailInput = document.getElementById('reg-email');
-        const rawEmail = emailInput ? emailInput.value.trim() : '';
-
-        let email = '';
-        if (rawEmail) {
-            if (!isValidEmail(rawEmail)) {
-                showError('有効なメールアドレスを入力してください');
-                return;
-            }
-            email = rawEmail.toLowerCase();
-        } else {
-            email = buildEmailFromUsername(trimmedUsername);
-        }
-
         const normalizedUsername = trimmedUsername.toLowerCase();
 
-        // 既存ユーザーのチェック（Supabase）
-        const { data: existingProfile, error: existingError } = await supabase
-            .from('user_profiles')
-            .select('id')
-            .eq('username', normalizedUsername)
-            .maybeSingle();
-
-        if (existingError && existingError.code !== 'PGRST116') {
-            console.error('既存ユーザーチェックエラー:', existingError);
-            showError('登録処理中にエラーが発生しました');
-            return;
-        }
-
-        if (existingProfile) {
+        // 既存ユーザーのチェック（ローカルストレージ）
+        const usersData = localStorage.getItem('local_users');
+        const users = usersData ? JSON.parse(usersData) : {};
+        
+        if (users[normalizedUsername]) {
             showError('このユーザー名は既に使用されています');
             return;
         }
 
-        const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    username: normalizedUsername,
-                    display_name: trimmedUsername
-                },
-                emailRedirectTo: undefined,
-                captchaToken: undefined
-            }
-        });
+        // 新しいユーザーを作成
+        const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const email = buildEmailFromUsername(trimmedUsername);
+        
+        const newUser = {
+            id: userId,
+            username: normalizedUsername,
+            display_name: trimmedUsername,
+            email: email,
+            password: password, // 実際のプロジェクトではハッシュ化が必要
+            created_at: new Date().toISOString()
+        };
 
-        if (error) {
-            console.error('Supabase登録エラー:', error);
-            showError(`登録に失敗しました: ${error.message}`);
-            return;
-        }
+        // ローカルストレージに保存
+        users[normalizedUsername] = newUser;
+        localStorage.setItem('local_users', JSON.stringify(users));
 
-        const authUser = data?.user;
-        if (authUser) {
-            try {
-                // 既存のemailチェック
-                const { data: existingEmail, error: emailCheckError } = await supabase
-                    .from('user_profiles')
-                    .select('id, username')
-                    .eq('email', email)
-                    .maybeSingle();
+        // セッションを作成
+        const session = {
+            user: {
+                id: newUser.id,
+                username: newUser.username,
+                display_name: newUser.display_name,
+                email: newUser.email,
+                created_at: newUser.created_at
+            },
+            expires: Date.now() + (24 * 60 * 60 * 1000) // 24時間
+        };
 
-                let finalEmail = email;
-                if (existingEmail && existingEmail.id !== authUser.id) {
-                    // emailが重複している場合は、一意のemailを生成
-                    finalEmail = `${normalizedUsername}_${authUser.id.slice(0, 8)}@${AUTH_EMAIL_DOMAIN}`;
-                    console.log('登録時Email重複を回避:', { original: email, new: finalEmail });
-                }
+        sessionStorage.setItem('local_auth_session', JSON.stringify(session));
+        appState.currentUser = session.user;
 
-                const { error: profileInsertError } = await supabase
-                    .from('user_profiles')
-                    .upsert({
-                        id: authUser.id,
-                        username: normalizedUsername,
-                        display_name: trimmedUsername,
-                        email: finalEmail
-                    }, {
-                        onConflict: 'id'
-                    });
-
-                if (profileInsertError) {
-                    console.error('プロファイル保存エラー:', profileInsertError);
-                    // エラーが発生しても登録処理を続行
-                } else {
-                    console.log('プロファイル保存成功:', { username: normalizedUsername, email: finalEmail });
-                }
-            } catch (profileError) {
-                console.error('プロファイル保存例外:', profileError);
-                // 例外が発生しても登録処理を続行
-            }
-        }
-
-        if (data?.session) {
-            await refreshCurrentUser();
-            showMainScreen();
-            await callLoadAllDataSafely();
-            showError('登録とログインが完了しました！', 'success');
-        } else {
-            // メール確認が必要な場合は、自動的にログインを試行
-            console.log('メール確認が必要な場合、自動ログインを試行します');
-            try {
-                const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-                    email,
-                    password
-                });
-                
-                if (loginError) {
-                    console.log('自動ログイン失敗:', loginError.message);
-                    showError('登録が完了しました！ログインしてください。', 'success');
-                    showLoginForm();
-                } else {
-                    await refreshCurrentUser();
-                    showMainScreen();
-                    await callLoadAllDataSafely();
-                    showError('登録とログインが完了しました！', 'success');
-                }
-            } catch (autoLoginError) {
-                console.log('自動ログイン例外:', autoLoginError.message);
-                showError('登録が完了しました！ログインしてください。', 'success');
-                showLoginForm();
-            }
-        }
+        console.log('ローカル登録成功:', newUser);
+        showMainScreen();
+        await callLoadAllDataSafely();
+        showError('登録とログインが完了しました！', 'success');
         
     } catch (error) {
-        console.error('登録エラー:', error);
+        console.error('ローカル登録エラー:', error);
         showError('登録に失敗しました: ' + error.message);
     }
 }
 
-// ログアウト処理
+// ログアウト処理（ローカルストレージベース）
 async function logout() {
     try {
-        // リアルタイムサブスクリプションの解除
-        appState.subscriptions.forEach(sub => {
-            supabase.removeChannel(sub);
-        });
-        appState.subscriptions = [];
-        await supabase.auth.signOut();
-
+        // セッションストレージをクリア
+        sessionStorage.removeItem('local_auth_session');
+        
+        // アプリケーション状態をリセット
         appState.currentUser = null;
         appState.tasks = [];
         appState.comments = [];
@@ -376,31 +232,42 @@ async function logout() {
         appState.brainstormFilter = 'all';
         appState.brainstormSubscribed = false;
         
+        console.log('ローカルログアウト完了');
         showLoginScreen();
         
     } catch (error) {
-        console.error('ログアウトエラー:', error);
+        console.error('ローカルログアウトエラー:', error);
     }
 }
 
-// セッションチェック（Supabaseベース）
+// セッションチェック（ローカルストレージベース）
 async function checkSession() {
-    console.log('セッションチェック開始');
-    const { data: { session }, error } = await supabase.auth.getSession();
+    console.log('ローカルセッションチェック開始');
+    
+    try {
+        const sessionData = sessionStorage.getItem('local_auth_session');
+        if (!sessionData) {
+            console.log('ローカルセッションなし');
+            showLoginScreen();
+            return;
+        }
 
-    if (error) {
-        console.error('セッション取得エラー:', error);
-        showLoginScreen();
-        return;
-    }
+        const session = JSON.parse(sessionData);
+        
+        // セッションの有効期限をチェック
+        if (session.expires && session.expires < Date.now()) {
+            console.log('ローカルセッション期限切れ');
+            sessionStorage.removeItem('local_auth_session');
+            showLoginScreen();
+            return;
+        }
 
-    if (session) {
-        console.log('セッションを検出:', session);
+        console.log('ローカルセッション存在:', session);
         await refreshCurrentUser();
         showMainScreen();
         await callLoadAllDataSafely();
-    } else {
-        console.log('アクティブなセッションなし');
+    } catch (error) {
+        console.error('ローカルセッションチェックエラー:', error);
         showLoginScreen();
     }
 }
