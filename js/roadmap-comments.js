@@ -283,6 +283,7 @@ async function submitRoadmapComment() {
         };
 
         // Supabaseに保存
+        let insertedData = null;
         try {
             const { data, error } = await supabase
                 .from('comments')
@@ -295,7 +296,8 @@ async function submitRoadmapComment() {
                 return;
             }
             
-            console.log('Supabaseコメント投稿成功:', data);
+            insertedData = data;
+            console.log('Supabaseコメント投稿成功:', insertedData);
         } catch (insertError) {
             console.error('Supabaseコメント投稿例外:', insertError);
             alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
