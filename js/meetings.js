@@ -220,30 +220,44 @@ function showMeetingNotification(notification) {
         // 通知表示エラーは会議作成を阻害しない
     }
 
-    // アプリ内通知の表示
-    const notificationElement = document.createElement('div');
-    notificationElement.className = 'meeting-notification';
-    notificationElement.innerHTML = `
-        <div class="notification-content">
-            <h4>${notification.title}</h4>
-            <p>${notification.message}</p>
-            <div class="notification-actions">
-                <button onclick="joinMeeting('${notification.data.meetingId}')" class="btn btn-primary">参加する</button>
-                <button onclick="dismissNotification('${notification.id}')" class="btn btn-secondary">閉じる</button>
+    // アプリ内通知の表示（エラーハンドリング強化）
+    try {
+        const notificationElement = document.createElement('div');
+        notificationElement.className = 'meeting-notification';
+        
+        // 安全なプロパティアクセス
+        const notificationTitle = notification.title || '会議通知';
+        const notificationMessage = notification.message || '新しい会議がスケジュールされました';
+        const notificationId = notification.id || `meeting_${Date.now()}`;
+        const meetingId = (notification.data && notification.data.meetingId) || notification.related_id || notificationId;
+        
+        notificationElement.innerHTML = `
+            <div class="notification-content">
+                <h4>${notificationTitle}</h4>
+                <p>${notificationMessage}</p>
+                <div class="notification-actions">
+                    <button onclick="joinMeeting('${meetingId}')" class="btn btn-primary">参加する</button>
+                    <button onclick="dismissNotification('${notificationId}')" class="btn btn-secondary">閉じる</button>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+        
+        // 通知を表示
+        document.body.appendChild(notificationElement);
+        
+        // 5秒後に自動削除
+        setTimeout(() => {
+            if (notificationElement.parentNode) {
+                notificationElement.parentNode.removeChild(notificationElement);
+            }
+        }, 5000);
+        
+    } catch (domError) {
+        console.warn('DOM通知表示エラー:', domError);
+        // DOM操作エラーは会議作成を阻害しない
+    }
 
-    // 通知を表示
-    const notificationContainer = document.getElementById('notification-container') || createNotificationContainer();
-    notificationContainer.appendChild(notificationElement);
 
-    // 自動で非表示（5秒後）
-    setTimeout(() => {
-        if (notificationElement.parentNode) {
-            notificationElement.parentNode.removeChild(notificationElement);
-        }
-    }, 5000);
 }
 
 // 通知コンテナの作成
