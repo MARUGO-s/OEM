@@ -374,25 +374,36 @@ function updateNotificationBadge() {
 // 通知作成
 async function createNotification(notificationData) {
     try {
+        console.log('📝 通知を作成します:', notificationData);
+        
         const notification = {
             ...notificationData,
             created_by: appState.currentUser?.id || null
         };
 
-        const { error } = await supabase
+        console.log('Supabaseに通知を保存します:', notification);
+        const { data, error } = await supabase
             .from('notifications')
-            .insert([notification]);
+            .insert([notification])
+            .select();
 
         if (error) {
-            console.error('通知作成エラー:', error);
+            console.error('❌ 通知作成エラー:', error);
+            console.error('エラー詳細:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
             // 通知作成エラーはコメント投稿を阻害しない
         } else {
-            console.log('通知をデータベースに保存しました:', notification);
-            // リアルタイムサブスクリプションが自動的にプッシュ通知を送信します
+            console.log('✅ 通知をデータベースに保存しました:', data);
+            console.log('リアルタイムサブスクリプションが自動的にプッシュ通知を送信します');
         }
         
     } catch (error) {
-        console.error('通知作成エラー:', error);
+        console.error('❌ 通知作成例外:', error);
+        console.error('スタック:', error.stack);
         // 通知作成エラーはコメント投稿を阻害しない
     }
 }
@@ -533,12 +544,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // リアルタイム更新のサブスクリプション
 function subscribeToNotifications() {
+    console.log('通知のリアルタイムサブスクリプションを開始します');
+    
     const channel = supabase
         .channel('notifications-changes')
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'notifications' },
             (payload) => {
-                console.log('新しい通知を受信:', payload);
+                console.log('🔔 新しい通知を受信:', payload);
+                console.log('通知データ:', payload.new);
                 
                 // 新しい通知をリストに追加
                 appState.notifications.unshift(payload.new);
@@ -546,10 +560,18 @@ function subscribeToNotifications() {
                 updateNotificationBadge();
                 
                 // プッシュ通知を送信
+                console.log('プッシュ通知を送信します...');
                 sendPushNotification(payload.new);
             }
         )
-        .subscribe();
+        .subscribe((status) => {
+            console.log('通知サブスクリプション状態:', status);
+            if (status === 'SUBSCRIBED') {
+                console.log('✅ 通知のリアルタイム更新が有効になりました');
+            } else if (status === 'CHANNEL_ERROR') {
+                console.error('❌ 通知サブスクリプションエラー');
+            }
+        });
 
     appState.subscriptions.push(channel);
 }
