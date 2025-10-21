@@ -1,5 +1,5 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'oem-app-v36';
+const CACHE_NAME = 'oem-app-v37';
 
 // ベースパスを自動検出（GitHub Pages対応）
 const BASE_PATH = self.registration.scope;
@@ -131,31 +131,46 @@ self.addEventListener('fetch', (event) => {
 
 // Push notification handling
 self.addEventListener('push', (event) => {
+  let notificationData = {};
+  
+  try {
+    if (event.data) {
+      notificationData = event.data.json();
+    }
+  } catch (e) {
+    notificationData = {
+      title: 'MARUGO OEM Special Menu',
+      message: event.data ? event.data.text() : '新しい通知があります'
+    };
+  }
+
+  const title = notificationData.title || 'MARUGO OEM Special Menu';
   const options = {
-    body: event.data ? event.data.text() : '新しい通知があります',
+    body: notificationData.message || notificationData.body || '新しい通知があります',
     icon: '/OEM/icon-192.svg',
     badge: '/OEM/icon-192.svg',
-    vibrate: [100, 50, 100],
+    vibrate: [200, 100, 200],
+    tag: notificationData.tag || 'oem-notification',
+    requireInteraction: false,
     data: {
       dateOfArrival: Date.now(),
-      primaryKey: 1
+      url: notificationData.url || '/OEM/',
+      notification_id: notificationData.id
     },
     actions: [
       {
-        action: 'explore',
-        title: 'アプリを開く',
-        icon: '/OEM/icon-192.svg'
+        action: 'open',
+        title: 'アプリを開く'
       },
       {
         action: 'close',
-        title: '閉じる',
-        icon: '/OEM/icon-192.svg'
+        title: '閉じる'
       }
     ]
   };
 
   event.waitUntil(
-    self.registration.showNotification('OEM商品企画管理', options)
+    self.registration.showNotification(title, options)
   );
 });
 
@@ -163,9 +178,24 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  if (event.action === 'explore') {
+  if (event.action === 'open' || !event.action) {
+    const urlToOpen = event.notification.data?.url || BASE_PATH;
+    
     event.waitUntil(
-      clients.openWindow(BASE_PATH)
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clientList) => {
+          // 既に開いているウィンドウがあればそれをフォーカス
+          for (let i = 0; i < clientList.length; i++) {
+            const client = clientList[i];
+            if (client.url.includes('/OEM/') && 'focus' in client) {
+              return client.focus();
+            }
+          }
+          // なければ新しいウィンドウを開く
+          if (clients.openWindow) {
+            return clients.openWindow(urlToOpen);
+          }
+        })
     );
   }
 });

@@ -2,6 +2,103 @@
 
 let notificationCount = 0;
 
+// プッシュ通知の許可をリクエスト
+async function requestNotificationPermission() {
+    try {
+        // 既に許可されている場合は何もしない
+        if ('Notification' in window && Notification.permission === 'granted') {
+            console.log('通知は既に許可されています');
+            await subscribeToPushNotifications();
+            return true;
+        }
+
+        // 通知がサポートされていない場合
+        if (!('Notification' in window)) {
+            console.warn('このブラウザは通知をサポートしていません');
+            return false;
+        }
+
+        // 許可をリクエスト
+        const permission = await Notification.requestPermission();
+        console.log('通知許可の結果:', permission);
+
+        if (permission === 'granted') {
+            showNotification('プッシュ通知が有効になりました！', 'success');
+            await subscribeToPushNotifications();
+            // 許可状態を保存
+            localStorage.setItem('notificationPermission', 'granted');
+            return true;
+        } else {
+            console.log('通知が拒否されました');
+            localStorage.setItem('notificationPermission', 'denied');
+            return false;
+        }
+    } catch (error) {
+        console.error('通知許可リクエストエラー:', error);
+        return false;
+    }
+}
+
+// プッシュ通知のサブスクリプション
+async function subscribeToPushNotifications() {
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        
+        // 既存のサブスクリプションを確認
+        let subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+            // 新しいサブスクリプションを作成
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: null // VAPIDキーは実際の実装では必要
+            });
+            console.log('プッシュ通知にサブスクライブしました:', subscription);
+        }
+
+        // サブスクリプション情報を保存（実際の実装ではサーバーに送信）
+        localStorage.setItem('pushSubscription', JSON.stringify(subscription));
+        
+        return subscription;
+    } catch (error) {
+        console.error('プッシュ通知サブスクリプションエラー:', error);
+        return null;
+    }
+}
+
+// ブラウザ通知を表示（テスト用）
+function showBrowserNotification(title, options = {}) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+        const defaultOptions = {
+            body: options.body || '新しい通知があります',
+            icon: '/OEM/icon-192.svg',
+            badge: '/OEM/icon-192.svg',
+            tag: options.tag || 'oem-notification',
+            requireInteraction: false,
+            ...options
+        };
+        
+        const notification = new Notification(title, defaultOptions);
+        
+        notification.onclick = function(event) {
+            event.preventDefault();
+            window.focus();
+            notification.close();
+        };
+        
+        return notification;
+    }
+    return null;
+}
+
+// 通知許可状態を確認
+function checkNotificationPermission() {
+    if (!('Notification' in window)) {
+        return 'unsupported';
+    }
+    return Notification.permission;
+}
+
 // 通知一覧の読み込み
 async function loadNotifications() {
     try {
@@ -237,11 +334,50 @@ async function createNotification(notificationData) {
         if (error) {
             console.error('通知作成エラー:', error);
             // 通知作成エラーはコメント投稿を阻害しない
+        } else {
+            // データベースに保存成功したら、プッシュ通知も送信
+            await sendPushNotification(notification);
         }
         
     } catch (error) {
         console.error('通知作成エラー:', error);
         // 通知作成エラーはコメント投稿を阻害しない
+    }
+}
+
+// プッシュ通知を送信
+async function sendPushNotification(notificationData) {
+    try {
+        // 通知許可が得られているか確認
+        if (checkNotificationPermission() !== 'granted') {
+            console.log('通知許可がないため、プッシュ通知をスキップします');
+            return;
+        }
+
+        // アプリがバックグラウンドまたは非アクティブの場合のみプッシュ通知を表示
+        if (document.hidden || !document.hasFocus()) {
+            // ブラウザ通知を表示
+            const title = 'MARUGO OEM Special Menu';
+            const options = {
+                body: notificationData.message,
+                icon: '/OEM/icon-192.svg',
+                badge: '/OEM/icon-192.svg',
+                tag: notificationData.related_id || 'general',
+                vibrate: [200, 100, 200],
+                data: {
+                    url: '/OEM/',
+                    notification_id: notificationData.id
+                }
+            };
+            
+            showBrowserNotification(title, options);
+        } else {
+            console.log('アプリがアクティブなため、プッシュ通知をスキップします');
+        }
+        
+    } catch (error) {
+        console.error('プッシュ通知送信エラー:', error);
+        // プッシュ通知エラーは無視
     }
 }
 
@@ -280,6 +416,8 @@ function toggleNotificationPanel() {
 document.addEventListener('DOMContentLoaded', () => {
     const notificationBell = document.getElementById('notification-bell');
     const closeNotifications = document.getElementById('close-notifications');
+    const enablePushBtn = document.getElementById('enable-push-notifications-btn');
+    const markAllReadBtn = document.getElementById('mark-all-read-btn');
     
     if (notificationBell && !notificationBell.dataset.listenerAttached) {
         notificationBell.addEventListener('click', toggleNotificationPanel);
@@ -295,6 +433,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         closeNotifications.dataset.listenerAttached = 'true';
     }
+    
+    if (enablePushBtn && !enablePushBtn.dataset.listenerAttached) {
+        enablePushBtn.addEventListener('click', async () => {
+            const granted = await requestNotificationPermission();
+            if (granted) {
+                hideNotificationPermissionButton();
+            }
+        });
+        enablePushBtn.dataset.listenerAttached = 'true';
+    }
+    
+    if (markAllReadBtn && !markAllReadBtn.dataset.listenerAttached) {
+        markAllReadBtn.addEventListener('click', markAllNotificationsAsRead);
+        markAllReadBtn.dataset.listenerAttached = 'true';
+    }
+    
+    // ページ読み込み時に通知許可状態をチェック
+    showNotificationPermissionButton();
 });
 
 // リアルタイム更新のサブスクリプション
@@ -325,30 +481,9 @@ function subscribeToNotifications() {
     appState.subscriptions.push(channel);
 }
 
-// ブラウザ通知の許可をリクエスト（ユーザージェスチャーが必要）
-function requestNotificationPermission() {
-    // ユーザージェスチャーなしでは通知許可を要求できないため、完全にスキップ
-    console.log('通知許可要求はスキップされました（ユーザージェスチャーが必要）');
-    return;
-}
-
-// ユーザージェスチャー付きで通知許可を要求する関数
-function requestNotificationPermissionWithGesture() {
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission().then(permission => {
-            if (permission === 'granted') {
-                console.log('通知許可が付与されました');
-                hideNotificationPermissionButton();
-            } else {
-                console.log('通知許可が拒否されました');
-            }
-        });
-    }
-}
-
 // 通知許可ボタンを表示
 function showNotificationPermissionButton() {
-    const button = document.getElementById('notification-permission-btn');
+    const button = document.getElementById('enable-push-notifications-btn');
     if (button && 'Notification' in window && Notification.permission === 'default') {
         button.style.display = 'inline-block';
     }
@@ -356,22 +491,9 @@ function showNotificationPermissionButton() {
 
 // 通知許可ボタンを非表示
 function hideNotificationPermissionButton() {
-    const button = document.getElementById('notification-permission-btn');
+    const button = document.getElementById('enable-push-notifications-btn');
     if (button) {
         button.style.display = 'none';
     }
 }
 
-// 通知許可ボタンのイベントリスナー
-document.addEventListener('DOMContentLoaded', () => {
-    const permissionBtn = document.getElementById('notification-permission-btn');
-    if (permissionBtn && !permissionBtn.dataset.listenerAttached) {
-        permissionBtn.addEventListener('click', () => {
-            requestNotificationPermissionWithGesture();
-        });
-        permissionBtn.dataset.listenerAttached = 'true';
-    }
-    
-    // 通知許可ボタンの表示チェック
-    showNotificationPermissionButton();
-});
