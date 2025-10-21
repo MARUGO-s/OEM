@@ -161,13 +161,13 @@ async function login(username, password) {
         if (error) {
             console.error('Supabaseログインエラー:', error);
             let message;
-            if (error.message === 'Invalid login credentials') {
-                message = 'ユーザー名またはパスワードが正しくありません。';
-            } else if (error.message === 'Email not confirmed') {
-                message = 'メール確認が完了していません。しばらく待ってから再度お試しください。';
-            } else {
-                message = `ログインに失敗しました: ${error.message}`;
-            }
+                if (error.message === 'Invalid login credentials') {
+                    message = 'ユーザー名またはパスワードが正しくありません。';
+                } else if (error.message === 'Email not confirmed') {
+                    message = 'メール確認が必要です。Supabase設定でメール確認を無効化するか、管理者にお問い合わせください。';
+                } else {
+                    message = `ログインに失敗しました: ${error.message}`;
+                }
             showError(message);
             return;
         }
@@ -293,36 +293,44 @@ async function register(username, password) {
             }
         }
 
-        if (data?.session) {
-            await refreshCurrentUser();
-            showMainScreen();
-            await callLoadAllDataSafely();
-            showError('登録とログインが完了しました！', 'success');
-        } else {
-            // メール確認が必要な場合は、自動的にログインを試行
-            console.log('メール確認が必要な場合、自動ログインを試行します');
-            try {
-                const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-                    email,
-                    password
-                });
-                
-                if (loginError) {
-                    console.log('自動ログイン失敗:', loginError.message);
-                    showError('登録が完了しました！ログインしてください。', 'success');
-                    showLoginForm();
-                } else {
+                if (data?.session) {
                     await refreshCurrentUser();
                     showMainScreen();
                     await callLoadAllDataSafely();
                     showError('登録とログインが完了しました！', 'success');
+                } else {
+                    // メール確認が不要な場合でも、自動的にログインを試行
+                    console.log('自動ログインを試行します');
+                    try {
+                        // 少し待ってからログインを試行（ユーザー作成の完了を待つ）
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        
+                        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+                            email,
+                            password
+                        });
+                        
+                        if (loginError) {
+                            console.log('自動ログイン失敗:', loginError.message);
+                            if (loginError.message === 'Email not confirmed') {
+                                // メール確認エラーの場合は、ユーザーに直接ログインしてもらう
+                                showError('登録が完了しました！ユーザー名とパスワードでログインしてください。', 'success');
+                            } else {
+                                showError('登録が完了しました！ログインしてください。', 'success');
+                            }
+                            showLoginForm();
+                        } else {
+                            await refreshCurrentUser();
+                            showMainScreen();
+                            await callLoadAllDataSafely();
+                            showError('登録とログインが完了しました！', 'success');
+                        }
+                    } catch (autoLoginError) {
+                        console.log('自動ログイン例外:', autoLoginError.message);
+                        showError('登録が完了しました！ログインしてください。', 'success');
+                        showLoginForm();
+                    }
                 }
-            } catch (autoLoginError) {
-                console.log('自動ログイン例外:', autoLoginError.message);
-                showError('登録が完了しました！ログインしてください。', 'success');
-                showLoginForm();
-            }
-        }
         
     } catch (error) {
         console.error('Supabase登録エラー:', error);
