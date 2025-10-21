@@ -11,7 +11,7 @@ DROP TABLE IF EXISTS user_profiles CASCADE;
 
 -- ユーザープロファイルテーブル
 CREATE TABLE IF NOT EXISTS user_profiles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username TEXT UNIQUE NOT NULL,
     display_name TEXT,
     email TEXT UNIQUE,
