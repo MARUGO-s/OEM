@@ -80,6 +80,8 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => {
             console.log('新規タスクモーダルを開きます');
             openTaskModal();
+            // モーダルが開いたらローディング画面を非表示
+            hideLoadingScreen();
         }, 500);
     }
     
@@ -164,12 +166,16 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('タスク追加ボタンがクリックされました');
             
-            // まずページをリロード
-            console.log('ページをリロードします');
-            window.location.reload();
+            // ローディング画面を表示
+            showLoadingScreen('新規タスクモーダルを準備中...');
             
-            // リロード後に新規タスク追加モーダルを開くためのフラグを設定
-            sessionStorage.setItem('openTaskModalAfterReload', 'true');
+            // 少し遅延してからページをリロード（ローディング画面が表示されるように）
+            setTimeout(() => {
+                console.log('ページをリロードします');
+                // リロード後に新規タスク追加モーダルを開くためのフラ@gmail.comを設定
+                sessionStorage.setItem('openTaskModalAfterReload', 'true');
+                window.location.reload();
+            }, 300);
             
         });
         addTaskBtn.dataset.listenerAttached = 'true';
@@ -541,6 +547,29 @@ function editTask(taskId) {
     document.getElementById('task-deadline').value = task.deadline || '';
 
     openTaskModal();
+}
+
+// ローディング画面の制御
+function showLoadingScreen(message = 'タスクモーダルを準備中...') {
+    const loadingScreen = document.getElementById('loading-screen');
+    const loadingText = document.querySelector('.loading-text');
+    
+    if (loadingScreen) {
+        if (loadingText) {
+            loadingText.textContent = message;
+        }
+        loadingScreen.classList.add('active');
+        console.log('ローディング画面を表示:', message);
+    }
+}
+
+function hideLoadingScreen() {
+    const loadingScreen = document.getElementById('loading-screen');
+    
+    if (loadingScreen) {
+        loadingScreen.classList.remove('active');
+        console.log('ローディング画面を非表示');
+    }
 }
 
 // モーダル操作（modal-utils.jsの関数を直接使用）
