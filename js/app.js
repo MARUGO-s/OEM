@@ -79,8 +79,8 @@ function registerServiceWorker() {
     
     // ページロード完了後に登録
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js', {
-            scope: './'
+        navigator.serviceWorker.register('/OEM/sw.js', {
+            scope: '/OEM/'
         })
         .then((registration) => {
             console.log('Service Worker登録成功:', registration.scope);

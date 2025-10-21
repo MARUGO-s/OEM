@@ -1,5 +1,5 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'oem-app-v30';
+const CACHE_NAME = 'oem-app-v31';
 
 // ベースパスを自動検出（GitHub Pages対応）
 const BASE_PATH = self.registration.scope;
@@ -55,11 +55,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // 外部リソース（Supabase API等）はスキップ
+  if (event.request.url.includes('supabase') || 
+      event.request.url.includes('unpkg.com') ||
+      event.request.url.includes('googleapis.com')) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
         // キャッシュから返す
         if (response) {
+          console.log('キャッシュから返却:', event.request.url);
           return response;
         }
 
@@ -76,15 +84,19 @@ self.addEventListener('fetch', (event) => {
             caches.open(CACHE_NAME)
               .then((cache) => {
                 cache.put(event.request, responseToCache);
+                console.log('キャッシュに保存:', event.request.url);
               });
 
             return response;
           })
-          .catch(() => {
+          .catch((error) => {
+            console.log('ネットワークエラー:', event.request.url, error);
             // ネットワークエラーの場合、オフラインページを返す
             if (event.request.destination === 'document') {
               return caches.match(OFFLINE_URL);
             }
+            // その他のリソースの場合は空のレスポンスを返す
+            return new Response('', { status: 404, statusText: 'Not Found' });
           });
       })
   );
