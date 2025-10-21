@@ -80,22 +80,45 @@ async function refreshCurrentUser() {
 
         // プロファイルが無ければ作成（コメントFK対策）
         if (!profile) {
-            const { data: upserted, error: upsertError } = await supabase
-                .from('user_profiles')
-                .upsert({
-                    id: user.id,
-                    username: username.toLowerCase(),
-                    display_name: displayName,
-                    email
-                }, {
-                    onConflict: 'id'
-                })
-                .select()
-                .maybeSingle();
-            if (upsertError) {
-                console.error('プロファイル自動作成エラー:', upsertError);
-            } else {
-                profile = upserted || { id: user.id, username, display_name: displayName, email };
+            try {
+                // まず既存のemailチェック
+                const { data: existingEmail, error: emailCheckError } = await supabase
+                    .from('user_profiles')
+                    .select('id, username')
+                    .eq('email', email)
+                    .maybeSingle();
+
+                let finalEmail = email;
+                if (existingEmail && existingEmail.id !== user.id) {
+                    // emailが重複している場合は、一意のemailを生成
+                    finalEmail = `${username.toLowerCase()}_${user.id.slice(0, 8)}@${AUTH_EMAIL_DOMAIN}`;
+                    console.log('Email重複を回避:', { original: email, new: finalEmail });
+                }
+
+                const { data: upserted, error: upsertError } = await supabase
+                    .from('user_profiles')
+                    .upsert({
+                        id: user.id,
+                        username: username.toLowerCase(),
+                        display_name: displayName,
+                        email: finalEmail
+                    }, {
+                        onConflict: 'id'
+                    })
+                    .select()
+                    .maybeSingle();
+                
+                if (upsertError) {
+                    console.error('プロファイル自動作成エラー:', upsertError);
+                    // エラーが発生してもフォールバックでプロファイルを作成
+                    profile = { id: user.id, username, display_name: displayName, email: finalEmail };
+                } else {
+                    profile = upserted || { id: user.id, username, display_name: displayName, email: finalEmail };
+                }
+            } catch (profileError) {
+                console.error('プロファイル作成例外:', profileError);
+                // 例外が発生してもフォールバックでプロファイルを作成
+                profile = { id: user.id, username, display_name: displayName, email };
             }
         }
 
@@ -259,19 +282,41 @@ async function register(username, password) {
 
         const authUser = data?.user;
         if (authUser) {
-            const { error: profileInsertError } = await supabase
-                .from('user_profiles')
-                .upsert({
-                    id: authUser.id,
-                    username: normalizedUsername,
-                    display_name: trimmedUsername,
-                    email
-                }, {
-                    onConflict: 'id'
-                });
+            try {
+                // 既存のemailチェック
+                const { data: existingEmail, error: emailCheckError } = await supabase
+                    .from('user_profiles')
+                    .select('id, username')
+                    .eq('email', email)
+                    .maybeSingle();
 
-            if (profileInsertError) {
-                console.error('プロファイル保存エラー:', profileInsertError);
+                let finalEmail = email;
+                if (existingEmail && existingEmail.id !== authUser.id) {
+                    // emailが重複している場合は、一意のemailを生成
+                    finalEmail = `${normalizedUsername}_${authUser.id.slice(0, 8)}@${AUTH_EMAIL_DOMAIN}`;
+                    console.log('登録時Email重複を回避:', { original: email, new: finalEmail });
+                }
+
+                const { error: profileInsertError } = await supabase
+                    .from('user_profiles')
+                    .upsert({
+                        id: authUser.id,
+                        username: normalizedUsername,
+                        display_name: trimmedUsername,
+                        email: finalEmail
+                    }, {
+                        onConflict: 'id'
+                    });
+
+                if (profileInsertError) {
+                    console.error('プロファイル保存エラー:', profileInsertError);
+                    // エラーが発生しても登録処理を続行
+                } else {
+                    console.log('プロファイル保存成功:', { username: normalizedUsername, email: finalEmail });
+                }
+            } catch (profileError) {
+                console.error('プロファイル保存例外:', profileError);
+                // 例外が発生しても登録処理を続行
             }
         }
 

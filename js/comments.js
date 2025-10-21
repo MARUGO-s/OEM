@@ -114,17 +114,32 @@ async function postComment(content) {
             return;
         }
 
-        // ユーザープロファイルの確実な存在保証（409エラーを無視してコメント投稿を優先）
+        // ユーザープロファイルの確実な存在保証（email重複回避）
         if (appState.currentUser && appState.currentUser.username !== 'anonymous') {
             try {
                 const email = appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`;
+                
+                // 既存のemailチェック
+                const { data: existingEmail, error: emailCheckError } = await supabase
+                    .from('user_profiles')
+                    .select('id, username')
+                    .eq('email', email)
+                    .maybeSingle();
+
+                let finalEmail = email;
+                if (existingEmail && existingEmail.id !== appState.currentUser.id) {
+                    // emailが重複している場合は、一意のemailを生成
+                    finalEmail = `${appState.currentUser.username}_${appState.currentUser.id.slice(0, 8)}@hotmail.com`;
+                    console.log('コメント投稿時Email重複を回避:', { original: email, new: finalEmail });
+                }
+
                 const { error: upsertError } = await supabase
                     .from('user_profiles')
                     .upsert({
                         id: appState.currentUser.id,
                         username: appState.currentUser.username,
                         display_name: appState.currentUser.username,
-                        email: email
+                        email: finalEmail
                     }, {
                         onConflict: 'id'
                     });

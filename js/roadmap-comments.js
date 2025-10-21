@@ -232,17 +232,32 @@ async function submitRoadmapComment() {
     const currentUser = appState.currentUser;
 
     try {
-        // ユーザープロファイルの確実な存在保証（409エラーを無視してコメント投稿を優先）
+        // ユーザープロファイルの確実な存在保証（email重複回避）
         if (currentUser.username !== 'anonymous') {
             try {
                 const email = currentUser.email || `${currentUser.username}@hotmail.com`;
+                
+                // 既存のemailチェック
+                const { data: existingEmail, error: emailCheckError } = await supabase
+                    .from('user_profiles')
+                    .select('id, username')
+                    .eq('email', email)
+                    .maybeSingle();
+
+                let finalEmail = email;
+                if (existingEmail && existingEmail.id !== currentUser.id) {
+                    // emailが重複している場合は、一意のemailを生成
+                    finalEmail = `${currentUser.username}_${currentUser.id.slice(0, 8)}@hotmail.com`;
+                    console.log('コメント投稿時Email重複を回避:', { original: email, new: finalEmail });
+                }
+
                 const { error: upsertError } = await supabase
                     .from('user_profiles')
                     .upsert({
                         id: currentUser.id,
                         username: currentUser.username,
                         display_name: currentUser.username,
-                        email: email
+                        email: finalEmail
                     }, {
                         onConflict: 'id'
                     });
