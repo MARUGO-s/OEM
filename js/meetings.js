@@ -175,29 +175,49 @@ async function createMeetingNotification(meeting) {
             // 例外が発生しても会議作成は継続
         }
 
-        // リアルタイム通知を表示
-        showMeetingNotification(notification);
+        // リアルタイム通知を表示（エラーハンドリング強化）
+        try {
+            showMeetingNotification(notification);
+        } catch (notificationDisplayError) {
+            console.warn('通知表示エラー（無視）:', notificationDisplayError);
+            // 通知表示エラーは会議作成を阻害しない
+        }
 
     } catch (error) {
         console.error('会議通知作成エラー:', error);
     }
 }
 
-// 会議通知の表示
+// 会議通知の表示（エラーハンドリング強化）
 function showMeetingNotification(notification) {
-    // ブラウザ通知の表示
-    if (Notification.permission === 'granted') {
-        new Notification(notification.title, {
-            body: notification.message,
-            icon: '/icon-192.png',
-            badge: '/icon-192.png',
-            tag: notification.id,
-            requireInteraction: true,
-            actions: [
-                { action: 'join', title: '参加する' },
-                { action: 'dismiss', title: '閉じる' }
-            ]
-        });
+    try {
+        // 通知オブジェクトのバリデーション
+        if (!notification || typeof notification !== 'object') {
+            console.warn('無効な通知オブジェクト:', notification);
+            return;
+        }
+
+        // ブラウザ通知の表示
+        if (Notification.permission === 'granted') {
+            const notificationTitle = notification.title || '会議通知';
+            const notificationBody = notification.message || '新しい会議がスケジュールされました';
+            const notificationId = notification.id || `meeting_${Date.now()}`;
+
+            new Notification(notificationTitle, {
+                body: notificationBody,
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                tag: notificationId,
+                requireInteraction: true,
+                actions: [
+                    { action: 'join', title: '参加する' },
+                    { action: 'dismiss', title: '閉じる' }
+                ]
+            });
+        }
+    } catch (error) {
+        console.warn('通知表示エラー:', error);
+        // 通知表示エラーは会議作成を阻害しない
     }
 
     // アプリ内通知の表示
