@@ -22,6 +22,83 @@ async function loadNotifications() {
     }
 }
 
+// 通知を既読にする
+async function markNotificationAsRead(notificationId) {
+    try {
+        // Supabaseで通知を既読に更新
+        const { error } = await supabase
+            .from('notifications')
+            .update({ read: true })
+            .eq('id', notificationId);
+
+        if (error) throw error;
+
+        // ローカル状態を更新
+        const notificationIndex = appState.notifications.findIndex(n => n.id === notificationId);
+        if (notificationIndex !== -1) {
+            appState.notifications[notificationIndex].read = true;
+        }
+
+        // 表示を更新
+        renderNotifications();
+        updateNotificationBadge();
+
+        console.log('通知を既読にしました:', notificationId);
+        
+    } catch (error) {
+        console.error('通知既読エラー:', error);
+        showNotification('通知の既読に失敗しました', 'error');
+    }
+}
+
+// すべての通知を既読にする
+async function markAllNotificationsAsRead() {
+    try {
+        // 未読の通知のみを取得
+        const unreadNotifications = appState.notifications.filter(n => !n.read);
+        
+        if (unreadNotifications.length === 0) {
+            showNotification('既読にする通知がありません', 'info');
+            return;
+        }
+
+        // Supabaseで一括更新
+        const { error } = await supabase
+            .from('notifications')
+            .update({ read: true })
+            .in('id', unreadNotifications.map(n => n.id));
+
+        if (error) throw error;
+
+        // ローカル状態を更新
+        appState.notifications.forEach(notification => {
+            notification.read = true;
+        });
+
+        // 表示を更新
+        renderNotifications();
+        updateNotificationBadge();
+
+        console.log('すべての通知を既読にしました');
+        showNotification('すべての通知を既読にしました', 'success');
+        
+    } catch (error) {
+        console.error('通知一括既読エラー:', error);
+        showNotification('通知の既読に失敗しました', 'error');
+    }
+}
+
+// 通知パネルのイベントリスナーを設定
+function setupNotificationEventListeners() {
+    // すべて既読ボタン
+    const markAllReadBtn = document.getElementById('mark-all-read-btn');
+    if (markAllReadBtn) {
+        markAllReadBtn.addEventListener('click', () => {
+            markAllNotificationsAsRead();
+        });
+    }
+}
+
 // 通知の表示
 function renderNotifications() {
     const container = document.getElementById('notification-list');
@@ -36,9 +113,12 @@ function renderNotifications() {
         const isNew = !notification.read;
         
         return `
-            <div class="notification-item ${isNew ? 'new' : ''}" data-notification-id="${notification.id}">
-                <div>${getNotificationIcon(notification.type)} ${escapeHtml(notification.message)}</div>
-                <div class="time">${timeAgo}</div>
+            <div class="notification-item ${isNew ? 'new' : ''}" data-notification-id="${notification.id}" onclick="markNotificationAsRead('${notification.id}')">
+                <div class="notification-content">
+                    <div class="notification-message">${getNotificationIcon(notification.type)} ${escapeHtml(notification.message)}</div>
+                    <div class="time">${timeAgo}</div>
+                </div>
+                ${isNew ? '<div class="unread-indicator"></div>' : ''}
             </div>
         `;
     }).join('');

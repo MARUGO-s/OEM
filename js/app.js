@@ -39,6 +39,15 @@ async function loadAllData() {
             console.error('通知許可リクエストエラー:', error);
         }
         
+        // 通知のイベントリスナーを設定
+        try {
+            if (typeof setupNotificationEventListeners === 'function') {
+                setupNotificationEventListeners();
+            }
+        } catch (error) {
+            console.error('通知イベントリスナー設定エラー:', error);
+        }
+        
         // Service Workerの登録（PWA対応、エラーハンドリング付き）
         try {
             registerServiceWorker();
