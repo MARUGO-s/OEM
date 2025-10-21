@@ -34,8 +34,7 @@ window.showRoadmapItemModal = function(taskId) {
     if (deleteBtn) {
         // 現在のユーザーがタスクの作成者かどうかチェック
         const canDelete = appState.currentUser && 
-                         (task.created_by === appState.currentUser.username || 
-                          task.created_by === appState.currentUser.id);
+                         task.created_by === appState.currentUser.id;
         
         if (canDelete) {
             deleteBtn.style.display = 'inline-block';
