@@ -1,34 +1,34 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'oem-app-v29';
+const CACHE_NAME = 'oem-app-v30';
 
 // ベースパスを自動検出（GitHub Pages対応）
 const BASE_PATH = self.registration.scope;
 
 const urlsToCache = [
-  './',
-  './index.html',
-  './styles/main.css',
-  './js/modal-utils.js',
-  './js/app.js',
-  './js/auth.js',
-  './js/comments.js',
-  './js/config.js',
-  './js/meetings.js',
-  './js/mobile.js',
-  './js/notifications.js',
-  './js/roadmap-comments.js',
-  './js/sample-data.js',
-  './js/tasks.js',
-  './manifest.json',
-  './favicon.ico',
-  './favicon.svg',
-  './icon-192.svg',
-  './icon-512.svg',
-  './offline.html'
+  '/OEM/',
+  '/OEM/index.html',
+  '/OEM/styles/main.css',
+  '/OEM/js/modal-utils.js',
+  '/OEM/js/app.js',
+  '/OEM/js/auth.js',
+  '/OEM/js/comments.js',
+  '/OEM/js/config.js',
+  '/OEM/js/meetings.js',
+  '/OEM/js/mobile.js',
+  '/OEM/js/notifications.js',
+  '/OEM/js/roadmap-comments.js',
+  '/OEM/js/sample-data.js',
+  '/OEM/js/tasks.js',
+  '/OEM/manifest.json',
+  '/OEM/favicon.ico',
+  '/OEM/favicon.svg',
+  '/OEM/icon-192.svg',
+  '/OEM/icon-512.svg',
+  '/OEM/offline.html'
 ];
 
 // オフライン用のフォールバックページ
-const OFFLINE_URL = './offline.html';
+const OFFLINE_URL = '/OEM/offline.html';
 
 // Install event
 self.addEventListener('install', (event) => {
@@ -94,8 +94,8 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   const options = {
     body: event.data ? event.data.text() : '新しい通知があります',
-    icon: './icon-192.svg',
-    badge: './icon-192.svg',
+    icon: '/OEM/icon-192.svg',
+    badge: '/OEM/icon-192.svg',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -105,12 +105,12 @@ self.addEventListener('push', (event) => {
       {
         action: 'explore',
         title: 'アプリを開く',
-        icon: './icon-192.svg'
+        icon: '/OEM/icon-192.svg'
       },
       {
         action: 'close',
         title: '閉じる',
-        icon: './icon-192.svg'
+        icon: '/OEM/icon-192.svg'
       }
     ]
   };
