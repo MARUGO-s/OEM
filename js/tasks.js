@@ -481,6 +481,12 @@ function updateSummary() {
 // タスク追加
 async function addTask(taskData) {
     try {
+        // 入力バリデーション
+        if (!taskData || !taskData.title || taskData.title.trim() === '') {
+            alert('タスク名は必須です。');
+            return;
+        }
+        
         // 現在のユーザー情報を確認
         if (!appState.currentUser || !appState.currentUser.id) {
             console.error('ユーザー情報が不足しています:', appState.currentUser);
@@ -492,6 +498,8 @@ async function addTask(taskData) {
         const newTask = {
             id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             ...taskData,
+            title: taskData.title.trim(), // トリミング
+            description: taskData.description ? taskData.description.trim() : '',
             created_by: appState.currentUser.id,
             created_at: now,
             updated_at: now

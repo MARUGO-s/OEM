@@ -6,41 +6,69 @@ function enableEditMode(taskId) {
     if (!task) return;
     
     // 表示モードを非表示、編集モードを表示
-    document.getElementById('roadmap-item-display-mode').style.display = 'none';
-    document.getElementById('roadmap-item-edit-mode').style.display = 'block';
+    const displayMode = document.getElementById('roadmap-item-display-mode');
+    const editMode = document.getElementById('roadmap-item-edit-mode');
+    const editBtn = document.getElementById('roadmap-item-edit-btn');
+    
+    if (displayMode) displayMode.style.display = 'none';
+    if (editMode) editMode.style.display = 'block';
     
     // フォームに現在の値を設定
-    document.getElementById('roadmap-edit-title').value = task.title;
-    document.getElementById('roadmap-edit-description').value = task.description || '';
-    document.getElementById('roadmap-edit-status').value = task.status || 'pending';
-    document.getElementById('roadmap-edit-priority').value = task.priority || 'medium';
-    document.getElementById('roadmap-edit-deadline').value = task.deadline || '';
+    const titleInput = document.getElementById('roadmap-edit-title');
+    const descInput = document.getElementById('roadmap-edit-description');
+    const statusInput = document.getElementById('roadmap-edit-status');
+    const priorityInput = document.getElementById('roadmap-edit-priority');
+    const deadlineInput = document.getElementById('roadmap-edit-deadline');
+    
+    if (titleInput) titleInput.value = task.title;
+    if (descInput) descInput.value = task.description || '';
+    if (statusInput) statusInput.value = task.status || 'pending';
+    if (priorityInput) priorityInput.value = task.priority || 'medium';
+    if (deadlineInput) deadlineInput.value = task.deadline || '';
     
     // 編集ボタンを非表示
-    document.getElementById('roadmap-item-edit-btn').style.display = 'none';
+    if (editBtn) editBtn.style.display = 'none';
 }
 
 // 編集モードを無効にする
 function disableEditMode() {
     // 編集モードを非表示、表示モードを表示
-    document.getElementById('roadmap-item-edit-mode').style.display = 'none';
-    document.getElementById('roadmap-item-display-mode').style.display = 'block';
+    const editMode = document.getElementById('roadmap-item-edit-mode');
+    const displayMode = document.getElementById('roadmap-item-display-mode');
+    const editBtn = document.getElementById('roadmap-item-edit-btn');
+    
+    if (editMode) editMode.style.display = 'none';
+    if (displayMode) displayMode.style.display = 'block';
     
     // 編集ボタンを表示
-    document.getElementById('roadmap-item-edit-btn').style.display = 'inline-block';
+    if (editBtn) editBtn.style.display = 'inline-block';
 }
 
 // タスクを更新する
 async function updateTask(taskId) {
     const form = document.getElementById('roadmap-item-edit-form');
-    const formData = new FormData(form);
+    if (!form) {
+        console.error('編集フォームが見つかりません');
+        return;
+    }
+    
+    const titleInput = document.getElementById('roadmap-edit-title');
+    const descInput = document.getElementById('roadmap-edit-description');
+    const statusInput = document.getElementById('roadmap-edit-status');
+    const priorityInput = document.getElementById('roadmap-edit-priority');
+    const deadlineInput = document.getElementById('roadmap-edit-deadline');
+    
+    if (!titleInput || !descInput || !statusInput || !priorityInput || !deadlineInput) {
+        console.error('必須フォーム要素が見つかりません');
+        return;
+    }
     
     const taskData = {
-        title: document.getElementById('roadmap-edit-title').value,
-        description: document.getElementById('roadmap-edit-description').value,
-        status: document.getElementById('roadmap-edit-status').value,
-        priority: document.getElementById('roadmap-edit-priority').value,
-        deadline: document.getElementById('roadmap-edit-deadline').value || null
+        title: titleInput.value,
+        description: descInput.value,
+        status: statusInput.value,
+        priority: priorityInput.value,
+        deadline: deadlineInput.value || null
     };
     
     try {

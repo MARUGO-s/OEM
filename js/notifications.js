@@ -288,7 +288,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (closeNotifications && !closeNotifications.dataset.listenerAttached) {
         closeNotifications.addEventListener('click', () => {
-            document.getElementById('notification-panel').classList.remove('open');
+            const panel = document.getElementById('notification-panel');
+            if (panel) {
+                panel.classList.remove('open');
+            }
         });
         closeNotifications.dataset.listenerAttached = 'true';
     }
