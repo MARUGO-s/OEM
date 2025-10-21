@@ -71,33 +71,33 @@ function escapeHtml(text) {
 
 let roadmapCommentCache = [];
 
-// ローカルコメントの読み込み
-async function loadLocalRoadmapComments(taskId) {
+// Supabaseコメントの読み込み（復活版）
+async function loadRoadmapComments(taskId) {
     try {
-        // ローカルストレージからコメントを取得
-        const commentsData = localStorage.getItem('local_comments');
-        const allComments = commentsData ? JSON.parse(commentsData) : [];
+        // Supabaseからコメントを取得
+        const { data: comments, error } = await supabase
+            .from('comments')
+            .select('*')
+            .eq('task_id', taskId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Supabaseコメント読み込みエラー:', error);
+            // エラーが発生しても空の配列で処理を続行
+            roadmapCommentCache = [];
+            renderRoadmapComments([]);
+            return;
+        }
         
-        // 特定のタスクのコメントをフィルタリング
-        const taskComments = allComments.filter(comment => comment.task_id === taskId);
-        
-        // 作成日時でソート（新しい順）
-        taskComments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        
-        roadmapCommentCache = taskComments;
+        roadmapCommentCache = comments || [];
         renderRoadmapComments(roadmapCommentCache);
         
-        console.log('ローカルロードマップコメント読み込み完了:', taskComments.length, '個のコメント');
+        console.log('Supabaseコメント読み込み完了:', comments ? comments.length : 0, '個のコメント');
     } catch (error) {
-        console.error('ローカルロードマップコメント読み込みエラー:', error);
+        console.error('Supabaseコメント読み込みエラー:', error);
         roadmapCommentCache = [];
         renderRoadmapComments([]);
     }
-}
-
-// 既存のSupabaseベースの関数は残しておく（後方互換性）
-async function loadRoadmapComments(taskId) {
-    return await loadLocalRoadmapComments(taskId);
 }
 
 // ロードマップコメントの表示
@@ -232,8 +232,8 @@ async function submitRoadmapComment() {
     const currentUser = appState.currentUser;
 
     try {
-        // ローカルストレージベースのコメント投稿（Supabase完全回避）
-        console.log('ローカルコメント投稿:', currentUser.username);
+        // Supabaseコメント投稿（復活版）
+        console.log('Supabaseコメント投稿:', currentUser.username);
 
         // 新しいコメントを作成
         const newComment = {
@@ -245,18 +245,23 @@ async function submitRoadmapComment() {
             created_at: new Date().toISOString()
         };
 
-        // ローカルストレージに保存
+        // Supabaseに保存
         try {
-            const commentsData = localStorage.getItem('local_comments');
-            const comments = commentsData ? JSON.parse(commentsData) : [];
+            const { data, error } = await supabase
+                .from('comments')
+                .insert([newComment])
+                .select();
+
+            if (error) {
+                console.error('Supabaseコメント投稿エラー:', error);
+                alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
+                return;
+            }
             
-            comments.push(newComment);
-            localStorage.setItem('local_comments', JSON.stringify(comments));
-            
-            console.log('ローカルコメント保存成功:', newComment);
-        } catch (saveError) {
-            console.error('ローカルコメント保存エラー:', saveError);
-            alert('コメントの保存に失敗しました。');
+            console.log('Supabaseコメント投稿成功:', data);
+        } catch (insertError) {
+            console.error('Supabaseコメント投稿例外:', insertError);
+            alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
             return;
         }
 
@@ -266,8 +271,8 @@ async function submitRoadmapComment() {
             roadmapCommentInput.value = '';
         }
         
-        // ローカルコメント一覧を再読み込み
-        await loadLocalRoadmapComments(taskId);
+        // Supabaseコメント一覧を再読み込み
+        await loadRoadmapComments(taskId);
         
         // タイムラインを再描画して最新コメントを反映
         if (typeof renderTasks === 'function') {
