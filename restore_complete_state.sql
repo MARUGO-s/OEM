@@ -1,0 +1,168 @@
+-- データベースの完全復元
+-- データクリアの直前の状態に完全復活させる
+-- SupabaseのSQLエディターで実行してください
+
+BEGIN;
+
+-- 1. 既存のテーブルとポリシーを削除（安全に）
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS meetings CASCADE;
+DROP TABLE IF EXISTS comments CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS user_profiles CASCADE;
+
+-- 2. user_profilesテーブルを作成
+CREATE TABLE user_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username TEXT UNIQUE NOT NULL,
+    display_name TEXT,
+    email TEXT UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 3. tasksテーブルを作成
+CREATE TABLE tasks (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    priority TEXT NOT NULL DEFAULT 'medium',
+    deadline DATE,
+    created_by UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 4. commentsテーブルを作成
+CREATE TABLE comments (
+    id TEXT PRIMARY KEY,
+    task_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+    author_id UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
+    author_username TEXT,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 5. meetingsテーブルを作成
+CREATE TABLE meetings (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    duration INTEGER NOT NULL,
+    participants TEXT[] NOT NULL,
+    meet_url TEXT,
+    status TEXT NOT NULL DEFAULT 'scheduled',
+    created_by UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+    meeting_code TEXT,
+    calendar_event_id TEXT
+);
+
+-- 6. notificationsテーブルを作成
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    related_id TEXT,
+    created_by UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 7. インデックスの作成
+CREATE INDEX idx_tasks_created_by ON tasks(created_by);
+CREATE INDEX idx_tasks_status ON tasks(status);
+CREATE INDEX idx_tasks_deadline ON tasks(deadline);
+CREATE INDEX idx_comments_task_id ON comments(task_id);
+CREATE INDEX idx_comments_author_id ON comments(author_id);
+CREATE INDEX idx_meetings_start_time ON meetings(start_time);
+CREATE INDEX idx_meetings_created_by ON meetings(created_by);
+CREATE INDEX idx_notifications_created_by ON notifications(created_by);
+CREATE INDEX idx_notifications_type ON notifications(type);
+
+-- 8. RLS（Row Level Security）の有効化
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE meetings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- 9. RLSポリシーの作成
+CREATE POLICY "Allow all access to user_profiles" ON user_profiles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access to tasks" ON tasks FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access to comments" ON comments FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access to meetings" ON meetings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access to notifications" ON notifications FOR ALL USING (true) WITH CHECK (true);
+
+-- 10. リアルタイム機能の有効化
+ALTER PUBLICATION supabase_realtime ADD TABLE tasks;
+ALTER PUBLICATION supabase_realtime ADD TABLE comments;
+ALTER PUBLICATION supabase_realtime ADD TABLE meetings;
+ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+
+-- 11. サンプルユーザープロファイルの挿入
+INSERT INTO user_profiles (id, username, display_name, email, created_at, updated_at) VALUES
+('550e8400-e29b-41d4-a716-446655440001', 'manager', 'マネージャー', 'manager@oem-restaurant.local', '2025-10-01 09:00:00+00', '2025-10-01 09:00:00+00'),
+('550e8400-e29b-41d4-a716-446655440002', 'procurement', '調達担当', 'procurement@oem-restaurant.local', '2025-10-02 09:00:00+00', '2025-10-02 09:00:00+00'),
+('550e8400-e29b-41d4-a716-446655440003', 'chef', 'シェフ', 'chef@oem-restaurant.local', '2025-10-03 09:00:00+00', '2025-10-03 09:00:00+00'),
+('550e8400-e29b-41d4-a716-446655440004', 'quality', '品質管理', 'quality@oem-restaurant.local', '2025-10-04 09:00:00+00', '2025-10-04 09:00:00+00'),
+('550e8400-e29b-41d4-a716-446655440005', 'production', '製造担当', 'production@oem-restaurant.local', '2025-10-05 09:00:00+00', '2025-10-05 09:00:00+00'),
+('550e8400-e29b-41d4-a716-446655440006', 'design', 'デザイナー', 'design@oem-restaurant.local', '2025-10-06 09:00:00+00', '2025-10-06 09:00:00+00'),
+('550e8400-e29b-41d4-a716-446655440007', 'testing', 'テスト担当', 'testing@oem-restaurant.local', '2025-10-07 09:00:00+00', '2025-10-07 09:00:00+00'),
+('550e8400-e29b-41d4-a716-446655440008', 'logistics', '物流担当', 'logistics@oem-restaurant.local', '2025-10-08 09:00:00+00', '2025-10-08 09:00:00+00'),
+('550e8400-e29b-41d4-a716-446655440009', 'marketing', 'マーケティング', 'marketing@oem-restaurant.local', '2025-10-09 09:00:00+00', '2025-10-09 09:00:00+00'),
+('550e8400-e29b-41d4-a716-446655440010', 'final', '最終確認担当', 'final@oem-restaurant.local', '2025-10-10 09:00:00+00', '2025-10-10 09:00:00+00');
+
+-- 12. サンプルタスクの挿入
+INSERT INTO tasks (id, title, description, status, priority, deadline, created_by, created_at, updated_at) VALUES
+('task-1', '市場調査・ニーズ分析', 'ターゲット市場の調査と顧客ニーズの分析を行い、OEM商品の方向性を決定する', 'completed', 'high', '2025-10-15', '550e8400-e29b-41d4-a716-446655440001', '2025-10-01 09:00:00+00', '2025-10-15 17:00:00+00'),
+('task-2', '原材料の選定・調達', '品質基準に合致する原材料の選定と安定供給体制の構築', 'in_progress', 'high', '2025-10-25', '550e8400-e29b-41d4-a716-446655440002', '2025-10-02 09:00:00+00', '2025-10-20 14:30:00+00'),
+('task-3', 'レシピ開発・試作', 'OEM商品のレシピ開発と試作品の作成・評価', 'in_progress', 'high', '2025-11-05', '550e8400-e29b-41d4-a716-446655440003', '2025-10-03 09:00:00+00', '2025-10-22 16:45:00+00'),
+('task-4', '品質管理基準設定', 'OEM商品の品質管理基準とチェックリストの策定', 'pending', 'medium', '2025-11-10', '550e8400-e29b-41d4-a716-446655440004', '2025-10-04 09:00:00+00', '2025-10-04 09:00:00+00'),
+('task-5', '製造ライン設計', '効率的な製造ラインの設計と設備配置の最適化', 'pending', 'high', '2025-11-15', '550e8400-e29b-41d4-a716-446655440005', '2025-10-05 09:00:00+00', '2025-10-05 09:00:00+00'),
+('task-6', 'パッケージング設計', 'OEM商品のパッケージデザインと梱包仕様の決定', 'pending', 'medium', '2025-11-20', '550e8400-e29b-41d4-a716-446655440006', '2025-10-06 09:00:00+00', '2025-10-06 09:00:00+00'),
+('task-7', '品質テスト・検証', '完成品の品質テストと顧客満足度の検証', 'pending', 'high', '2025-11-25', '550e8400-e29b-41d4-a716-446655440007', '2025-10-07 09:00:00+00', '2025-10-07 09:00:00+00'),
+('task-8', '出荷プロセス構築', '造成ต่อ効率的な出荷プロセスと物流システムの構築', 'pending', 'medium', '2025-11-30', '550e8400-e29b-41d4-a716-446655440008', '2025-10-08 09:00:00+00', '2025-10-08 09:00:00+00'),
+('task-9', 'マーケティング準備', 'OEM商品のマーケティング戦略と販促資料の準備', 'pending', 'low', '2025-12-05', '550e8400-e29b-41d4-a716-446655440009', '2025-10-09 09:00:00+00', '2025-10-09 09:00:00+00'),
+('task-10', '最終品質確認・納品開始', '最終品質確認と顧客への納品開始', 'pending', 'high', '2025-12-10', '550e8400-e29b-41d4-a716-446655440010', '2025-10-10 09:00:00+00', '2025-10-10 09:00:00+00');
+
+-- 13. サンプルコメントの挿入
+INSERT INTO comments (id, task_id, author_id, author_username, content, created_at) VALUES
+('comment-1', 'task-1', '550e8400-e29b-41d4-a716-446655440001', 'manager', '市場調査が完了しました。ターゲット顧客のニーズが明確になりました。', '2025-10-15 10:30:00+00'),
+('comment-2', 'task-1', '550e8400-e29b-41d4-a716-446655440001', 'manager', '競合他社の分析結果を共有します。差別化ポイントが見えてきました。', '2025-10-15 14:20:00+00'),
+('comment-3', 'task-2', '550e8400-e29b-41d4-a716-446655440002', 'procurement', '原材料のサンプルを複数業者から取得しました。品質比較を開始します。', '2025-10-20 09:15:00+00'),
+('comment-4', 'task-2', '550e8400-e29b-41d4-a716-446655440004', 'quality', '原材料の品質基準を設定しました。コストと品質のバランスを検討中です。', '2025-10-21 11:45:00+00'),
+('comment-5', 'task-3', '550e8400-e29b-41d4-a716-446655440003', 'chef', 'レシピの第一版が完成しました。試作品の味見を実施予定です。', '2025-10-22 16:30:00+00'),
+('comment-6', 'task-3', '550e8400-e29b-41d4-a716-446655440003', 'chef', '試作品の味見結果を共有します。調整が必要な点がいくつかあります。', '2025-10-23 13:20:00+00'),
+('comment-7', 'task-4', '550e8400-e29b-41d4-a716-446655440004', 'quality', '品質管理基準の草案を作成しました。レビューをお願いします。', '2025-10-24 10:00:00+00'),
+('comment-8', 'task-5', '550e8400-e29b-41d4-a716-446655440005', 'production', '製造ラインの設計図を作成中です。効率性を重視したレイアウトを検討しています。', '2025-10-25 14:15:00+00'),
+('comment-9', 'task-6', '550e8400-e29b-41d4-a716-446655440006', 'design', 'パッケージデザインのコンセプトを検討中です。ブランドイメージを重視します。', '2025-10-26 09:30:00+00'),
+('comment-10', 'task-7', '550e8400-e29b-41d4-a716-446655440007', 'testing', '品質テストの計画を策定しました。包括的なテスト項目を準備中です。', '2025-10-27 11:45:00+00'),
+('comment-11', 'task-8', '550e8400-e29b-41d4-a716-446655440008', 'logistics', '出荷プロセスの効率化を検討中です。自動化できる部分を特定しています。', '2025-10-28 15:20:00+00'),
+('comment-12', 'task-9', '550e8400-e29b-41d4-a716-446655440009', 'marketing', 'ブランド戦略の方向性を検討中です。差別化ポイントを明確にします。', '2025-10-29 10:30:00+00'),
+('comment-13', 'task-10', '550e8400-e29b-41d4-a716-446655440010', 'final', '納品スケジュールの調整を行っています。顧客の要求に柔軟に対応します。', '2025-11-09 09:30:00+00');
+
+-- 14. サンプル会議の挿入
+INSERT INTO meetings (id, title, start_time, duration, participants, meet_url, status, created_at, updated_at) VALUES
+('meeting-1', 'OEM開発プロジェクト キックオフ会議', '2025-10-15 10:00:00+00', 90, ARRAY['manager', 'chef', 'procurement'], 'https://meet.google.com/abc-defg-hij', 'scheduled', '2025-10-01 09:00:00+00', '2025-10-01 09:00:00+00'),
+('meeting-2', '原材料選定 検討会議', '2025-10-25 14:00:00+00', 60, ARRAY['procurement', 'quality', 'chef'], 'https://meet.google.com/xyz-uvwx-rst', 'scheduled', '2025-10-20 10:30:00+00', '2025-10-20 10:30:00+00'),
+('meeting-3', 'レシピ開発 進捗報告会', '2025-11-05 11:00:00+00', 45, ARRAY['chef', 'quality', 'manager'], 'https://meet.google.com/mno-pqrs-tuv', 'scheduled', '2025-10-22 15:45:00+00', '2025-10-22 15:45:00+00'),
+('meeting-4', '品質管理基準 レビュー会議', '2025-11-10 15:00:00+00', 75, ARRAY['quality', 'production', 'testing'], 'https://meet.google.com/ghi-jklm-nop', 'scheduled', '2025-10-24 11:20:00+00', '2025-10-24 11:20:00+00'),
+('meeting-5', '最終品質確認 準備会議', '2025-12-05 09:00:00+00', 120, ARRAY['final', 'testing', 'logistics'], 'https://meet.google.com/qrs-tuvw-xyz', 'scheduled', '2025-10-30 16:00:00+00', '2025-10-30 16:00:00+00');
+
+COMMIT;
+
+-- 15. データ挿入の確認
+SELECT 
+    'user_profiles' as table_name, COUNT(*) as count FROM user_profiles
+UNION ALL
+SELECT 'tasks' as table_name, COUNT(*) as count FROM tasks
+UNION ALL
+SELECT 'comments' as table_name, COUNT(*) as count FROM comments
+UNION ALL
+SELECT 'meetings' as table_name, COUNT(*) as count FROM meetings
+ORDER BY table_name;
+
+-- 完了メッセージ
+SELECT 'Database has been completely restored to pre-clear state' as status;

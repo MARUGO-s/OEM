@@ -27,7 +27,7 @@ DROP INDEX IF EXISTS idx_meetings_start_time;
 
 -- ユーザープロファイルテーブル（完全に新しい）
 CREATE TABLE user_profiles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username TEXT UNIQUE NOT NULL,
     display_name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE comments (
 
 -- 通知テーブル（完全に新しい）
 CREATE TABLE notifications (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     type TEXT NOT NULL,
     message TEXT NOT NULL,
     related_id TEXT,

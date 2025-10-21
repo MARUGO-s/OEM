@@ -399,7 +399,7 @@ async function submitRoadmapComment() {
         const newComment = {
             id: generateRoadmapCommentId(),
             task_id: taskId,
-            author_id: currentUser.id || null,
+            author_id: currentUser.id,
             author_username: currentUser.username,
             content: content,
             created_at: new Date().toISOString()

@@ -67,6 +67,9 @@ function hideTaskDetailModal() {
 
 // モーダルイベントリスナー設定
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoadedイベントが発生しました');
+    console.log('document.readyState:', document.readyState);
+    
     const modal = document.getElementById('task-detail-modal');
     const closeBtn = document.getElementById('modal-close-btn');
     const closeAction = document.getElementById('modal-close-action');
@@ -126,6 +129,85 @@ document.addEventListener('DOMContentLoaded', function() {
             hideTaskDetailModal();
         }
     });
+    
+    // タスク追加ボタンのイベントリスナー
+    const addTaskBtn = document.getElementById('add-task-btn');
+    const closeModalBtn = document.getElementById('close-modal');
+    const cancelTaskBtn = document.getElementById('cancel-task');
+    const taskForm = document.getElementById('task-form');
+    const taskModal = document.getElementById('task-modal');
+    
+    // 必須要素の存在確認
+    if (!taskModal) {
+        console.error('task-modal要素が見つかりません。HTMLの読み込みに問題があります。');
+        return;
+    }
+    
+    if (addTaskBtn && !addTaskBtn.dataset.listenerAttached) {
+        console.log('タスク追加ボタンのイベントリスナーを設定します');
+        addTaskBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('タスク追加ボタンがクリックされました');
+            
+            // 既にモーダルが開いている場合は何もしない
+            const modal = document.getElementById('task-modal');
+            if (modal && modal.classList.contains('active')) {
+                console.log('モーダルが既に開いているため、処理をスキップします');
+                return;
+            }
+            
+            try {
+                currentEditingTask = null;
+                if (taskForm) taskForm.reset();
+                const modalTitle = document.getElementById('modal-title');
+                if (modalTitle) modalTitle.textContent = '新規タスク追加';
+                console.log('openModal関数を呼び出します');
+                openModal();
+            } catch (error) {
+                console.error('タスク追加ボタンクリックエラー:', error);
+                console.error('エラーの詳細:', error.message, error.stack);
+            }
+        });
+        addTaskBtn.dataset.listenerAttached = 'true';
+        console.log('タスク追加ボタンのイベントリスナーが設定されました');
+    } else if (!addTaskBtn) {
+        console.error('add-task-btn要素が見つかりません');
+    } else if (addTaskBtn.dataset.listenerAttached) {
+        console.log('タスク追加ボタンのイベントリスナーは既に設定されています');
+    }
+    
+    if (closeModalBtn && !closeModalBtn.dataset.listenerAttached) {
+        closeModalBtn.addEventListener('click', closeModal);
+        closeModalBtn.dataset.listenerAttached = 'true';
+    }
+    
+    if (cancelTaskBtn && !cancelTaskBtn.dataset.listenerAttached) {
+        cancelTaskBtn.addEventListener('click', closeModal);
+        cancelTaskBtn.dataset.listenerAttached = 'true';
+    }
+    
+    if (taskForm && !taskForm.dataset.listenerAttached) {
+        taskForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const taskData = {
+                title: document.getElementById('task-title').value,
+                description: document.getElementById('task-description').value,
+                status: document.getElementById('task-status').value,
+                priority: document.getElementById('task-priority').value,
+                deadline: document.getElementById('task-deadline').value || null
+            };
+
+            if (currentEditingTask) {
+                await updateTask(currentEditingTask.id, taskData);
+            } else {
+                await addTask(taskData);
+            }
+        });
+        taskForm.dataset.listenerAttached = 'true';
+    }
 });
 
 // タスク一覧の読み込み
@@ -341,29 +423,56 @@ function updateSummary() {
 // タスク追加
 async function addTask(taskData) {
     try {
+        // 現在のユーザー情報を確認
+        if (!appState.currentUser || !appState.currentUser.id) {
+            console.error('ユーザー情報が不足しています:', appState.currentUser);
+            alert('ログインが必要です。ページを再読み込みしてください。');
+            return;
+        }
+
         const now = new Date().toISOString();
         const newTask = {
             id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             ...taskData,
-            created_by: appState.currentUser?.id || null,
+            created_by: appState.currentUser.id,
             created_at: now,
             updated_at: now
         };
 
-        const { error } = await supabase
+        console.log('タスク追加開始:', newTask);
+
+        const { data, error } = await supabase
             .from('tasks')
-            .insert([newTask]);
+            .insert([newTask])
+            .select();
 
         if (error) {
+            console.error('Supabaseタスク追加エラー:', error);
             throw error;
         }
 
+        console.log('タスク追加成功:', data);
+        
+        // 通知を表示
+        showNotification('タスクが正常に追加されました！', 'success');
+        
+        // タスクを再読み込みしてモーダルを閉じる
         await loadTasks();
         closeModal();
         
     } catch (error) {
         console.error('タスク追加エラー:', error);
-        alert('タスクの追加に失敗しました');
+        
+        // より詳細なエラーメッセージを表示
+        let errorMessage = 'タスクの追加に失敗しました。';
+        if (error.message) {
+            errorMessage += `\nエラー: ${error.message}`;
+        }
+        if (error.code) {
+            errorMessage += `\nコード: ${error.code}`;
+        }
+        
+        alert(errorMessage);
     }
 }
 
@@ -432,16 +541,31 @@ function editTask(taskId) {
     openModal();
 }
 
-// モーダル操作
+// モーダル操作（新しいモーダルマネージャーを使用）
 function openModal() {
-    document.getElementById('task-modal').classList.add('active');
+    console.log('tasks.js の openModal関数が呼び出されました');
+    return window.openModal('task-modal');
 }
 
 function closeModal() {
-    document.getElementById('task-modal').classList.remove('active');
-    document.getElementById('task-form').reset();
+    console.log('tasks.js の closeModal関数が呼び出されました');
+    
+    // 新しいモーダルマネージャーを使用
+    window.closeModal('task-modal');
+    window.resetModalState();
+    
+    // フォームをリセット
+    const form = document.getElementById('task-form');
+    if (form) {
+        form.reset();
+    }
+    
     currentEditingTask = null;
-    document.getElementById('modal-title').textContent = '新規タスク追加';
+    
+    const modalTitle = document.getElementById('modal-title');
+    if (modalTitle) {
+        modalTitle.textContent = '新規タスク追加';
+    }
 }
 
 // ステータスラベル
@@ -569,55 +693,6 @@ async function deleteTask(taskId) {
     }
 }
 
-// イベントリスナー（DOMContentLoaded後に登録、重複防止）
-document.addEventListener('DOMContentLoaded', () => {
-    const addTaskBtn = document.getElementById('add-task-btn');
-    const closeModalBtn = document.getElementById('close-modal');
-    const cancelTaskBtn = document.getElementById('cancel-task');
-    const taskForm = document.getElementById('task-form');
-    
-    if (addTaskBtn && !addTaskBtn.dataset.listenerAttached) {
-        addTaskBtn.addEventListener('click', () => {
-            currentEditingTask = null;
-            if (taskForm) taskForm.reset();
-            const modalTitle = document.getElementById('modal-title');
-            if (modalTitle) modalTitle.textContent = '新規タスク追加';
-            openModal();
-        });
-        addTaskBtn.dataset.listenerAttached = 'true';
-    }
-    
-    if (closeModalBtn && !closeModalBtn.dataset.listenerAttached) {
-        closeModalBtn.addEventListener('click', closeModal);
-        closeModalBtn.dataset.listenerAttached = 'true';
-    }
-    
-    if (cancelTaskBtn && !cancelTaskBtn.dataset.listenerAttached) {
-        cancelTaskBtn.addEventListener('click', closeModal);
-        cancelTaskBtn.dataset.listenerAttached = 'true';
-    }
-    
-    if (taskForm && !taskForm.dataset.listenerAttached) {
-        taskForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const taskData = {
-                title: document.getElementById('task-title').value,
-                description: document.getElementById('task-description').value,
-                status: document.getElementById('task-status').value,
-                priority: document.getElementById('task-priority').value,
-                deadline: document.getElementById('task-deadline').value || null
-            };
-
-            if (currentEditingTask) {
-                await updateTask(currentEditingTask.id, taskData);
-            } else {
-                await addTask(taskData);
-            }
-        });
-        taskForm.dataset.listenerAttached = 'true';
-    }
-});
 
 // リアルタイム更新のサブスクリプション
 function subscribeToTasks() {

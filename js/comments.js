@@ -215,7 +215,7 @@ async function postComment(content) {
         const newComment = {
             id: generateCommentId(),
             content: content,
-            author_id: appState.currentUser.id || null,
+            author_id: appState.currentUser.id,
             author_username: appState.currentUser.username,
             task_id: null,
             created_at: new Date().toISOString()
