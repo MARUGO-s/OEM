@@ -242,9 +242,8 @@ function renderTasks() {
                         ? comment.author_username
                         : '匿名';
                     
-                    // 削除ボタンの表示判定（現在のユーザーがコメントの作成者かどうか）
-                    const canDelete = appState.currentUser && 
-                                     comment && comment.author_username === appState.currentUser.username;
+                    // 削除ボタンの表示判定（ログインユーザーなら誰でも削除可能）
+                    const canDelete = appState.currentUser && appState.currentUser.username;
                     
                     return `
                         <div class="roadmap-comment-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">

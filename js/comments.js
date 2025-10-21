@@ -57,9 +57,8 @@ function renderComments() {
         const createdAt = comment.created_at ? new Date(comment.created_at) : new Date();
         const timeAgo = getTimeAgo(createdAt);
         
-        // 削除ボタンの表示判定（現在のユーザーがコメントの作成者かどうか）
-        const canDelete = appState.currentUser && 
-                         comment.author_username === appState.currentUser.username;
+        // 削除ボタンの表示判定（ログインユーザーなら誰でも削除可能）
+        const canDelete = appState.currentUser && appState.currentUser.username;
         
         return `
             <div class="comment-item">

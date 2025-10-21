@@ -29,12 +29,11 @@ window.showRoadmapItemModal = function(taskId) {
         document.getElementById('roadmap-item-deadline').textContent = '未設定';
     }
     
-    // 削除ボタンの表示制御
+    // 削除ボタンの表示制御（誰でも削除可能）
     const deleteBtn = document.getElementById('roadmap-item-delete-btn');
     if (deleteBtn) {
-        // 現在のユーザーがタスクの作成者かどうかチェック
-        const canDelete = appState.currentUser && 
-                         task.created_by === appState.currentUser.id;
+        // ログインユーザーなら誰でも削除可能
+        const canDelete = appState.currentUser && appState.currentUser.username;
         
         if (canDelete) {
             deleteBtn.style.display = 'inline-block';
@@ -250,9 +249,8 @@ function renderRoadmapComments(comments) {
         const authorName = comment.author_username || 
             (comment.author_email ? comment.author_email.split('@')[0] : '匿名');
         
-        // 削除ボタンの表示判定（現在のユーザーがコメントの作成者かどうか）
-        const canDelete = appState.currentUser && 
-                         comment.author_username === appState.currentUser.username;
+        // 削除ボタンの表示判定（ログインユーザーなら誰でも削除可能）
+        const canDelete = appState.currentUser && appState.currentUser.username;
         
         return `
             <div class="roadmap-comment-item" data-comment-id="${escapeHtml(comment.id || '')}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
