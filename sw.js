@@ -1,5 +1,5 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'oem-app-v31';
+const CACHE_NAME = 'oem-app-v32';
 
 // ベースパスを自動検出（GitHub Pages対応）
 const BASE_PATH = self.registration.scope;
@@ -32,9 +32,11 @@ const OFFLINE_URL = '/OEM/offline.html';
 
 // Install event
 self.addEventListener('install', (event) => {
+  console.log('Service Worker: インストール中...', CACHE_NAME);
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
+        console.log('Service Worker: キャッシュを開いています');
         // 各URLを個別にキャッシュしてエラーを回避
         return Promise.allSettled(
           urlsToCache.map(url => 
@@ -45,6 +47,31 @@ self.addEventListener('install', (event) => {
           )
         );
       })
+      .then(() => {
+        console.log('Service Worker: インストール完了');
+        return self.skipWaiting(); // 新しいSWを即座にアクティブ化
+      })
+  );
+});
+
+// Activate event - 古いキャッシュを削除
+self.addEventListener('activate', (event) => {
+  console.log('Service Worker: アクティベーション中...', CACHE_NAME);
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Service Worker: 古いキャッシュを削除:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+    .then(() => {
+      console.log('Service Worker: アクティベーション完了');
+      return self.clients.claim(); // すべてのクライアントを即座に制御下に
+    })
   );
 });
 

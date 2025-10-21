@@ -2,11 +2,14 @@
   "name": "OEM商品企画管理システム",
   "short_name": "OEM管理",
   "description": "レストラン商品開発プロジェクト管理システム",
+  "id": "/OEM/",
   "start_url": "/OEM/",
   "scope": "/OEM/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/OEM/icon-192.svg",
