@@ -104,3 +104,4 @@ COMMIT;
 
 -- 完了メッセージ
 SELECT 'Schema has been successfully recreated' as status;
+

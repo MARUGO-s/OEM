@@ -24,3 +24,4 @@ DELETE FROM user_profiles;
 
 -- 完了メッセージ
 SELECT 'All test data has been cleared successfully' as status;
+

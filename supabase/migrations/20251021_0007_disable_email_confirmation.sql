@@ -20,3 +20,4 @@ WHERE id IN (
     WHERE email_confirmed_at IS NULL 
       AND confirmed_at IS NULL
 );
+

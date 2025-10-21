@@ -1,31 +1,34 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'oem-app-v11';
+const CACHE_NAME = 'oem-app-v12';
+
+// ベースパスを自動検出（GitHub Pages対応）
+const BASE_PATH = self.registration.scope;
+
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/styles/main.css',
-  '/js/modal-utils.js',
-  '/js/app.js',
-  '/js/auth.js',
-  '/js/comments.js',
-  '/js/config.js',
-  '/js/meetings.js',
-  '/js/mobile.js',
-  '/js/notifications.js',
-  '/js/roadmap-comments.js',
-  '/js/sample-data.js',
-  '/js/tasks.js',
-  '/manifest.json',
-  '/sw.js',
-  '/favicon.ico',
-  '/favicon.svg',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/offline.html'
+  './',
+  './index.html',
+  './styles/main.css',
+  './js/modal-utils.js',
+  './js/app.js',
+  './js/auth.js',
+  './js/comments.js',
+  './js/config.js',
+  './js/meetings.js',
+  './js/mobile.js',
+  './js/notifications.js',
+  './js/roadmap-comments.js',
+  './js/sample-data.js',
+  './js/tasks.js',
+  './manifest.json',
+  './favicon.ico',
+  './favicon.svg',
+  './icon-192.png',
+  './icon-512.png',
+  './offline.html'
 ];
 
 // オフライン用のフォールバックページ
-const OFFLINE_URL = '/offline.html';
+const OFFLINE_URL = './offline.html';
 
 // Install event
 self.addEventListener('install', (event) => {
@@ -91,8 +94,8 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   const options = {
     body: event.data ? event.data.text() : '新しい通知があります',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -102,12 +105,12 @@ self.addEventListener('push', (event) => {
       {
         action: 'explore',
         title: 'アプリを開く',
-        icon: '/icon-192.png'
+        icon: './icon-192.png'
       },
       {
         action: 'close',
         title: '閉じる',
-        icon: '/icon-192.png'
+        icon: './icon-192.png'
       }
     ]
   };
@@ -123,7 +126,7 @@ self.addEventListener('notificationclick', (event) => {
 
   if (event.action === 'explore') {
     event.waitUntil(
-      clients.openWindow('/')
+      clients.openWindow(BASE_PATH)
     );
   }
 });

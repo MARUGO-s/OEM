@@ -73,3 +73,4 @@ window.resetModalState = function() {
 };
 
 console.log('modal-utils.js が読み込まれました');
+

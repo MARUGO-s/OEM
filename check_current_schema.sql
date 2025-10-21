@@ -100,3 +100,4 @@ SELECT 'meetings' as table_name, COUNT(*) as count FROM meetings
 UNION ALL
 SELECT 'notifications' as table_name, COUNT(*) as count FROM notifications
 ORDER BY table_name;
+

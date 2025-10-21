@@ -113,3 +113,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
 
 -- 完了メッセージ
 SELECT 'Schema has been successfully verified and fixed' as status;
+

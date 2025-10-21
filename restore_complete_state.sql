@@ -166,3 +166,4 @@ ORDER BY table_name;
 
 -- 完了メッセージ
 SELECT 'Database has been completely restored to pre-clear state' as status;
+

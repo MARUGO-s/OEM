@@ -40,3 +40,4 @@ INSERT INTO meetings (id, title, start_time, duration, participants, meet_url, s
 ('meeting-2', '品質管理レビュー', '2025-10-26 14:00:00+00', 90, ARRAY['manager', 'quality'], 'https://meet.google.com/xyz-uvwx-rst', 'scheduled', (SELECT id FROM user_profiles WHERE username = 'manager' LIMIT 1), '2025-10-20 09:00:00+00', '2025-10-20 09:00:00+00'),
 ('meeting-3', '市場調査結果報告', '2025-10-27 16:00:00+00', 45, ARRAY['manager', 'marketing'], 'https://meet.google.com/mno-pqrs-tuv', 'scheduled', (SELECT id FROM user_profiles WHERE username = 'manager' LIMIT 1), '2025-10-20 09:00:00+00', '2025-10-20 09:00:00+00')
 ON CONFLICT (id) DO NOTHING;
+

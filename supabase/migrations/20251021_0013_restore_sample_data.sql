@@ -68,3 +68,4 @@ ORDER BY table_name;
 
 -- 完了メッセージ
 SELECT 'Sample data has been successfully restored' as status;
+

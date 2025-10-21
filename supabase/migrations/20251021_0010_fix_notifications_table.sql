@@ -34,3 +34,4 @@ INSERT INTO notifications (id, type, message, related_id, created_by, created_at
 ('notif-2', 'meeting_reminder', '会議のリマインダーです', 'meeting-1', (SELECT id FROM user_profiles WHERE username = 'manager' LIMIT 1), '2025-10-20 09:00:00+00'),
 ('notif-3', 'task_update', 'タスクが更新されました', 'task-1', (SELECT id FROM user_profiles WHERE username = 'manager' LIMIT 1), '2025-10-20 09:00:00+00')
 ON CONFLICT (id) DO NOTHING;
+
