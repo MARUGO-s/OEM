@@ -242,6 +242,10 @@ function renderTasks() {
                         ? comment.author_username
                         : '匿名';
                     
+                    // 削除ボタンの表示判定（現在のユーザーがコメントの作成者かどうか）
+                    const canDelete = appState.currentUser && 
+                                     comment && comment.author_username === appState.currentUser.username;
+                    
                     return `
                         <div class="roadmap-comment-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
                             <div class="roadmap-comment-bullet comment" data-comment-id="${escapeHtml(comment ? comment.id : '')}" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
@@ -253,9 +257,9 @@ function renderTasks() {
                                     </div>
                                 </div>
                             </div>
-                            <button data-comment-id="${escapeHtml(comment ? comment.id : '')}" class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
+                            ${canDelete ? `<button data-comment-id="${escapeHtml(comment ? comment.id : '')}" class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
                                 削除
-                            </button>
+                            </button>` : ''}
                         </div>
                     `;
                 } else {
@@ -313,7 +317,7 @@ function renderTasks() {
                    e.stopPropagation();
                    const commentId = button.dataset.commentId;
                    if (commentId) {
-                       deleteRoadmapComment(commentId);
+                       deleteTimelineComment(commentId);
                    }
                });
            });
@@ -466,6 +470,48 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// タイムラインコメント削除機能
+async function deleteTimelineComment(commentId) {
+    try {
+        // ユーザー情報のバリデーション
+        if (!appState.currentUser || !appState.currentUser.username) {
+            alert('コメントを削除するにはログインが必要です。');
+            return;
+        }
+
+        // 確認ダイアログ
+        if (!confirm('このコメントを削除しますか？')) {
+            return;
+        }
+
+        console.log('タイムラインコメント削除開始:', commentId);
+
+        // Supabaseからコメントを削除
+        const { error } = await supabase
+            .from('comments')
+            .delete()
+            .eq('id', commentId);
+
+        if (error) {
+            console.error('タイムラインコメント削除エラー:', error);
+            alert('コメントの削除に失敗しました。しばらく待ってから再度お試しください。');
+            return;
+        }
+
+        console.log('タイムラインコメント削除成功:', commentId);
+
+        // タスクを再読み込み
+        await loadTasks();
+
+        // 通知を表示
+        showNotification('コメントを削除しました', 'success');
+
+    } catch (error) {
+        console.error('タイムラインコメント削除エラー:', error);
+        alert('コメントの削除に失敗しました');
+    }
 }
 
 // イベントリスナー（DOMContentLoaded後に登録、重複防止）
