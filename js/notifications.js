@@ -2,6 +2,155 @@
 
 let notificationCount = 0;
 
+// プッシュ通知の許可をリクエスト
+async function requestNotificationPermission() {
+    try {
+        console.log('通知許可リクエスト開始');
+        
+        // 既に許可されている場合は何もしない
+        if ('Notification' in window && Notification.permission === 'granted') {
+            console.log('通知は既に許可されています');
+            localStorage.setItem('notificationPermission', 'granted');
+            
+            // テスト通知を表示
+            showBrowserNotification('通知が有効です', {
+                body: 'プッシュ通知が正常に動作しています'
+            });
+            
+            return true;
+        }
+
+        // 通知がサポートされていない場合
+        if (!('Notification' in window)) {
+            console.warn('このブラウザは通知をサポートしていません');
+            alert('このブラウザは通知をサポートしていません');
+            return false;
+        }
+
+        // 許可をリクエスト
+        console.log('Notification.requestPermission() を呼び出します');
+        const permission = await Notification.requestPermission();
+        console.log('通知許可の結果:', permission);
+
+        if (permission === 'granted') {
+            console.log('通知が許可されました！');
+            
+            // 許可状態を保存
+            localStorage.setItem('notificationPermission', 'granted');
+            
+            // テスト通知を表示
+            showBrowserNotification('プッシュ通知が有効になりました！', {
+                body: '今後、コメントや会議の通知が届きます'
+            });
+            
+            // 成功メッセージ
+            if (typeof showNotification === 'function') {
+                showNotification('プッシュ通知が有効になりました！', 'success');
+            }
+            
+            return true;
+        } else if (permission === 'denied') {
+            console.log('通知が拒否されました');
+            localStorage.setItem('notificationPermission', 'denied');
+            alert('通知が拒否されました。ブラウザの設定から通知を許可してください。');
+            return false;
+        } else {
+            console.log('通知許可が保留されました');
+            return false;
+        }
+    } catch (error) {
+        console.error('通知許可リクエストエラー:', error);
+        console.error('エラー詳細:', error.stack);
+        alert('通知の設定中にエラーが発生しました: ' + error.message);
+        return false;
+    }
+}
+
+// プッシュ通知のサブスクリプション
+async function subscribeToPushNotifications() {
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        
+        // 既存のサブスクリプションを確認
+        let subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+            // 新しいサブスクリプションを作成
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: null // VAPIDキーは実際の実装では必要
+            });
+            console.log('プッシュ通知にサブスクライブしました:', subscription);
+        }
+
+        // サブスクリプション情報を保存（実際の実装ではサーバーに送信）
+        localStorage.setItem('pushSubscription', JSON.stringify(subscription));
+        
+        return subscription;
+    } catch (error) {
+        console.error('プッシュ通知サブスクリプションエラー:', error);
+        return null;
+    }
+}
+
+// ブラウザ通知を表示（テスト用）
+function showBrowserNotification(title, options = {}) {
+    console.log('showBrowserNotification 呼び出し:', {
+        title: title,
+        options: options,
+        notificationSupported: 'Notification' in window,
+        permission: 'Notification' in window ? Notification.permission : 'unsupported'
+    });
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+            const defaultOptions = {
+                body: options.body || '新しい通知があります',
+                icon: '/OEM/icon-192.svg',
+                badge: '/OEM/icon-192.svg',
+                tag: options.tag || 'oem-notification',
+                requireInteraction: false,
+                ...options
+            };
+            
+            console.log('Notification オブジェクトを作成します:', defaultOptions);
+            const notification = new Notification(title, defaultOptions);
+            
+            notification.onclick = function(event) {
+                console.log('通知がクリックされました');
+                event.preventDefault();
+                window.focus();
+                notification.close();
+            };
+            
+            notification.onerror = function(error) {
+                console.error('通知表示エラー:', error);
+            };
+            
+            notification.onshow = function() {
+                console.log('通知が表示されました');
+            };
+            
+            console.log('通知オブジェクトを作成しました:', notification);
+            return notification;
+        } catch (error) {
+            console.error('Notification 作成エラー:', error);
+            return null;
+        }
+    } else {
+        console.warn('通知が許可されていないか、サポートされていません');
+        return null;
+    }
+}
+
+// 通知許可状態を確認
+function checkNotificationPermission() {
+    if (!('Notification' in window)) {
+        return 'unsupported';
+    }
+    return Notification.permission;
+}
+
 // 通知一覧の読み込み
 async function loadNotifications() {
     try {
@@ -237,11 +386,63 @@ async function createNotification(notificationData) {
         if (error) {
             console.error('通知作成エラー:', error);
             // 通知作成エラーはコメント投稿を阻害しない
+        } else {
+            console.log('通知をデータベースに保存しました:', notification);
+            // リアルタイムサブスクリプションが自動的にプッシュ通知を送信します
         }
         
     } catch (error) {
         console.error('通知作成エラー:', error);
         // 通知作成エラーはコメント投稿を阻害しない
+    }
+}
+
+// プッシュ通知を送信
+async function sendPushNotification(notificationData) {
+    try {
+        console.log('プッシュ通知送信チェック:', {
+            permission: checkNotificationPermission(),
+            hidden: document.hidden,
+            hasFocus: document.hasFocus(),
+            notificationData: notificationData
+        });
+
+        // 通知許可が得られているか確認
+        const permission = checkNotificationPermission();
+        if (permission !== 'granted') {
+            console.log('通知許可がないため、プッシュ通知をスキップします。現在の許可状態:', permission);
+            return;
+        }
+
+        // アプリがバックグラウンドまたは非アクティブの場合、常にプッシュ通知を表示
+        // アプリがアクティブでも通知を表示（ユーザーが気づきやすくするため）
+        const title = 'MARUGO OEM Special Menu';
+        const options = {
+            body: notificationData.message || '新しい通知があります',
+            icon: '/OEM/icon-192.svg',
+            badge: '/OEM/icon-192.svg',
+            tag: notificationData.related_id || 'oem-notification',
+            vibrate: [200, 100, 200],
+            requireInteraction: false,
+            data: {
+                url: '/OEM/',
+                notification_id: notificationData.id
+            }
+        };
+        
+        console.log('ブラウザ通知を表示します:', title, options);
+        const notification = showBrowserNotification(title, options);
+        
+        if (notification) {
+            console.log('プッシュ通知を送信しました');
+        } else {
+            console.warn('プッシュ通知の送信に失敗しました');
+        }
+        
+    } catch (error) {
+        console.error('プッシュ通知送信エラー:', error);
+        console.error('エラー詳細:', error.stack);
+        // プッシュ通知エラーは無視
     }
 }
 
@@ -280,6 +481,9 @@ function toggleNotificationPanel() {
 document.addEventListener('DOMContentLoaded', () => {
     const notificationBell = document.getElementById('notification-bell');
     const closeNotifications = document.getElementById('close-notifications');
+    const enablePushBtn = document.getElementById('enable-push-notifications-btn');
+    const testNotificationBtn = document.getElementById('test-notification-btn');
+    const markAllReadBtn = document.getElementById('mark-all-read-btn');
     
     if (notificationBell && !notificationBell.dataset.listenerAttached) {
         notificationBell.addEventListener('click', toggleNotificationPanel);
@@ -295,6 +499,36 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         closeNotifications.dataset.listenerAttached = 'true';
     }
+    
+    if (enablePushBtn && !enablePushBtn.dataset.listenerAttached) {
+        enablePushBtn.addEventListener('click', async () => {
+            const granted = await requestNotificationPermission();
+            if (granted) {
+                hideNotificationPermissionButton();
+                showTestNotificationButton();
+            }
+        });
+        enablePushBtn.dataset.listenerAttached = 'true';
+    }
+    
+    if (testNotificationBtn && !testNotificationBtn.dataset.listenerAttached) {
+        testNotificationBtn.addEventListener('click', () => {
+            console.log('テスト通知ボタンがクリックされました');
+            showBrowserNotification('テスト通知', {
+                body: 'これはテスト通知です。通知が正常に動作しています！',
+                tag: 'test-notification'
+            });
+        });
+        testNotificationBtn.dataset.listenerAttached = 'true';
+    }
+    
+    if (markAllReadBtn && !markAllReadBtn.dataset.listenerAttached) {
+        markAllReadBtn.addEventListener('click', markAllNotificationsAsRead);
+        markAllReadBtn.dataset.listenerAttached = 'true';
+    }
+    
+    // ページ読み込み時に通知許可状態をチェック
+    checkAndShowNotificationButtons();
 });
 
 // リアルタイム更新のサブスクリプション
@@ -304,20 +538,15 @@ function subscribeToNotifications() {
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'notifications' },
             (payload) => {
-                console.log('新しい通知:', payload);
+                console.log('新しい通知を受信:', payload);
                 
                 // 新しい通知をリストに追加
                 appState.notifications.unshift(payload.new);
                 renderNotifications();
                 updateNotificationBadge();
                 
-                // ブラウザ通知を表示（許可されている場合）
-                if ('Notification' in window && Notification.permission === 'granted') {
-                    new Notification('OEM商品企画管理', {
-                        body: payload.new.message,
-                        icon: '🍽️'
-                    });
-                }
+                // プッシュ通知を送信
+                sendPushNotification(payload.new);
             }
         )
         .subscribe();
@@ -325,30 +554,9 @@ function subscribeToNotifications() {
     appState.subscriptions.push(channel);
 }
 
-// ブラウザ通知の許可をリクエスト（ユーザージェスチャーが必要）
-function requestNotificationPermission() {
-    // ユーザージェスチャーなしでは通知許可を要求できないため、完全にスキップ
-    console.log('通知許可要求はスキップされました（ユーザージェスチャーが必要）');
-    return;
-}
-
-// ユーザージェスチャー付きで通知許可を要求する関数
-function requestNotificationPermissionWithGesture() {
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission().then(permission => {
-            if (permission === 'granted') {
-                console.log('通知許可が付与されました');
-                hideNotificationPermissionButton();
-            } else {
-                console.log('通知許可が拒否されました');
-            }
-        });
-    }
-}
-
 // 通知許可ボタンを表示
 function showNotificationPermissionButton() {
-    const button = document.getElementById('notification-permission-btn');
+    const button = document.getElementById('enable-push-notifications-btn');
     if (button && 'Notification' in window && Notification.permission === 'default') {
         button.style.display = 'inline-block';
     }
@@ -356,22 +564,39 @@ function showNotificationPermissionButton() {
 
 // 通知許可ボタンを非表示
 function hideNotificationPermissionButton() {
-    const button = document.getElementById('notification-permission-btn');
+    const button = document.getElementById('enable-push-notifications-btn');
     if (button) {
         button.style.display = 'none';
     }
 }
 
-// 通知許可ボタンのイベントリスナー
-document.addEventListener('DOMContentLoaded', () => {
-    const permissionBtn = document.getElementById('notification-permission-btn');
-    if (permissionBtn && !permissionBtn.dataset.listenerAttached) {
-        permissionBtn.addEventListener('click', () => {
-            requestNotificationPermissionWithGesture();
-        });
-        permissionBtn.dataset.listenerAttached = 'true';
+// テスト通知ボタンを表示
+function showTestNotificationButton() {
+    const button = document.getElementById('test-notification-btn');
+    if (button && 'Notification' in window && Notification.permission === 'granted') {
+        button.style.display = 'inline-block';
     }
-    
-    // 通知許可ボタンの表示チェック
-    showNotificationPermissionButton();
-});
+}
+
+// 通知ボタンの表示状態をチェック
+function checkAndShowNotificationButtons() {
+    if ('Notification' in window) {
+        const permission = Notification.permission;
+        console.log('現在の通知許可状態:', permission);
+        
+        if (permission === 'default') {
+            // 未許可の場合は許可ボタンを表示
+            showNotificationPermissionButton();
+        } else if (permission === 'granted') {
+            // 許可済みの場合はテストボタンを表示
+            hideNotificationPermissionButton();
+            showTestNotificationButton();
+        } else if (permission === 'denied') {
+            // 拒否されている場合は両方非表示
+            hideNotificationPermissionButton();
+            const testBtn = document.getElementById('test-notification-btn');
+            if (testBtn) testBtn.style.display = 'none';
+        }
+    }
+}
+

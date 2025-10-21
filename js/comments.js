@@ -235,7 +235,7 @@ async function postComment(content) {
                 return;
             }
             
-            insertedData = data;
+            insertedData = data && data.length > 0 ? data[0] : newComment;
             console.log('コメント投稿成功:', insertedData);
         } catch (insertError) {
             console.error('コメント投稿例外:', insertError);
@@ -243,8 +243,20 @@ async function postComment(content) {
             return;
         }
 
-        // コメントを再読み込み
-        await loadComments();
+        // ローカル状態を即座に更新（UIの即時反映）
+        appState.comments.unshift(insertedData);
+        console.log('ローカルコメント配列を更新:', appState.comments.length);
+        
+        // 画面を即座に更新
+        renderComments();
+        
+        // タイムライン側も更新
+        if (typeof renderTasks === 'function') {
+            renderTasks();
+        }
+        
+        // バックグラウンドでデータを再読み込み（整合性確保）
+        loadComments().catch(err => console.error('コメント再読み込みエラー:', err));
 
         // 通知を送信（エラーが発生してもコメント投稿は成功とする）
         try {
