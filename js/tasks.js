@@ -346,7 +346,7 @@ async function addTask(taskData) {
         const newTask = {
             id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             ...taskData,
-            created_by: appState.currentUser?.username || null,
+            created_by: appState.currentUser?.id || null,
             created_at: now,
             updated_at: now
         };
