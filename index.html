@@ -162,7 +162,10 @@
                             <div class="roadmap-item-modal-content">
                                 <div class="roadmap-item-modal-header">
                                     <h3 id="roadmap-item-title">タスクタイトル</h3>
-                                    <button class="roadmap-item-modal-close" onclick="closeRoadmapItemModal()">×</button>
+                                    <div class="roadmap-item-modal-actions">
+                                        <button id="roadmap-item-delete-btn" class="btn btn-danger" style="margin-right: 0.5rem; display: none;">🗑️ 削除</button>
+                                        <button class="roadmap-item-modal-close" onclick="closeRoadmapItemModal()">×</button>
+                                    </div>
                                 </div>
                                 
                                 <div class="roadmap-item-modal-body">

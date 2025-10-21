@@ -514,6 +514,62 @@ async function deleteTimelineComment(commentId) {
     }
 }
 
+// タスク削除機能
+async function deleteTask(taskId) {
+    try {
+        // ユーザー情報のバリデーション
+        if (!appState.currentUser || !appState.currentUser.username) {
+            alert('タスクを削除するにはログインが必要です。');
+            return;
+        }
+
+        // 確認ダイアログ
+        if (!confirm('このタスクを削除しますか？\n\n注意: 関連するコメントもすべて削除されます。')) {
+            return;
+        }
+
+        console.log('タスク削除開始:', taskId);
+
+        // まず関連するコメントを削除
+        const { error: commentsError } = await supabase
+            .from('comments')
+            .delete()
+            .eq('task_id', taskId);
+
+        if (commentsError) {
+            console.warn('関連コメント削除エラー（継続）:', commentsError);
+            // コメント削除エラーはタスク削除を阻害しない
+        }
+
+        // Supabaseからタスクを削除
+        const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .eq('id', taskId);
+
+        if (error) {
+            console.error('タスク削除エラー:', error);
+            alert('タスクの削除に失敗しました。しばらく待ってから再度お試しください。');
+            return;
+        }
+
+        console.log('タスク削除成功:', taskId);
+
+        // タスクを再読み込み
+        await loadTasks();
+
+        // モーダルを閉じる
+        closeModal();
+
+        // 通知を表示
+        showNotification('タスクを削除しました', 'success');
+
+    } catch (error) {
+        console.error('タスク削除エラー:', error);
+        alert('タスクの削除に失敗しました');
+    }
+}
+
 // イベントリスナー（DOMContentLoaded後に登録、重複防止）
 document.addEventListener('DOMContentLoaded', () => {
     const addTaskBtn = document.getElementById('add-task-btn');

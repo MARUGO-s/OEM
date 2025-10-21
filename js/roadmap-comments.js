@@ -29,6 +29,22 @@ window.showRoadmapItemModal = function(taskId) {
         document.getElementById('roadmap-item-deadline').textContent = '未設定';
     }
     
+    // 削除ボタンの表示制御
+    const deleteBtn = document.getElementById('roadmap-item-delete-btn');
+    if (deleteBtn) {
+        // 現在のユーザーがタスクの作成者かどうかチェック
+        const canDelete = appState.currentUser && 
+                         (task.created_by === appState.currentUser.username || 
+                          task.created_by === appState.currentUser.id);
+        
+        if (canDelete) {
+            deleteBtn.style.display = 'inline-block';
+            deleteBtn.onclick = () => deleteTask(taskId);
+        } else {
+            deleteBtn.style.display = 'none';
+        }
+    }
+    
     // モーダルを表示
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
@@ -114,6 +130,64 @@ async function deleteRoadmapComment(commentId) {
     } catch (error) {
         console.error('ロードマップコメント削除エラー:', error);
         alert('コメントの削除に失敗しました');
+    }
+}
+
+// タスク削除機能
+async function deleteTask(taskId) {
+    try {
+        // ユーザー情報のバリデーション
+        if (!appState.currentUser || !appState.currentUser.username) {
+            alert('タスクを削除するにはログインが必要です。');
+            return;
+        }
+
+        // 確認ダイアログ
+        if (!confirm('このタスクを削除しますか？\n\n注意: 関連するコメントもすべて削除されます。')) {
+            return;
+        }
+
+        console.log('タスク削除開始:', taskId);
+
+        // まず関連するコメントを削除
+        const { error: commentsError } = await supabase
+            .from('comments')
+            .delete()
+            .eq('task_id', taskId);
+
+        if (commentsError) {
+            console.warn('関連コメント削除エラー（継続）:', commentsError);
+            // コメント削除エラーはタスク削除を阻害しない
+        }
+
+        // Supabaseからタスクを削除
+        const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .eq('id', taskId);
+
+        if (error) {
+            console.error('タスク削除エラー:', error);
+            alert('タスクの削除に失敗しました。しばらく待ってから再度お試しください。');
+            return;
+        }
+
+        console.log('タスク削除成功:', taskId);
+
+        // モーダルを閉じる
+        closeRoadmapItemModal();
+
+        // タスクを再読み込み
+        if (typeof loadTasks === 'function') {
+            await loadTasks();
+        }
+
+        // 通知を表示
+        showNotification('タスクを削除しました', 'success');
+
+    } catch (error) {
+        console.error('タスク削除エラー:', error);
+        alert('タスクの削除に失敗しました');
     }
 }
 
@@ -783,5 +857,6 @@ window.submitRoadmapComment = submitRoadmapComment;
 window.showCommentPopup = showCommentPopup;
 window.closeCommentPopup = closeCommentPopup;
 window.deleteRoadmapComment = deleteRoadmapComment;
+window.deleteTask = deleteTask;
 
 document.head.appendChild(style);
