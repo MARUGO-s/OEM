@@ -130,13 +130,18 @@ async function sendMeetingNotification(participant, meeting) {
     try {
         // 実際の実装では、メール送信やプッシュ通知を使用
         
-        // 通知データを作成（アプリ内通知は既存の通知テーブルを使用）
-        await createNotification({
-            type: 'meeting',
-            message: `${meeting.title} - ${new Date(meeting.start_time).toLocaleString('ja-JP')}`,
-            related_id: meeting.id,
-            recipient: participant
-        });
+        // 通知データを作成（エラーハンドリング強化）
+        try {
+            await createNotification({
+                type: 'meeting',
+                message: `${meeting.title} - ${new Date(meeting.start_time).toLocaleString('ja-JP')}`,
+                related_id: meeting.id,
+                recipient: participant
+            });
+        } catch (notificationError) {
+            console.warn('通知作成エラー（無視）:', notificationError);
+            // 通知エラーは会議作成を阻害しない
+        }
 
     } catch (error) {
         console.error('通知送信エラー:', error);
@@ -152,11 +157,23 @@ async function createMeetingNotification(meeting) {
             related_id: meeting.id
         };
 
-        const { error } = await supabase
-            .from('notifications')
-            .insert([notification]);
+        // Supabaseに通知を保存（エラーハンドリング強化）
+        try {
+            const { data, error } = await supabase
+                .from('notifications')
+                .insert([notification])
+                .select();
 
-        if (error) throw error;
+            if (error) {
+                console.warn('Supabase通知保存エラー（無視）:', error);
+                // エラーが発生しても会議作成は継続
+            } else {
+                console.log('Supabase通知保存成功:', data);
+            }
+        } catch (supabaseError) {
+            console.warn('Supabase通知保存例外（無視）:', supabaseError);
+            // 例外が発生しても会議作成は継続
+        }
 
         // リアルタイム通知を表示
         showMeetingNotification(notification);
