@@ -10,21 +10,31 @@ function callLoadAllDataSafely(maxRetries = 20, intervalMs = 100) {
     return new Promise((resolve) => {
         let attempts = 0;
         const tryCall = () => {
-            if (typeof window.loadAllData === 'function') {
+            // 必要なDOM要素が存在するかチェック
+            const roadmapContainer = document.getElementById('roadmap-container');
+            const totalTasksElement = document.getElementById('total-tasks');
+            
+            if (typeof window.loadAllData === 'function' && roadmapContainer && totalTasksElement) {
                 try {
+                    console.log('DOM要素の準備が完了、データ読み込みを開始');
                     window.loadAllData();
                 } finally {
                     resolve();
                 }
                 return;
             }
+            
             attempts += 1;
             if (attempts >= maxRetries) {
+                console.error('DOM要素の準備が完了しませんでした');
                 resolve();
                 return;
             }
+            
+            console.log('DOM要素の準備待機中... (試行回数:', attempts, ')');
             setTimeout(tryCall, intervalMs);
         };
+        
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', tryCall, { once: true });
         } else {
@@ -436,6 +446,14 @@ function showMainScreen() {
             console.error('ユーザー名要素が見つかりません');
         }
     }
+    
+    // DOM要素の表示完了を待ってからデータ読み込みを開始
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            console.log('DOM表示完了、データ読み込みを開始');
+            callLoadAllDataSafely();
+        }, 100);
+    });
 }
 
 // エラー表示

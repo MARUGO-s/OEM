@@ -280,13 +280,24 @@ async function loadTasks() {
 }
 
 // タスクの表示
-function renderTasks() {
+function renderTasks(retryCount = 0) {
     try {
         const container = document.getElementById('roadmap-container');
         
         if (!container) {
-            console.error('roadmap-container要素が見つかりません');
-            return;
+            console.error('roadmap-container要素が見つかりません (試行回数:', retryCount + 1, ')');
+            
+            // 最大3回まで再試行
+            if (retryCount < 3) {
+                console.log('DOM要素の準備を待って再試行します...');
+                setTimeout(() => {
+                    renderTasks(retryCount + 1);
+                }, 200);
+                return;
+            } else {
+                console.error('roadmap-container要素が見つからないため、表示をスキップします');
+                return;
+            }
         }
         
         if (appState.tasks.length === 0) {
@@ -470,12 +481,20 @@ function updateSummary() {
     const pending = appState.tasks.filter(t => t.status === 'pending').length;
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-    document.getElementById('total-tasks').textContent = total;
-    document.getElementById('completed-tasks').textContent = completed;
-    document.getElementById('inprogress-tasks').textContent = inProgress;
-    document.getElementById('pending-tasks').textContent = pending;
-    document.getElementById('progress-fill').style.width = progress + '%';
-    document.getElementById('progress-text').textContent = progress + '%';
+    // DOM要素の存在確認を強化
+    const totalTasksElement = document.getElementById('total-tasks');
+    const completedTasksElement = document.getElementById('completed-tasks');
+    const inProgressTasksElement = document.getElementById('inprogress-tasks');
+    const pendingTasksElement = document.getElementById('pending-tasks');
+    const progressFillElement = document.getElementById('progress-fill');
+    const progressTextElement = document.getElementById('progress-text');
+
+    if (totalTasksElement) totalTasksElement.textContent = total;
+    if (completedTasksElement) completedTasksElement.textContent = completed;
+    if (inProgressTasksElement) inProgressTasksElement.textContent = inProgress;
+    if (pendingTasksElement) pendingTasksElement.textContent = pending;
+    if (progressFillElement) progressFillElement.style.width = progress + '%';
+    if (progressTextElement) progressTextElement.textContent = progress + '%';
 }
 
 // タスク追加
