@@ -172,11 +172,9 @@ function subscribeToNotifications() {
 
 // ブラウザ通知の許可をリクエスト（ユーザージェスチャーが必要）
 function requestNotificationPermission() {
-    // ユーザージェスチャーなしでは通知許可を要求できないため、スキップ
-    if ('Notification' in window && Notification.permission === 'default') {
-        console.log('通知許可はユーザージェスチャーが必要です。ユーザーが手動で許可してください。');
-        return;
-    }
+    // ユーザージェスチャーなしでは通知許可を要求できないため、完全にスキップ
+    console.log('通知許可要求はスキップされました（ユーザージェスチャーが必要）');
+    return;
 }
 
 // ユーザージェスチャー付きで通知許可を要求する関数

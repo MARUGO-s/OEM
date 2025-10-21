@@ -1,5 +1,5 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'oem-app-v3';
+const CACHE_NAME = 'oem-app-v4';
 const urlsToCache = [
   '/',
   '/index.html',
