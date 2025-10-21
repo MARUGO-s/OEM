@@ -14,6 +14,7 @@ async function loadNotifications() {
         if (error) throw error;
 
         appState.notifications = data || [];
+        console.log('読み込まれた通知:', appState.notifications);
         renderNotifications();
         updateNotificationBadge();
         
@@ -25,13 +26,18 @@ async function loadNotifications() {
 // 通知を既読にする
 async function markNotificationAsRead(notificationId) {
     try {
+        console.log('既読にする通知ID:', notificationId);
+        
         // Supabaseで通知を既読に更新
         const { error } = await supabase
             .from('notifications')
             .update({ read: true })
             .eq('id', notificationId);
 
-        if (error) throw error;
+        if (error) {
+            console.error('Supabase更新エラー:', error);
+            throw error;
+        }
 
         // ローカル状態を更新
         const notificationIndex = appState.notifications.findIndex(n => n.id === notificationId);
@@ -113,7 +119,7 @@ function renderNotifications() {
         const isNew = !notification.read;
         
         return `
-            <div class="notification-item ${isNew ? 'new' : ''}" data-notification-id="${notification.id}" onclick="markNotificationAsRead('${notification.id}')">
+            <div class="notification-item ${isNew ? 'new' : ''}" data-notification-id="${notification.id}">
                 <div class="notification-content">
                     <div class="notification-message">${getNotificationIcon(notification.type)} ${escapeHtml(notification.message)}</div>
                     <div class="time">${timeAgo}</div>
@@ -122,6 +128,18 @@ function renderNotifications() {
             </div>
         `;
     }).join('');
+    
+    // 各通知アイテムにクリックイベントを追加
+    container.querySelectorAll('.notification-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const notificationId = item.getAttribute('data-notification-id');
+            console.log('クリックされた通知ID:', notificationId);
+            if (notificationId) {
+                markNotificationAsRead(notificationId);
+            }
+        });
+    });
 }
 
 // 通知アイコン
