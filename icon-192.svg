@@ -1,23 +1,53 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
-  <!-- Background circle with distressed effect -->
-  <circle cx="96" cy="96" r="88" fill="#8B4513" stroke="#5D2F0A" stroke-width="3"/>
+  <!-- Background with distressed effect -->
+  <defs>
+    <filter id="distressed192">
+      <feTurbulence baseFrequency="0.03" numOctaves="2" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1"/>
+    </filter>
+    <pattern id="leather192" patternUnits="userSpaceOnUse" width="10" height="10">
+      <rect width="10" height="10" fill="#8B4513"/>
+      <circle cx="5" cy="5" r="0.5" fill="#654321" opacity="0.3"/>
+    </pattern>
+  </defs>
   
-  <!-- Outer ring with text -->
-  <circle cx="96" cy="96" r="80" fill="none" stroke="#8B4513" stroke-width="2"/>
+  <!-- Main background circle with leather texture -->
+  <circle cx="96" cy="96" r="88" fill="url(#leather192)" stroke="#5D2F0A" stroke-width="3" filter="url(#distressed192)"/>
   
-  <!-- MARUGO text (simplified for 192px) -->
-  <text x="96" y="65" text-anchor="middle" fill="#8B4513" font-family="Arial, sans-serif" font-size="12" font-weight="bold">MARUGO</text>
-  <text x="96" y="80" text-anchor="middle" fill="#8B4513" font-family="Arial, sans-serif" font-size="8" font-weight="bold">ORIGINAL</text>
+  <!-- Outer decorative ring -->
+  <circle cx="96" cy="96" r="80" fill="none" stroke="#8B4513" stroke-width="2" stroke-dasharray="5,3" opacity="0.7"/>
   
-  <!-- Inner circle -->
-  <circle cx="96" cy="96" r="45" fill="none" stroke="#8B4513" stroke-width="2"/>
+  <!-- Inner decorative ring -->
+  <circle cx="96" cy="96" r="72" fill="none" stroke="#8B4513" stroke-width="2" stroke-dasharray="3,5" opacity="0.5"/>
+  
+  <!-- MARUGO text -->
+  <text x="96" y="65" text-anchor="middle" fill="#8B4513" font-family="serif" font-size="14" font-weight="bold" filter="url(#distressed192)">MARUGO</text>
+  
+  <!-- ORIGINAL text -->
+  <text x="96" y="80" text-anchor="middle" fill="#8B4513" font-family="serif" font-size="8" font-weight="normal" filter="url(#distressed192)">ORIGINAL</text>
+  
+  <!-- Central circle -->
+  <circle cx="96" cy="96" r="45" fill="none" stroke="#8B4513" stroke-width="3" filter="url(#distressed192)"/>
   
   <!-- Large OEM text -->
-  <text x="96" y="115" text-anchor="middle" fill="#8B4513" font-family="Arial, sans-serif" font-size="20" font-weight="bold">OEM</text>
+  <text x="96" y="115" text-anchor="middle" fill="#8B4513" font-family="serif" font-size="24" font-weight="bold" filter="url(#distressed192)">OEM</text>
   
-  <!-- Small special menu text -->
-  <text x="96" y="130" text-anchor="middle" fill="#8B4513" font-family="Arial, sans-serif" font-size="7">special menu</text>
+  <!-- Special menu text -->
+  <text x="96" y="130" text-anchor="middle" fill="#8B4513" font-family="serif" font-size="7" font-weight="normal" filter="url(#distressed192)">special menu</text>
   
-  <!-- Distressed effect overlay -->
-  <circle cx="96" cy="96" r="88" fill="none" stroke="#654321" stroke-width="1" opacity="0.3" stroke-dasharray="2,2"/>
+  <!-- Decorative elements -->
+  <circle cx="68" cy="68" r="1" fill="#8B4513" opacity="0.6"/>
+  <circle cx="124" cy="68" r="1" fill="#8B4513" opacity="0.6"/>
+  <circle cx="68" cy="124" r="1" fill="#8B4513" opacity="0.6"/>
+  <circle cx="124" cy="124" r="1" fill="#8B4513" opacity="0.6"/>
+  
+  <!-- Corner decorative lines -->
+  <line x1="45" y1="45" x2="55" y2="45" stroke="#8B4513" stroke-width="1" opacity="0.5"/>
+  <line x1="45" y1="45" x2="45" y2="55" stroke="#8B4513" stroke-width="1" opacity="0.5"/>
+  <line x1="147" y1="45" x2="137" y2="45" stroke="#8B4513" stroke-width="1" opacity="0.5"/>
+  <line x1="147" y1="45" x2="147" y2="55" stroke="#8B4513" stroke-width="1" opacity="0.5"/>
+  <line x1="45" y1="147" x2="55" y2="147" stroke="#8B4513" stroke-width="1" opacity="0.5"/>
+  <line x1="45" y1="147" x2="45" y2="137" stroke="#8B4513" stroke-width="1" opacity="0.5"/>
+  <line x1="147" y1="147" x2="137" y2="147" stroke="#8B4513" stroke-width="1" opacity="0.5"/>
+  <line x1="147" y1="147" x2="147" y2="137" stroke="#8B4513" stroke-width="1" opacity="0.5"/>
 </svg>
