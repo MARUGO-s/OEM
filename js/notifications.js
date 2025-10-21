@@ -15,6 +15,7 @@ async function loadNotifications() {
 
         appState.notifications = data || [];
         console.log('読み込まれた通知:', appState.notifications);
+        console.log('通知IDの例:', appState.notifications.length > 0 ? appState.notifications[0].id : 'なし');
         renderNotifications();
         updateNotificationBadge();
         
@@ -27,22 +28,57 @@ async function loadNotifications() {
 async function markNotificationAsRead(notificationId) {
     try {
         console.log('既読にする通知ID:', notificationId);
+        console.log('通知IDの型:', typeof notificationId);
+        console.log('通知IDの長さ:', notificationId ? notificationId.length : 'null');
+        
+        // 通知IDの検証
+        if (!notificationId) {
+            throw new Error('通知IDが指定されていません');
+        }
+        
+        // 現在の通知データを確認
+        const notification = appState.notifications.find(n => n.id === notificationId);
+        console.log('対象通知:', notification);
+        
+        if (!notification) {
+            throw new Error('指定された通知が見つかりません');
+        }
+        
+        // 通知IDの形式を確認（UUID形式の場合はそのまま使用）
+        console.log('通知ID形式確認:', {
+            id: notificationId,
+            isUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notificationId),
+            hasPrefix: notificationId.startsWith('notification_')
+        });
         
         // Supabaseで通知を既読に更新
-        const { error } = await supabase
+        console.log('Supabase更新開始...');
+        const { data, error } = await supabase
             .from('notifications')
             .update({ read: true })
-            .eq('id', notificationId);
+            .eq('id', notificationId)
+            .select();
 
         if (error) {
             console.error('Supabase更新エラー:', error);
+            console.error('エラー詳細:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
             throw error;
         }
+        
+        console.log('Supabase更新成功:', data);
 
         // ローカル状態を更新
         const notificationIndex = appState.notifications.findIndex(n => n.id === notificationId);
         if (notificationIndex !== -1) {
             appState.notifications[notificationIndex].read = true;
+            console.log('ローカル状態更新成功');
+        } else {
+            console.warn('ローカル状態で通知が見つかりません');
         }
 
         // 表示を更新
@@ -50,10 +86,12 @@ async function markNotificationAsRead(notificationId) {
         updateNotificationBadge();
 
         console.log('通知を既読にしました:', notificationId);
+        showNotification('通知を既読にしました', 'success');
         
     } catch (error) {
         console.error('通知既読エラー:', error);
-        showNotification('通知の既読に失敗しました', 'error');
+        console.error('エラースタック:', error.stack);
+        showNotification(`通知の既読に失敗しました: ${error.message}`, 'error');
     }
 }
 
@@ -62,6 +100,8 @@ async function markAllNotificationsAsRead() {
     try {
         // 未読の通知のみを取得
         const unreadNotifications = appState.notifications.filter(n => !n.read);
+        console.log('未読通知数:', unreadNotifications.length);
+        console.log('未読通知ID一覧:', unreadNotifications.map(n => n.id));
         
         if (unreadNotifications.length === 0) {
             showNotification('既読にする通知がありません', 'info');
@@ -69,12 +109,25 @@ async function markAllNotificationsAsRead() {
         }
 
         // Supabaseで一括更新
-        const { error } = await supabase
+        console.log('一括更新開始...');
+        const { data, error } = await supabase
             .from('notifications')
             .update({ read: true })
-            .in('id', unreadNotifications.map(n => n.id));
+            .in('id', unreadNotifications.map(n => n.id))
+            .select();
 
-        if (error) throw error;
+        if (error) {
+            console.error('一括更新エラー:', error);
+            console.error('エラー詳細:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            throw error;
+        }
+        
+        console.log('一括更新成功:', data);
 
         // ローカル状態を更新
         appState.notifications.forEach(notification => {
@@ -90,7 +143,8 @@ async function markAllNotificationsAsRead() {
         
     } catch (error) {
         console.error('通知一括既読エラー:', error);
-        showNotification('通知の既読に失敗しました', 'error');
+        console.error('エラースタック:', error.stack);
+        showNotification(`通知の既読に失敗しました: ${error.message}`, 'error');
     }
 }
 
