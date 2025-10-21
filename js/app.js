@@ -32,6 +32,7 @@ async function loadAllData() {
         }
         
         // ブラウザ通知の許可をリクエスト（エラーハンドリング付き）
+        // ユーザージェスチャーなしでは通知許可を要求できないため、スキップ
         try {
             requestNotificationPermission();
         } catch (error) {

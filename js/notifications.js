@@ -170,9 +170,55 @@ function subscribeToNotifications() {
     appState.subscriptions.push(channel);
 }
 
-// ブラウザ通知の許可をリクエスト
+// ブラウザ通知の許可をリクエスト（ユーザージェスチャーが必要）
 function requestNotificationPermission() {
+    // ユーザージェスチャーなしでは通知許可を要求できないため、スキップ
     if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
+        console.log('通知許可はユーザージェスチャーが必要です。ユーザーが手動で許可してください。');
+        return;
     }
 }
+
+// ユーザージェスチャー付きで通知許可を要求する関数
+function requestNotificationPermissionWithGesture() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                console.log('通知許可が付与されました');
+                hideNotificationPermissionButton();
+            } else {
+                console.log('通知許可が拒否されました');
+            }
+        });
+    }
+}
+
+// 通知許可ボタンを表示
+function showNotificationPermissionButton() {
+    const button = document.getElementById('notification-permission-btn');
+    if (button && 'Notification' in window && Notification.permission === 'default') {
+        button.style.display = 'inline-block';
+    }
+}
+
+// 通知許可ボタンを非表示
+function hideNotificationPermissionButton() {
+    const button = document.getElementById('notification-permission-btn');
+    if (button) {
+        button.style.display = 'none';
+    }
+}
+
+// 通知許可ボタンのイベントリスナー
+document.addEventListener('DOMContentLoaded', () => {
+    const permissionBtn = document.getElementById('notification-permission-btn');
+    if (permissionBtn && !permissionBtn.dataset.listenerAttached) {
+        permissionBtn.addEventListener('click', () => {
+            requestNotificationPermissionWithGesture();
+        });
+        permissionBtn.dataset.listenerAttached = 'true';
+    }
+    
+    // 通知許可ボタンの表示チェック
+    showNotificationPermissionButton();
+});
