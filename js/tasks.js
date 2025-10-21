@@ -163,8 +163,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (taskForm) taskForm.reset();
                 const modalTitle = document.getElementById('modal-title');
                 if (modalTitle) modalTitle.textContent = '新規タスク追加';
-                console.log('openModal関数を呼び出します');
-                openModal();
+                console.log('openTaskModal関数を呼び出します');
+                openTaskModal();
             } catch (error) {
                 console.error('タスク追加ボタンクリックエラー:', error);
                 console.error('エラーの詳細:', error.message, error.stack);
@@ -179,12 +179,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     if (closeModalBtn && !closeModalBtn.dataset.listenerAttached) {
-        closeModalBtn.addEventListener('click', closeModal);
+        closeModalBtn.addEventListener('click', closeTaskModal);
         closeModalBtn.dataset.listenerAttached = 'true';
     }
     
     if (cancelTaskBtn && !cancelTaskBtn.dataset.listenerAttached) {
-        cancelTaskBtn.addEventListener('click', closeModal);
+        cancelTaskBtn.addEventListener('click', closeTaskModal);
         cancelTaskBtn.dataset.listenerAttached = 'true';
     }
     
@@ -458,7 +458,7 @@ async function addTask(taskData) {
         
         // タスクを再読み込みしてモーダルを閉じる
         await loadTasks();
-        closeModal();
+        closeTaskModal();
         
     } catch (error) {
         console.error('タスク追加エラー:', error);
@@ -494,7 +494,7 @@ async function updateTask(taskId, updates) {
         }
 
         await loadTasks();
-        closeModal();
+        closeTaskModal();
         
     } catch (error) {
         console.error('タスク更新エラー:', error);
@@ -538,17 +538,17 @@ function editTask(taskId) {
     document.getElementById('task-priority').value = task.priority;
     document.getElementById('task-deadline').value = task.deadline || '';
 
-    openModal();
+    openTaskModal();
 }
 
-// モーダル操作（新しいモーダルマネージャーを使用）
-function openModal() {
-    console.log('tasks.js の openModal関数が呼び出されました');
+// モーダル操作（modal-utils.jsの関数を直接使用）
+function openTaskModal() {
+    console.log('tasks.js の openTaskModal関数が呼び出されました');
     return window.openModal('task-modal');
 }
 
-function closeModal() {
-    console.log('tasks.js の closeModal関数が呼び出されました');
+function closeTaskModal() {
+    console.log('tasks.js の closeTaskModal関数が呼び出されました');
     
     // 新しいモーダルマネージャーを使用
     window.closeModal('task-modal');
@@ -682,7 +682,7 @@ async function deleteTask(taskId) {
         await loadTasks();
 
         // モーダルを閉じる
-        closeModal();
+        closeTaskModal();
 
         // 通知を表示
         showNotification('タスクを削除しました', 'success');
