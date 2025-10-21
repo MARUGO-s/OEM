@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     status TEXT NOT NULL DEFAULT 'pending',
     priority TEXT NOT NULL DEFAULT 'medium',
     deadline DATE,
-    created_by TEXT REFERENCES user_profiles(username) ON DELETE SET NULL,
+    created_by UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
@@ -97,16 +97,16 @@ ON CONFLICT (username) DO NOTHING;
 
 -- サンプルタスクの挿入
 INSERT INTO tasks (id, title, description, status, priority, deadline, created_by, created_at, updated_at) VALUES
-('task-1', '市場調査・ニーズ分析', 'ターゲット市場の調査と顧客ニーズの分析を行い、OEM商品の方向性を決定する', 'completed', 'high', '2025-10-15', 'manager', '2025-10-01 09:00:00+00', '2025-10-15 17:00:00+00'),
-('task-2', '原材料の選定・調達', '品質基準に合致する原材料の選定と安定供給体制の構築', 'in_progress', 'high', '2025-10-25', 'procurement', '2025-10-02 09:00:00+00', '2025-10-20 14:30:00+00'),
-('task-3', 'レシピ開発・試作', 'OEM商品のレシピ開発と試作品の作成・評価', 'in_progress', 'high', '2025-11-05', 'chef', '2025-10-03 09:00:00+00', '2025-10-22 16:45:00+00'),
-('task-4', '品質管理基準設定', 'OEM商品の品質管理基準とチェックリストの策定', 'pending', 'medium', '2025-11-10', 'quality', '2025-10-04 09:00:00+00', '2025-10-04 09:00:00+00'),
-('task-5', '製造ライン設計', '効率的な製造ラインの設計と設備配置の最適化', 'pending', 'high', '2025-11-15', 'production', '2025-10-05 09:00:00+00', '2025-10-05 09:00:00+00'),
-('task-6', 'パッケージング設計', 'OEM商品のパッケージデザインと梱包仕様の決定', 'pending', 'medium', '2025-11-20', 'design', '2025-10-06 09:00:00+00', '2025-10-06 09:00:00+00'),
-('task-7', '品質テスト・検証', '完成品の品質テストと顧客満足度の検証', 'pending', 'high', '2025-11-25', 'testing', '2025-10-07 09:00:00+00', '2025-10-07 09:00:00+00'),
-('task-8', '出荷プロセス構築', '効率的な出荷プロセスと物流システムの構築', 'pending', 'medium', '2025-11-30', 'logistics', '2025-10-08 09:00:00+00', '2025-10-08 09:00:00+00'),
-('task-9', 'マーケティング準備', 'OEM商品のマーケティング戦略と販促資料の準備', 'pending', 'low', '2025-12-05', 'marketing', '2025-10-09 09:00:00+00', '2025-10-09 09:00:00+00'),
-('task-10', '最終品質確認・納品開始', '最終品質確認と顧客への納品開始', 'pending', 'high', '2025-12-10', 'final', '2025-10-10 09:00:00+00', '2025-10-10 09:00:00+00')
+('task-1', '市場調査・ニーズ分析', 'ターゲット市場の調査と顧客ニーズの分析を行い、OEM商品の方向性を決定する', 'completed', 'high', '2025-10-15', (SELECT id FROM user_profiles WHERE username = 'manager'), '2025-10-01 09:00:00+00', '2025-10-15 17:00:00+00'),
+('task-2', '原材料の選定・調達', '品質基準に合致する原材料の選定と安定供給体制の構築', 'in_progress', 'high', '2025-10-25', (SELECT id FROM user_profiles WHERE username = 'procurement'), '2025-10-02 09:00:00+00', '2025-10-20 14:30:00+00'),
+('task-3', 'レシピ開発・試作', 'OEM商品のレシピ開発と試作品の作成・評価', 'in_progress', 'high', '2025-11-05', (SELECT id FROM user_profiles WHERE username = 'chef'), '2025-10-03 09:00:00+00', '2025-10-22 16:45:00+00'),
+('task-4', '品質管理基準設定', 'OEM商品の品質管理基準とチェックリストの策定', 'pending', 'medium', '2025-11-10', (SELECT id FROM user_profiles WHERE username = 'quality'), '2025-10-04 09:00:00+00', '2025-10-04 09:00:00+00'),
+('task-5', '製造ライン設計', '効率的な製造ラインの設計と設備配置の最適化', 'pending', 'high', '2025-11-15', (SELECT id FROM user_profiles WHERE username = 'production'), '2025-10-05 09:00:00+00', '2025-10-05 09:00:00+00'),
+('task-6', 'パッケージング設計', 'OEM商品のパッケージデザインと梱包仕様の決定', 'pending', 'medium', '2025-11-20', (SELECT id FROM user_profiles WHERE username = 'design'), '2025-10-06 09:00:00+00', '2025-10-06 09:00:00+00'),
+('task-7', '品質テスト・検証', '完成品の品質テストと顧客満足度の検証', 'pending', 'high', '2025-11-25', (SELECT id FROM user_profiles WHERE username = 'testing'), '2025-10-07 09:00:00+00', '2025-10-07 09:00:00+00'),
+('task-8', '出荷プロセス構築', '効率的な出荷プロセスと物流システムの構築', 'pending', 'medium', '2025-11-30', (SELECT id FROM user_profiles WHERE username = 'logistics'), '2025-10-08 09:00:00+00', '2025-10-08 09:00:00+00'),
+('task-9', 'マーケティング準備', 'OEM商品のマーケティング戦略と販促資料の準備', 'pending', 'low', '2025-12-05', (SELECT id FROM user_profiles WHERE username = 'marketing'), '2025-10-09 09:00:00+00', '2025-10-09 09:00:00+00'),
+('task-10', '最終品質確認・納品開始', '最終品質確認と顧客への納品開始', 'pending', 'high', '2025-12-10', (SELECT id FROM user_profiles WHERE username = 'final'), '2025-10-10 09:00:00+00', '2025-10-10 09:00:00+00')
 ON CONFLICT (id) DO NOTHING;
 
 -- サンプルコメントの挿入（author_idは実際のuser_profilesのidを使用）
