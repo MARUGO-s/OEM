@@ -70,6 +70,19 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('DOMContentLoadedイベントが発生しました');
     console.log('document.readyState:', document.readyState);
     
+    // リロード後に新規タスクモーダルを開くフラグをチェック
+    const shouldOpenTaskModal = sessionStorage.getItem('openTaskModalAfterReload');
+    if (shouldOpenTaskModal === 'true') {
+        console.log('リロード後の新規タスクモーダル表示フラグが検出されました');
+        sessionStorage.removeItem('openTaskModalAfterReload');
+        
+        // 少し遅延してからモーダルを開く（DOM要素の読み込みを待つ）
+        setTimeout(() => {
+            console.log('新規タスクモーダルを開きます');
+            openTaskModal();
+        }, 500);
+    }
+    
     const modal = document.getElementById('task-detail-modal');
     const closeBtn = document.getElementById('modal-close-btn');
     const closeAction = document.getElementById('modal-close-action');
@@ -151,24 +164,13 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('タスク追加ボタンがクリックされました');
             
-            // 既にモーダルが開いている場合は何もしない
-            const modal = document.getElementById('task-modal');
-            if (modal && modal.classList.contains('active')) {
-                console.log('モーダルが既に開いているため、処理をスキップします');
-                return;
-            }
+            // まずページをリロード
+            console.log('ページをリロードします');
+            window.location.reload();
             
-            try {
-                currentEditingTask = null;
-                if (taskForm) taskForm.reset();
-                const modalTitle = document.getElementById('modal-title');
-                if (modalTitle) modalTitle.textContent = '新規タスク追加';
-                console.log('openTaskModal関数を呼び出します');
-                openTaskModal();
-            } catch (error) {
-                console.error('タスク追加ボタンクリックエラー:', error);
-                console.error('エラーの詳細:', error.message, error.stack);
-            }
+            // リロード後に新規タスク追加モーダルを開くためのフラグを設定
+            sessionStorage.setItem('openTaskModalAfterReload', 'true');
+            
         });
         addTaskBtn.dataset.listenerAttached = 'true';
         console.log('タスク追加ボタンのイベントリスナーが設定されました');
