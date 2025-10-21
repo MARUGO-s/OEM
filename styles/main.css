@@ -312,7 +312,7 @@ body {
 .roadmap-container {
     position: relative;
     padding: 2rem 0;
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
@@ -351,7 +351,7 @@ body {
 .roadmap-side {
     width: 50%;
     display: flex;
-    padding: 0 1.75rem;
+    padding: 0 1rem;
     box-sizing: border-box;
 }
 
@@ -610,19 +610,19 @@ body {
     }
 
     .roadmap-side {
-        padding: 0 2rem;
+        padding: 0 1.25rem;
     }
 
     .roadmap-side-task.left,
     .roadmap-side-comments.left {
-        padding-left: 2.5rem;
-        padding-right: 1.25rem;
+        padding-left: 2rem;
+        padding-right: 1rem;
     }
 
     .roadmap-side-task.right,
     .roadmap-side-comments.right {
-        padding-left: 1.25rem;
-        padding-right: 2.5rem;
+        padding-left: 1rem;
+        padding-right: 2rem;
     }
 
     .roadmap-task,
@@ -658,19 +658,19 @@ body {
     }
 
     .roadmap-side {
-        padding: 0 1.5rem;
+        padding: 0 1rem;
     }
 
     .roadmap-side-task.left,
     .roadmap-side-comments.left {
-        padding-left: 2rem;
-        padding-right: 1rem;
+        padding-left: 1.5rem;
+        padding-right: 0.75rem;
     }
 
     .roadmap-side-task.right,
     .roadmap-side-comments.right {
-        padding-left: 1rem;
-        padding-right: 2rem;
+        padding-left: 0.75rem;
+        padding-right: 1.5rem;
     }
 
     .roadmap-task,
@@ -720,19 +720,19 @@ body {
     }
 
     .roadmap-side {
-        padding: 0 1rem;
+        padding: 0 0.75rem;
     }
 
     .roadmap-side-task.left,
     .roadmap-side-comments.left {
-        padding-left: 1.5rem;
-        padding-right: 0.75rem;
+        padding-left: 1.25rem;
+        padding-right: 0.5rem;
     }
 
     .roadmap-side-task.right,
     .roadmap-side-comments.right {
-        padding-left: 0.75rem;
-        padding-right: 1.5rem;
+        padding-left: 0.5rem;
+        padding-right: 1.25rem;
     }
 
     .roadmap-task {
@@ -877,19 +877,19 @@ body {
     }
 
     .roadmap-side {
-        padding: 0 0.75rem;
+        padding: 0 0.5rem;
     }
 
     .roadmap-side-task.left,
     .roadmap-side-comments.left {
-        padding-left: 1.25rem;
-        padding-right: 0.6rem;
+        padding-left: 1rem;
+        padding-right: 0.4rem;
     }
 
     .roadmap-side-task.right,
     .roadmap-side-comments.right {
-        padding-left: 0.6rem;
-        padding-right: 1.25rem;
+        padding-left: 0.4rem;
+        padding-right: 1rem;
     }
 
     .roadmap-task {
@@ -1791,7 +1791,7 @@ body {
 .roadmap-side {
     width: 50%;
     display: flex;
-    padding: 0 1.75rem;
+    padding: 0 1rem;
     box-sizing: border-box;
 }
 
