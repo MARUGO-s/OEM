@@ -1,49 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
-  <defs>
-    <!-- グラデーション定義 -->
-    <radialGradient id="backgroundGradient" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" style="stop-color:#f8f9fa;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#6c757d;stop-opacity:1" />
-    </radialGradient>
-    
-    <!-- 3D効果用のグラデーション -->
-    <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#e9ecef;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#dee2e6;stop-opacity:1" />
-    </linearGradient>
-    
-    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#f8f9fa;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#e9ecef;stop-opacity:1" />
-    </linearGradient>
-    
-    <!-- 影のフィルター -->
-    <filter id="textShadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="#000000" flood-opacity="0.3"/>
-    </filter>
-    
-    <filter id="ringShadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="1" dy="1" stdDeviation="2" flood-color="#000000" flood-opacity="0.2"/>
-    </filter>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Background circle with distressed effect -->
+  <circle cx="96" cy="96" r="88" fill="#8B4513" stroke="#5D2F0A" stroke-width="3"/>
   
-  <!-- 背景 -->
-  <rect width="192" height="192" fill="url(#backgroundGradient)"/>
+  <!-- Outer ring with text -->
+  <circle cx="96" cy="96" r="80" fill="none" stroke="#8B4513" stroke-width="2"/>
   
-  <!-- 外側のリング -->
-  <circle cx="96" cy="96" r="90" fill="none" stroke="url(#ringGradient)" stroke-width="12" filter="url(#ringShadow)"/>
+  <!-- MARUGO text (simplified for 192px) -->
+  <text x="96" y="65" text-anchor="middle" fill="#8B4513" font-family="Arial, sans-serif" font-size="12" font-weight="bold">MARUGO</text>
+  <text x="96" y="80" text-anchor="middle" fill="#8B4513" font-family="Arial, sans-serif" font-size="8" font-weight="bold">ORIGINAL</text>
   
-  <!-- 内側の円（背景） -->
-  <circle cx="96" cy="96" r="75" fill="#495057"/>
+  <!-- Inner circle -->
+  <circle cx="96" cy="96" r="45" fill="none" stroke="#8B4513" stroke-width="2"/>
   
-  <!-- 上部のテキスト "MARUGO" -->
-  <text x="96" y="68" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="url(#textGradient)" filter="url(#textShadow)">MARUGO</text>
+  <!-- Large OEM text -->
+  <text x="96" y="115" text-anchor="middle" fill="#8B4513" font-family="Arial, sans-serif" font-size="20" font-weight="bold">OEM</text>
   
-  <!-- 中央のテキスト "OEM" -->
-  <text x="96" y="105" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="url(#textGradient)" filter="url(#textShadow)">OEM</text>
+  <!-- Small special menu text -->
+  <text x="96" y="130" text-anchor="middle" fill="#8B4513" font-family="Arial, sans-serif" font-size="7">special menu</text>
   
-  <!-- 下部のテキスト "ORIGINAL" -->
-  <text x="96" y="142" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="url(#textGradient)" filter="url(#textShadow)">ORIGINAL</text>
+  <!-- Distressed effect overlay -->
+  <circle cx="96" cy="96" r="88" fill="none" stroke="#654321" stroke-width="1" opacity="0.3" stroke-dasharray="2,2"/>
 </svg>

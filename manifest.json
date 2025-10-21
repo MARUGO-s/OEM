@@ -1,14 +1,14 @@
 {
-  "name": "OEM商品企画管理システム",
-  "short_name": "OEM管理",
-  "description": "レストラン商品開発プロジェクト管理システム",
+  "name": "MARUGO OEM Special Menu",
+  "short_name": "MARUGO OEM",
+  "description": "MARUGOオリジナルフード商品企画管理システム",
   "id": "/OEM/",
   "start_url": "/OEM/",
   "scope": "/OEM/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
-  "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "background_color": "#8B4513",
+  "theme_color": "#8B4513",
   "dir": "ltr",
   "icons": [
     {
