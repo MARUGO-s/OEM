@@ -57,16 +57,32 @@ function renderComments() {
         const createdAt = comment.created_at ? new Date(comment.created_at) : new Date();
         const timeAgo = getTimeAgo(createdAt);
         
+        // 削除ボタンの表示判定（現在のユーザーがコメントの作成者かどうか）
+        const canDelete = appState.currentUser && 
+                         comment.author_username === appState.currentUser.username;
+        
         return `
             <div class="comment-item">
                 <div class="comment-header">
                     <span class="comment-author">${escapeHtml(comment.author_username || 'anonymous')}</span>
                     <span class="comment-time">${timeAgo}</span>
+                    ${canDelete ? `<button class="delete-comment-btn" data-comment-id="${escapeHtml(comment.id)}" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; margin-left: 0.5rem;">削除</button>` : ''}
                 </div>
                 <div class="comment-text">${escapeHtml(comment.content || '')}</div>
             </div>
         `;
     }).join('');
+
+    // 削除ボタンのイベントリスナーを追加
+    container.querySelectorAll('.delete-comment-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const commentId = button.dataset.commentId;
+            if (commentId) {
+                deleteComment(commentId);
+            }
+        });
+    });
 }
 
 function generateCommentId() {
@@ -86,6 +102,48 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// コメント削除機能
+async function deleteComment(commentId) {
+    try {
+        // ユーザー情報のバリデーション
+        if (!appState.currentUser || !appState.currentUser.username) {
+            alert('コメントを削除するにはログインが必要です。');
+            return;
+        }
+
+        // 確認ダイアログ
+        if (!confirm('このコメントを削除しますか？')) {
+            return;
+        }
+
+        console.log('コメント削除開始:', commentId);
+
+        // Supabaseからコメントを削除
+        const { error } = await supabase
+            .from('comments')
+            .delete()
+            .eq('id', commentId);
+
+        if (error) {
+            console.error('コメント削除エラー:', error);
+            alert('コメントの削除に失敗しました。しばらく待ってから再度お試しください。');
+            return;
+        }
+
+        console.log('コメント削除成功:', commentId);
+
+        // コメントを再読み込み
+        await loadComments();
+
+        // 通知を表示
+        showNotification('コメントを削除しました', 'success');
+
+    } catch (error) {
+        console.error('コメント削除エラー:', error);
+        alert('コメントの削除に失敗しました');
+    }
 }
 
 // コメント投稿

@@ -69,6 +69,54 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// ロードマップコメント削除機能
+async function deleteRoadmapComment(commentId) {
+    try {
+        // ユーザー情報のバリデーション
+        if (!appState.currentUser || !appState.currentUser.username) {
+            alert('コメントを削除するにはログインが必要です。');
+            return;
+        }
+
+        // 確認ダイアログ
+        if (!confirm('このコメントを削除しますか？')) {
+            return;
+        }
+
+        console.log('ロードマップコメント削除開始:', commentId);
+
+        // Supabaseからコメントを削除
+        const { error } = await supabase
+            .from('comments')
+            .delete()
+            .eq('id', commentId);
+
+        if (error) {
+            console.error('ロードマップコメント削除エラー:', error);
+            alert('コメントの削除に失敗しました。しばらく待ってから再度お試しください。');
+            return;
+        }
+
+        console.log('ロードマップコメント削除成功:', commentId);
+
+        // モーダルからタスクIDを取得
+        const modal = document.getElementById('roadmap-item-modal');
+        const taskId = modal ? modal.dataset.taskId : null;
+
+        if (taskId) {
+            // コメントを再読み込み
+            await loadRoadmapComments(taskId);
+        }
+
+        // 通知を表示
+        showNotification('コメントを削除しました', 'success');
+
+    } catch (error) {
+        console.error('ロードマップコメント削除エラー:', error);
+        alert('コメントの削除に失敗しました');
+    }
+}
+
 let roadmapCommentCache = [];
 
 // Supabaseコメントの読み込み（復活版）
@@ -129,6 +177,10 @@ function renderRoadmapComments(comments) {
         const authorName = comment.author_username || 
             (comment.author_email ? comment.author_email.split('@')[0] : '匿名');
         
+        // 削除ボタンの表示判定（現在のユーザーがコメントの作成者かどうか）
+        const canDelete = appState.currentUser && 
+                         comment.author_username === appState.currentUser.username;
+        
         return `
             <div class="roadmap-comment-item" data-comment-id="${escapeHtml(comment.id || '')}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
                 <div class="roadmap-comment-bullet" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
@@ -136,9 +188,9 @@ function renderRoadmapComments(comments) {
                     <span class="comment-text">${escapeHtml(comment.content || '')}</span>
                     <span class="comment-date">${escapeHtml(authorName)} ${escapeHtml(formattedDate)}</span>
                 </div>
-                <button class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
+                ${canDelete ? `<button class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
                     削除
-                </button>
+                </button>` : ''}
             </div>
         `;
     }).join('');
