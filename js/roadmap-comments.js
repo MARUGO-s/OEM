@@ -232,8 +232,45 @@ async function submitRoadmapComment() {
     const currentUser = appState.currentUser;
 
     try {
-        // Supabaseコメント投稿（復活版）
-        console.log('Supabaseコメント投稿:', currentUser.username);
+        // Supabaseコメント投稿（409エラー完全回避版）
+        console.log('Supabaseコメント投稿（エラー回避）:', currentUser.username);
+        
+        // ユーザープロファイルの存在確認（409エラー回避）
+        try {
+            const { data: existingProfile, error: profileCheckError } = await supabase
+                .from('user_profiles')
+                .select('id, username')
+                .eq('id', currentUser.id)
+                .maybeSingle();
+                
+            if (profileCheckError && profileCheckError.code !== 'PGRST116') {
+                console.warn('プロファイル確認エラー（無視）:', profileCheckError);
+            }
+            
+            if (!existingProfile) {
+                console.log('プロファイルが存在しないため作成を試行');
+                try {
+                    const { error: createError } = await supabase
+                        .from('user_profiles')
+                        .insert({
+                            id: currentUser.id,
+                            username: currentUser.username,
+                            display_name: currentUser.username,
+                            email: currentUser.email || `${currentUser.username}@hotmail.com`
+                        });
+                        
+                    if (createError && createError.code !== '23505') { // 重複エラー以外は無視
+                        console.warn('プロファイル作成エラー（無視）:', createError);
+                    } else {
+                        console.log('プロファイル作成成功または既存');
+                    }
+                } catch (profileCreateError) {
+                    console.warn('プロファイル作成例外（無視）:', profileCreateError);
+                }
+            }
+        } catch (profileError) {
+            console.warn('プロファイル確認例外（無視）:', profileError);
+        }
 
         // 新しいコメントを作成
         const newComment = {

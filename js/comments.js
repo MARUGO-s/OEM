@@ -114,9 +114,45 @@ async function postComment(content) {
             return;
         }
 
-        // ユーザープロファイル作成を完全にスキップ（競合回避）
-        // コメント投稿のみに集中し、プロファイル作成は別途処理
-        console.log('コメント投稿に集中: プロファイル作成をスキップ', appState.currentUser.username);
+        // Supabaseコメント投稿（409エラー完全回避版）
+        console.log('Supabaseコメント投稿（エラー回避）:', appState.currentUser.username);
+        
+        // ユーザープロファイルの存在確認（409エラー回避）
+        try {
+            const { data: existingProfile, error: profileCheckError } = await supabase
+                .from('user_profiles')
+                .select('id, username')
+                .eq('id', appState.currentUser.id)
+                .maybeSingle();
+                
+            if (profileCheckError && profileCheckError.code !== 'PGRST116') {
+                console.warn('プロファイル確認エラー（無視）:', profileCheckError);
+            }
+            
+            if (!existingProfile) {
+                console.log('プロファイルが存在しないため作成を試行');
+                try {
+                    const { error: createError } = await supabase
+                        .from('user_profiles')
+                        .insert({
+                            id: appState.currentUser.id,
+                            username: appState.currentUser.username,
+                            display_name: appState.currentUser.username,
+                            email: appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`
+                        });
+                        
+                    if (createError && createError.code !== '23505') { // 重複エラー以外は無視
+                        console.warn('プロファイル作成エラー（無視）:', createError);
+                    } else {
+                        console.log('プロファイル作成成功または既存');
+                    }
+                } catch (profileCreateError) {
+                    console.warn('プロファイル作成例外（無視）:', profileCreateError);
+                }
+            }
+        } catch (profileError) {
+            console.warn('プロファイル確認例外（無視）:', profileError);
+        }
 
         // 新しいコメントを作成
         const newComment = {
