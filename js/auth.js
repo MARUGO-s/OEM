@@ -185,9 +185,9 @@ async function login(username, password) {
     }
 }
 
-// 新規登録処理（ローカルストレージベース）
+// 新規登録処理（Supabase復活版）
 async function register(username, password) {
-    console.log('ローカル登録処理開始:', { username });
+    console.log('Supabase登録処理開始:', { username });
     
     try {
         // ユーザー名のバリデーション
@@ -214,67 +214,132 @@ async function register(username, password) {
             return;
         }
 
+        const emailInput = document.getElementById('reg-email');
+        const rawEmail = emailInput ? emailInput.value.trim() : '';
+
+        let email = '';
+        if (rawEmail) {
+            if (!isValidEmail(rawEmail)) {
+                showError('有効なメールアドレスを入力してください');
+                return;
+            }
+            email = rawEmail.toLowerCase();
+        } else {
+            email = buildEmailFromUsername(trimmedUsername);
+        }
+
         const normalizedUsername = trimmedUsername.toLowerCase();
 
-        // 既存ユーザーのチェック（ローカルストレージ）
-        const usersData = localStorage.getItem('local_users');
-        const users = usersData ? JSON.parse(usersData) : {};
-        
-        if (users[normalizedUsername]) {
+        // 既存ユーザーのチェック（Supabase）
+        const { data: existingProfile, error: existingError } = await supabase
+            .from('user_profiles')
+            .select('id')
+            .eq('username', normalizedUsername)
+            .maybeSingle();
+
+        if (existingError && existingError.code !== 'PGRST116') {
+            console.error('既存ユーザーチェックエラー:', existingError);
+            showError('登録処理中にエラーが発生しました');
+            return;
+        }
+
+        if (existingProfile) {
             showError('このユーザー名は既に使用されています');
             return;
         }
 
-        // 新しいユーザーを作成
-        const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const email = buildEmailFromUsername(trimmedUsername);
-        
-        const newUser = {
-            id: userId,
-            username: normalizedUsername,
-            display_name: trimmedUsername,
-            email: email,
-            password: password, // 実際のプロジェクトではハッシュ化が必要
-            created_at: new Date().toISOString()
-        };
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    username: normalizedUsername,
+                    display_name: trimmedUsername
+                },
+                emailRedirectTo: undefined,
+                captchaToken: undefined
+            }
+        });
 
-        // ローカルストレージに保存
-        users[normalizedUsername] = newUser;
-        localStorage.setItem('local_users', JSON.stringify(users));
+        if (error) {
+            console.error('Supabase登録エラー:', error);
+            showError(`登録に失敗しました: ${error.message}`);
+            return;
+        }
 
-        // セッションを作成
-        const session = {
-            user: {
-                id: newUser.id,
-                username: newUser.username,
-                display_name: newUser.display_name,
-                email: newUser.email,
-                created_at: newUser.created_at
-            },
-            expires: Date.now() + (24 * 60 * 60 * 1000) // 24時間
-        };
+        const authUser = data?.user;
+        if (authUser) {
+            try {
+                const { error: profileInsertError } = await supabase
+                    .from('user_profiles')
+                    .upsert({
+                        id: authUser.id,
+                        username: normalizedUsername,
+                        display_name: trimmedUsername,
+                        email: email
+                    }, {
+                        onConflict: 'id'
+                    });
 
-        sessionStorage.setItem('local_auth_session', JSON.stringify(session));
-        appState.currentUser = session.user;
+                if (profileInsertError) {
+                    console.error('プロファイル保存エラー:', profileInsertError);
+                    // エラーが発生しても登録処理を続行
+                } else {
+                    console.log('プロファイル保存成功:', { username: normalizedUsername, email: email });
+                }
+            } catch (profileError) {
+                console.error('プロファイル保存例外:', profileError);
+                // 例外が発生しても登録処理を続行
+            }
+        }
 
-        console.log('ローカル登録成功:', newUser);
-        showMainScreen();
-        await callLoadAllDataSafely();
-        showError('登録とログインが完了しました！', 'success');
+        if (data?.session) {
+            await refreshCurrentUser();
+            showMainScreen();
+            await callLoadAllDataSafely();
+            showError('登録とログインが完了しました！', 'success');
+        } else {
+            // メール確認が必要な場合は、自動的にログインを試行
+            console.log('メール確認が必要な場合、自動ログインを試行します');
+            try {
+                const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                });
+                
+                if (loginError) {
+                    console.log('自動ログイン失敗:', loginError.message);
+                    showError('登録が完了しました！ログインしてください。', 'success');
+                    showLoginForm();
+                } else {
+                    await refreshCurrentUser();
+                    showMainScreen();
+                    await callLoadAllDataSafely();
+                    showError('登録とログインが完了しました！', 'success');
+                }
+            } catch (autoLoginError) {
+                console.log('自動ログイン例外:', autoLoginError.message);
+                showError('登録が完了しました！ログインしてください。', 'success');
+                showLoginForm();
+            }
+        }
         
     } catch (error) {
-        console.error('ローカル登録エラー:', error);
+        console.error('Supabase登録エラー:', error);
         showError('登録に失敗しました: ' + error.message);
     }
 }
 
-// ログアウト処理（ローカルストレージベース）
+// ログアウト処理（Supabase復活版）
 async function logout() {
     try {
-        // セッションストレージをクリア
-        sessionStorage.removeItem('local_auth_session');
-        
-        // アプリケーション状態をリセット
+        // リアルタイムサブスクリプションの解除
+        appState.subscriptions.forEach(sub => {
+            supabase.removeChannel(sub);
+        });
+        appState.subscriptions = [];
+        await supabase.auth.signOut();
+
         appState.currentUser = null;
         appState.tasks = [];
         appState.comments = [];
@@ -284,42 +349,38 @@ async function logout() {
         appState.brainstormFilter = 'all';
         appState.brainstormSubscribed = false;
         
-        console.log('ローカルログアウト完了');
+        console.log('Supabaseログアウト完了');
         showLoginScreen();
         
     } catch (error) {
-        console.error('ローカルログアウトエラー:', error);
+        console.error('Supabaseログアウトエラー:', error);
     }
 }
 
-// セッションチェック（ローカルストレージベース）
+// セッションチェック（Supabase復活版）
 async function checkSession() {
-    console.log('ローカルセッションチェック開始');
+    console.log('Supabaseセッションチェック開始');
     
     try {
-        const sessionData = sessionStorage.getItem('local_auth_session');
-        if (!sessionData) {
-            console.log('ローカルセッションなし');
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+            console.error('セッション取得エラー:', error);
             showLoginScreen();
             return;
         }
 
-        const session = JSON.parse(sessionData);
-        
-        // セッションの有効期限をチェック
-        if (session.expires && session.expires < Date.now()) {
-            console.log('ローカルセッション期限切れ');
-            sessionStorage.removeItem('local_auth_session');
+        if (session) {
+            console.log('Supabaseセッション存在:', session);
+            await refreshCurrentUser();
+            showMainScreen();
+            await callLoadAllDataSafely();
+        } else {
+            console.log('Supabaseセッションなし');
             showLoginScreen();
-            return;
         }
-
-        console.log('ローカルセッション存在:', session);
-        await refreshCurrentUser();
-        showMainScreen();
-        await callLoadAllDataSafely();
     } catch (error) {
-        console.error('ローカルセッションチェックエラー:', error);
+        console.error('Supabaseセッションチェックエラー:', error);
         showLoginScreen();
     }
 }
