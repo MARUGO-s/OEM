@@ -177,7 +177,63 @@ async function createMeetingNotification(meeting) {
 
         // リアルタイム通知を表示（エラーハンドリング強化）
         try {
-            showMeetingNotification(notification);
+            // 通知オブジェクトのバリデーション
+            if (!notification || typeof notification !== 'object') {
+                console.warn('無効な通知オブジェクト:', notification);
+                return;
+            }
+
+            // ブラウザ通知の表示
+            if (Notification.permission === 'granted') {
+                const notificationTitle = notification.title || '会議通知';
+                const notificationBody = notification.message || '新しい会議がスケジュールされました';
+                const notificationId = notification.id || `meeting_${Date.now()}`;
+
+                new Notification(notificationTitle, {
+                    body: notificationBody,
+                    icon: '/icon-192.png',
+                    badge: '/icon-192.png',
+                    tag: notificationId,
+                    requireInteraction: true
+                });
+            }
+
+            // アプリ内通知の表示
+            try {
+                const notificationElement = document.createElement('div');
+                notificationElement.className = 'meeting-notification';
+                
+                // 安全なプロパティアクセス
+                const notificationTitle = notification.title || '会議通知';
+                const notificationMessage = notification.message || '新しい会議がスケジュールされました';
+                const notificationId = notification.id || `meeting_${Date.now()}`;
+                const meetingId = (notification.data && notification.data.meetingId) || notification.related_id || notificationId;
+                
+                notificationElement.innerHTML = `
+                    <div class="notification-content">
+                        <h4>${notificationTitle}</h4>
+                        <p>${notificationMessage}</p>
+                        <div class="notification-actions">
+                            <button onclick="joinMeeting('${meetingId}')" class="btn btn-primary">参加する</button>
+                            <button onclick="dismissNotification('${notificationId}')" class="btn btn-secondary">閉じる</button>
+                        </div>
+                    </div>
+                `;
+                
+                // 通知を表示
+                document.body.appendChild(notificationElement);
+                
+                // 5秒後に自動削除
+                setTimeout(() => {
+                    if (notificationElement.parentNode) {
+                        notificationElement.parentNode.removeChild(notificationElement);
+                    }
+                }, 5000);
+                
+            } catch (domError) {
+                console.warn('DOM通知表示エラー:', domError);
+            }
+
         } catch (notificationDisplayError) {
             console.warn('通知表示エラー（無視）:', notificationDisplayError);
             // 通知表示エラーは会議作成を阻害しない
@@ -188,77 +244,6 @@ async function createMeetingNotification(meeting) {
     }
 }
 
-// 会議通知の表示（エラーハンドリング強化）
-function showMeetingNotification(notification) {
-    try {
-        // 通知オブジェクトのバリデーション
-        if (!notification || typeof notification !== 'object') {
-            console.warn('無効な通知オブジェクト:', notification);
-            return;
-        }
-
-        // ブラウザ通知の表示
-        if (Notification.permission === 'granted') {
-            const notificationTitle = notification.title || '会議通知';
-            const notificationBody = notification.message || '新しい会議がスケジュールされました';
-            const notificationId = notification.id || `meeting_${Date.now()}`;
-
-            new Notification(notificationTitle, {
-                body: notificationBody,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
-                tag: notificationId,
-                requireInteraction: true,
-                actions: [
-                    { action: 'join', title: '参加する' },
-                    { action: 'dismiss', title: '閉じる' }
-                ]
-            });
-        }
-    } catch (error) {
-        console.warn('通知表示エラー:', error);
-        // 通知表示エラーは会議作成を阻害しない
-    }
-
-    // アプリ内通知の表示（エラーハンドリング強化）
-    try {
-        const notificationElement = document.createElement('div');
-        notificationElement.className = 'meeting-notification';
-        
-        // 安全なプロパティアクセス
-        const notificationTitle = notification.title || '会議通知';
-        const notificationMessage = notification.message || '新しい会議がスケジュールされました';
-        const notificationId = notification.id || `meeting_${Date.now()}`;
-        const meetingId = (notification.data && notification.data.meetingId) || notification.related_id || notificationId;
-        
-        notificationElement.innerHTML = `
-            <div class="notification-content">
-                <h4>${notificationTitle}</h4>
-                <p>${notificationMessage}</p>
-                <div class="notification-actions">
-                    <button onclick="joinMeeting('${meetingId}')" class="btn btn-primary">参加する</button>
-                    <button onclick="dismissNotification('${notificationId}')" class="btn btn-secondary">閉じる</button>
-                </div>
-            </div>
-        `;
-        
-        // 通知を表示
-        document.body.appendChild(notificationElement);
-        
-        // 5秒後に自動削除
-        setTimeout(() => {
-            if (notificationElement.parentNode) {
-                notificationElement.parentNode.removeChild(notificationElement);
-            }
-        }, 5000);
-        
-    } catch (domError) {
-        console.warn('DOM通知表示エラー:', domError);
-        // DOM操作エラーは会議作成を阻害しない
-    }
-
-
-}
 
 // 通知コンテナの作成
 function createNotificationContainer() {
