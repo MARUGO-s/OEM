@@ -327,13 +327,13 @@ body {
     }
     
     .roadmap-task {
-        max-width: 600px;
+        max-width: 720px;
         padding: 1.5rem 2rem;
         min-height: 140px;
     }
     
     .roadmap-task-comments {
-        max-width: 600px;
+        max-width: 720px;
     }
     
     .roadmap-task-title {
@@ -454,7 +454,7 @@ body {
     padding: 0.8rem 1.1rem;
     box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
     width: 100%;
-    max-width: 320px;
+    max-width: 384px;
     position: relative;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
@@ -683,13 +683,13 @@ body {
     }
     
     .roadmap-task {
-        max-width: 500px;
+        max-width: 600px;
         padding: 1.2rem 1.5rem;
         min-height: 120px;
     }
     
     .roadmap-task-comments {
-        max-width: 500px;
+        max-width: 600px;
     }
     
     .roadmap-task-title {
@@ -765,7 +765,7 @@ body {
 
     .roadmap-task,
     .roadmap-task-comments {
-        max-width: 600px;
+        max-width: 720px;
     }
 
     .brainstorm-body {
@@ -813,7 +813,7 @@ body {
 
     .roadmap-task,
     .roadmap-task-comments {
-        max-width: 500px;
+        max-width: 600px;
     }
 
     .roadmap-task-title {
@@ -1783,7 +1783,7 @@ body {
 /* ロードマップタスクコメント表示 */
 .roadmap-task-comments {
     width: 100%;
-    max-width: 320px;
+    max-width: 384px;
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
@@ -1940,7 +1940,7 @@ body {
 
 .roadmap-task {
     width: 100%;
-    max-width: 320px;
+    max-width: 384px;
     border-left-width: 4px;
 }
 
@@ -1954,7 +1954,7 @@ body {
 
 .roadmap-task-comments {
     width: 100%;
-    max-width: 320px;
+    max-width: 384px;
     margin: 0 !important;
     padding: 0 !important;
     background: transparent !important;
