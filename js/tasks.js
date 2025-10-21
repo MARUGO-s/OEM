@@ -281,12 +281,20 @@ async function loadTasks() {
 
 // タスクの表示
 function renderTasks() {
-    const container = document.getElementById('roadmap-container');
-    
-    if (appState.tasks.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">タスクがまだありません。新規タスクを追加してください。</p>';
-        return;
-    }
+    try {
+        const container = document.getElementById('roadmap-container');
+        
+        if (!container) {
+            console.error('roadmap-container要素が見つかりません');
+            return;
+        }
+        
+        if (appState.tasks.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">タスクがまだありません。新規タスクを追加してください。</p>';
+            return;
+        }
+        
+        console.log('タスク表示開始:', appState.tasks.length, '個のタスク');
 
     // タスクを日付順でソート
     const sortedTasks = [...appState.tasks].sort((a, b) => {
@@ -374,11 +382,18 @@ function renderTasks() {
             month: '2-digit',
             day: '2-digit'
         });
-        // ユーザー名を取得（JOINしたデータから）
-        const taskCreatedBy = task.user_profiles?.username || 
-                              task.user_profiles?.display_name || 
-                              task.created_by || 
-                              'システム';
+        // ユーザー名を取得（JOINしたデータから）- Safari互換性対応
+        let taskCreatedBy = 'システム';
+        
+        if (task.user_profiles) {
+            if (task.user_profiles.username) {
+                taskCreatedBy = task.user_profiles.username;
+            } else if (task.user_profiles.display_name) {
+                taskCreatedBy = task.user_profiles.display_name;
+            }
+        } else if (task.created_by) {
+            taskCreatedBy = task.created_by;
+        }
 
         return `
             <div class="roadmap-item ${task.status}" data-task-id="${task.id}">
@@ -437,6 +452,14 @@ function renderTasks() {
                    }
                });
            });
+           
+    } catch (error) {
+        console.error('タスク表示エラー:', error);
+        const container = document.getElementById('roadmap-container');
+        if (container) {
+            container.innerHTML = '<p style="text-align: center; color: #ef4444; padding: 2rem;">タスクの表示中にエラーが発生しました。ページを再読み込みしてください。</p>';
+        }
+    }
 }
 
 // サマリー更新
