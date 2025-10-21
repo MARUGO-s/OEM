@@ -2,6 +2,32 @@
 
 let currentEditingTask = null;
 
+// Safari対応: 安全なsessionStorage操作
+function safeSessionStorageGet(key) {
+    try {
+        return sessionStorage.getItem(key);
+    } catch (e) {
+        console.warn('sessionStorage.getItem failed:', e);
+        return null;
+    }
+}
+
+function safeSessionStorageSet(key, value) {
+    try {
+        sessionStorage.setItem(key, value);
+    } catch (e) {
+        console.warn('sessionStorage.setItem failed:', e);
+    }
+}
+
+function safeSessionStorageRemove(key) {
+    try {
+        sessionStorage.removeItem(key);
+    } catch (e) {
+        console.warn('sessionStorage.removeItem failed:', e);
+    }
+}
+
 // タスク詳細ポップアップモーダル表示
 function showTaskDetailModal(taskId) {
     const task = appState.tasks.find(t => t.id === taskId);
@@ -71,10 +97,10 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('document.readyState:', document.readyState);
     
     // リロード後に新規タスクモーダルを開くフラグをチェック
-    const shouldOpenTaskModal = sessionStorage.getItem('openTaskModalAfterReload');
+    const shouldOpenTaskModal = safeSessionStorageGet('openTaskModalAfterReload');
     if (shouldOpenTaskModal === 'true') {
         console.log('リロード後の新規タスクモーダル表示フラグが検出されました');
-        sessionStorage.removeItem('openTaskModalAfterReload');
+        safeSessionStorageRemove('openTaskModalAfterReload');
         
         // 少し遅延してからモーダルを開く（DOM要素の読み込みを待つ）
         setTimeout(() => {
@@ -172,8 +198,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // 少し遅延してからページをリロード（ローディング画面が表示されるように）
             setTimeout(() => {
                 console.log('ページをリロードします');
-                // リロード後に新規タスク追加モーダルを開くためのフラ@gmail.comを設定
-                sessionStorage.setItem('openTaskModalAfterReload', 'true');
+                // リロード後に新規タスク追加モーダルを開くためのフラグを設定
+                safeSessionStorageSet('openTaskModalAfterReload', 'true');
                 window.location.reload();
             }, 300);
             

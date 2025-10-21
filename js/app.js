@@ -54,18 +54,45 @@ async function loadAllData() {
     }
 }
 
-// Service Workerの登録
+// Service Workerの登録（Safari対応強化）
 function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js')
-            .then((registration) => {
-                console.log('Service Worker登録成功:', registration);
-            })
-            .catch((error) => {
-                console.log('Service Worker登録失敗:', error);
-                // Service Worker登録失敗はアプリケーションの動作を阻害しない
-            });
+    // Service Workerのサポートチェック
+    if (!('serviceWorker' in navigator)) {
+        console.log('このブラウザはService Workerをサポートしていません');
+        return;
     }
+    
+    // Safariの場合、追加のチェックを実行
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    if (isSafari) {
+        console.log('Safari検出: Service Workerを慎重に登録します');
+    }
+    
+    // ページロード完了後に登録
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js', {
+            scope: './'
+        })
+        .then((registration) => {
+            console.log('Service Worker登録成功:', registration.scope);
+            
+            // 更新チェック（Safari対応）
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                console.log('新しいService Workerが見つかりました');
+                
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        console.log('新しいService Workerがインストールされました。リロードしてください。');
+                    }
+                });
+            });
+        })
+        .catch((error) => {
+            console.log('Service Worker登録失敗:', error);
+            // Service Worker登録失敗はアプリケーションの動作を阻害しない
+        });
+    });
 }
 
 // モーダル外クリックで閉じる（要素が存在する場合のみ）
