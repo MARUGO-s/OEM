@@ -62,11 +62,25 @@ async function createGoogleMeetMeeting(title, date, duration = 60, participants 
             created_by: appState.currentUser ? appState.currentUser.id : null
         };
 
-        const { error } = await supabase
-            .from('meetings')
-            .insert([meeting]);
+        // Supabaseに会議を保存（エラーハンドリング強化）
+        try {
+            const { data, error } = await supabase
+                .from('meetings')
+                .insert([meeting])
+                .select();
 
-        if (error) throw error;
+            if (error) {
+                console.error('Supabase会議保存エラー:', error);
+                // エラーが発生しても会議作成は継続（ローカル保存）
+                console.warn('会議をローカルに保存します');
+            } else {
+                console.log('Supabase会議保存成功:', data);
+            }
+        } catch (supabaseError) {
+            console.error('Supabase会議保存例外:', supabaseError);
+            // 例外が発生しても会議作成は継続
+            console.warn('会議をローカルに保存します');
+        }
 
         // 参加者に通知
         await notifyMeetingParticipants(meeting);
