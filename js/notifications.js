@@ -69,26 +69,52 @@ async function requestNotificationPermission() {
 // プッシュ通知のサブスクリプション
 async function subscribeToPushNotifications() {
     try {
+        console.log('🔔 プッシュ通知のサブスクリプションを開始します...');
+        
+        if (!('serviceWorker' in navigator)) {
+            console.warn('⚠️ Service Workerがサポートされていません');
+            return null;
+        }
+
+        if (!('PushManager' in window)) {
+            console.warn('⚠️ Push Managerがサポートされていません');
+            return null;
+        }
+
         const registration = await navigator.serviceWorker.ready;
+        console.log('✅ Service Worker登録確認:', registration);
         
         // 既存のサブスクリプションを確認
         let subscription = await registration.pushManager.getSubscription();
+        console.log('📋 既存のサブスクリプション:', subscription);
         
         if (!subscription) {
             // 新しいサブスクリプションを作成
+            console.log('🆕 新しいプッシュ通知サブスクリプションを作成します...');
             subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
+                userVisibleOnly: true, // ユーザーに表示される通知のみ
                 applicationServerKey: null // VAPIDキーは実際の実装では必要
             });
-            console.log('プッシュ通知にサブスクライブしました:', subscription);
+            console.log('✅ プッシュ通知にサブスクライブしました:', subscription);
+        } else {
+            console.log('✅ 既存のプッシュ通知サブスクリプションを使用します');
         }
 
         // サブスクリプション情報を保存（実際の実装ではサーバーに送信）
         localStorage.setItem('pushSubscription', JSON.stringify(subscription));
+        localStorage.setItem('pushNotificationsEnabled', 'true');
+        
+        console.log('💾 プッシュ通知設定を保存しました');
+        showNotification('🔔 プッシュ通知が有効になりました（アプリが閉じていても通知されます）', 'success');
+        
+        // 通知ボタンの表示を更新
+        checkAndShowNotificationButtons();
         
         return subscription;
     } catch (error) {
-        console.error('プッシュ通知サブスクリプションエラー:', error);
+        console.error('❌ プッシュ通知サブスクリプションエラー:', error);
+        console.error('エラー詳細:', error.stack);
+        showNotification('プッシュ通知の設定に失敗しました', 'error');
         return null;
     }
 }
@@ -408,10 +434,10 @@ async function createNotification(notificationData) {
     }
 }
 
-// プッシュ通知を送信
+// プッシュ通知を送信 - アプリが閉じている時も確実に通知
 async function sendPushNotification(notificationData) {
     try {
-        console.log('プッシュ通知送信チェック:', {
+        console.log('🔔 プッシュ通知送信チェック:', {
             permission: checkNotificationPermission(),
             hidden: document.hidden,
             hasFocus: document.hasFocus(),
@@ -421,37 +447,88 @@ async function sendPushNotification(notificationData) {
         // 通知許可が得られているか確認
         const permission = checkNotificationPermission();
         if (permission !== 'granted') {
-            console.log('通知許可がないため、プッシュ通知をスキップします。現在の許可状態:', permission);
+            console.log('⚠️ 通知許可がないため、プッシュ通知をスキップします。現在の許可状態:', permission);
             return;
         }
 
-        // アプリがバックグラウンドまたは非アクティブの場合、常にプッシュ通知を表示
-        // アプリがアクティブでも通知を表示（ユーザーが気づきやすくするため）
-        const title = 'MARUGO OEM Special Menu';
-        const options = {
-            body: notificationData.message || '新しい通知があります',
-            icon: '/OEM/icon-192.svg',
-            badge: '/OEM/icon-192.svg',
-            tag: notificationData.related_id || 'oem-notification',
-            vibrate: [200, 100, 200],
-            requireInteraction: false,
-            data: {
-                url: '/OEM/',
-                notification_id: notificationData.id
+        // Service Workerにプッシュ通知を送信（アプリが閉じていても動作）
+        console.log('📡 Service Workerにプッシュ通知を送信します...');
+        
+        // Service Workerが登録されているか確認
+        if ('serviceWorker' in navigator && 'PushManager' in window) {
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                console.log('✅ Service Worker準備完了:', registration);
+                
+                // Service Workerにメッセージを送信してプッシュ通知を表示
+                if (registration.active) {
+                    registration.active.postMessage({
+                        type: 'SHOW_NOTIFICATION',
+                        notificationData: {
+                            title: 'MARUGO OEM Special Menu',
+                            message: notificationData.message || '新しい通知があります',
+                            icon: '/OEM/icon-192.svg',
+                            badge: '/OEM/icon-192.svg',
+                            tag: notificationData.related_id || 'oem-notification',
+                            url: '/OEM/',
+                            notification_id: notificationData.id,
+                            type: notificationData.type || 'general'
+                        }
+                    });
+                    console.log('✅ Service Workerに通知メッセージを送信しました');
+                } else {
+                    console.warn('⚠️ Service Workerがアクティブではありません');
+                    // フォールバック: 直接ブラウザ通知を表示
+                    showBrowserNotification('MARUGO OEM Special Menu', {
+                        body: notificationData.message || '新しい通知があります',
+                        icon: '/OEM/icon-192.svg',
+                        badge: '/OEM/icon-192.svg',
+                        tag: notificationData.related_id || 'oem-notification',
+                        vibrate: [200, 100, 200],
+                        requireInteraction: true, // アプリが閉じている時は確実に表示
+                        data: {
+                            url: '/OEM/',
+                            notification_id: notificationData.id
+                        }
+                    });
+                }
+            } catch (swError) {
+                console.error('❌ Service Worker通知送信エラー:', swError);
+                // フォールバック: 直接ブラウザ通知を表示
+                showBrowserNotification('MARUGO OEM Special Menu', {
+                    body: notificationData.message || '新しい通知があります',
+                    icon: '/OEM/icon-192.svg',
+                    badge: '/OEM/icon-192.svg',
+                    tag: notificationData.related_id || 'oem-notification',
+                    vibrate: [200, 100, 200],
+                    requireInteraction: true,
+                    data: {
+                        url: '/OEM/',
+                        notification_id: notificationData.id
+                    }
+                });
             }
-        };
-        
-        console.log('ブラウザ通知を表示します:', title, options);
-        const notification = showBrowserNotification(title, options);
-        
-        if (notification) {
-            console.log('プッシュ通知を送信しました');
         } else {
-            console.warn('プッシュ通知の送信に失敗しました');
+            console.warn('⚠️ Service WorkerまたはPushManagerがサポートされていません');
+            // フォールバック: 直接ブラウザ通知を表示
+            showBrowserNotification('MARUGO OEM Special Menu', {
+                body: notificationData.message || '新しい通知があります',
+                icon: '/OEM/icon-192.svg',
+                badge: '/OEM/icon-192.svg',
+                tag: notificationData.related_id || 'oem-notification',
+                vibrate: [200, 100, 200],
+                requireInteraction: true,
+                data: {
+                    url: '/OEM/',
+                    notification_id: notificationData.id
+                }
+            });
         }
         
+        console.log('✅ プッシュ通知を送信しました');
+        
     } catch (error) {
-        console.error('プッシュ通知送信エラー:', error);
+        console.error('❌ プッシュ通知送信エラー:', error);
         console.error('エラー詳細:', error.stack);
         // プッシュ通知エラーは無視
     }

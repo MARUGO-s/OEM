@@ -1,5 +1,5 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'oem-app-v38';
+const CACHE_NAME = 'oem-app-v39';
 
 // ベースパスを自動検出（GitHub Pages対応）
 const BASE_PATH = self.registration.scope;
@@ -129,15 +129,19 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Push notification handling
+// Push notification handling - アプリが閉じている時も確実に通知を表示
 self.addEventListener('push', (event) => {
+  console.log('🔔 Service Worker: プッシュ通知を受信', event);
+  
   let notificationData = {};
   
   try {
     if (event.data) {
       notificationData = event.data.json();
+      console.log('📦 通知データ:', notificationData);
     }
   } catch (e) {
+    console.warn('⚠️ 通知データの解析に失敗:', e);
     notificationData = {
       title: 'MARUGO OEM Special Menu',
       message: event.data ? event.data.text() : '新しい通知があります'
@@ -145,17 +149,23 @@ self.addEventListener('push', (event) => {
   }
 
   const title = notificationData.title || 'MARUGO OEM Special Menu';
+  const message = notificationData.message || notificationData.body || '新しい通知があります';
+  
+  console.log('📢 通知を表示:', { title, message });
+
   const options = {
-    body: notificationData.message || notificationData.body || '新しい通知があります',
+    body: message,
     icon: '/OEM/icon-192.svg',
     badge: '/OEM/icon-192.svg',
     vibrate: [200, 100, 200],
     tag: notificationData.tag || 'oem-notification',
-    requireInteraction: false,
+    requireInteraction: true, // アプリが閉じている時は確実に表示
+    silent: false, // 音を鳴らす
     data: {
       dateOfArrival: Date.now(),
       url: notificationData.url || '/OEM/',
-      notification_id: notificationData.id
+      notification_id: notificationData.id,
+      type: notificationData.type || 'general'
     },
     actions: [
       {
@@ -169,30 +179,88 @@ self.addEventListener('push', (event) => {
     ]
   };
 
+  // 確実に通知を表示（アプリが閉じていても）
   event.waitUntil(
     self.registration.showNotification(title, options)
+      .then(() => {
+        console.log('✅ プッシュ通知を表示しました');
+      })
+      .catch((error) => {
+        console.error('❌ プッシュ通知の表示に失敗:', error);
+      })
   );
+});
+
+// Service Workerメッセージ受信 - アプリが閉じている時も通知を表示
+self.addEventListener('message', (event) => {
+  console.log('📨 Service Worker: メッセージを受信', event.data);
+  
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const notificationData = event.data.notificationData;
+    console.log('🔔 通知を表示します:', notificationData);
+    
+    const options = {
+      body: notificationData.message,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      tag: notificationData.tag,
+      vibrate: [200, 100, 200],
+      requireInteraction: true, // アプリが閉じている時は確実に表示
+      silent: false, // 音を鳴らす
+      data: {
+        dateOfArrival: Date.now(),
+        url: notificationData.url,
+        notification_id: notificationData.notification_id,
+        type: notificationData.type
+      },
+      actions: [
+        {
+          action: 'open',
+          title: 'アプリを開く'
+        },
+        {
+          action: 'close',
+          title: '閉じる'
+        }
+      ]
+    };
+
+    event.waitUntil(
+      self.registration.showNotification(notificationData.title, options)
+        .then(() => {
+          console.log('✅ Service Worker: 通知を表示しました');
+        })
+        .catch((error) => {
+          console.error('❌ Service Worker: 通知表示エラー:', error);
+        })
+    );
+  }
 });
 
 // Notification click handling
 self.addEventListener('notificationclick', (event) => {
+  console.log('🖱️ 通知がクリックされました:', event);
   event.notification.close();
 
   if (event.action === 'open' || !event.action) {
     const urlToOpen = event.notification.data?.url || BASE_PATH;
+    console.log('🔗 アプリを開きます:', urlToOpen);
     
     event.waitUntil(
       clients.matchAll({ type: 'window', includeUncontrolled: true })
         .then((clientList) => {
+          console.log('🪟 既存のクライアント:', clientList.length);
           // 既に開いているウィンドウがあればそれをフォーカス
           for (let i = 0; i < clientList.length; i++) {
             const client = clientList[i];
             if (client.url.includes('/OEM/') && 'focus' in client) {
+              console.log('✅ 既存のウィンドウをフォーカスします');
               return client.focus();
             }
           }
           // なければ新しいウィンドウを開く
           if (clients.openWindow) {
+            console.log('🆕 新しいウィンドウを開きます');
             return clients.openWindow(urlToOpen);
           }
         })
