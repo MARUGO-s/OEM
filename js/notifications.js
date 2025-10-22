@@ -20,10 +20,40 @@ async function requestNotificationPermission() {
             return true;
         }
 
+        // HTTPS接続の確認
+        if (!window.isSecureContext) {
+            console.warn('⚠️ HTTPS接続が必要です');
+            alert('通知機能を使用するにはHTTPS接続が必要です。\n\n現在の接続: ' + window.location.protocol + '//' + window.location.host);
+            return false;
+        }
+
         // 通知がサポートされていない場合
         if (!('Notification' in window)) {
-            console.warn('このブラウザは通知をサポートしていません');
-            alert('このブラウザは通知をサポートしていません');
+            console.warn('⚠️ このブラウザは通知をサポートしていません');
+            console.log('🔍 ブラウザ情報:', {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                cookieEnabled: navigator.cookieEnabled,
+                isSecureContext: window.isSecureContext,
+                protocol: window.location.protocol
+            });
+            
+            // より詳細なエラーメッセージを表示
+            const errorMessage = `このブラウザは通知をサポートしていません。
+
+対応ブラウザ:
+• Chrome 50以上
+• Firefox 44以上  
+• Safari 16以上
+• Edge 79以上
+
+現在のブラウザ: ${navigator.userAgent.split(' ')[0]}
+接続: ${window.location.protocol}//${window.location.host}
+
+HTTPS接続が必要です。`;
+            
+            alert(errorMessage);
             return false;
         }
 
@@ -679,23 +709,51 @@ function showTestNotificationButton() {
 
 // 通知ボタンの表示状態をチェック
 function checkAndShowNotificationButtons() {
+    console.log('🔍 通知ボタン表示チェック開始');
+    console.log('ブラウザ情報:', {
+        userAgent: navigator.userAgent,
+        notificationSupported: 'Notification' in window,
+        serviceWorkerSupported: 'serviceWorker' in navigator,
+        pushManagerSupported: 'PushManager' in window,
+        isSecureContext: window.isSecureContext,
+        protocol: window.location.protocol
+    });
+    
     if ('Notification' in window) {
         const permission = Notification.permission;
         console.log('現在の通知許可状態:', permission);
         
         if (permission === 'default') {
             // 未許可の場合は許可ボタンを表示
+            console.log('📝 通知許可ボタンを表示します');
             showNotificationPermissionButton();
         } else if (permission === 'granted') {
             // 許可済みの場合はテストボタンを表示
+            console.log('✅ 通知テストボタンを表示します');
             hideNotificationPermissionButton();
             showTestNotificationButton();
         } else if (permission === 'denied') {
             // 拒否されている場合は両方非表示
+            console.log('❌ 通知が拒否されているため、ボタンを非表示にします');
             hideNotificationPermissionButton();
             const testBtn = document.getElementById('test-notification-btn');
             if (testBtn) testBtn.style.display = 'none';
         }
+    } else {
+        console.warn('⚠️ 通知がサポートされていません');
+        // 通知がサポートされていない場合の対応
+        hideNotificationPermissionButton();
+        const testBtn = document.getElementById('test-notification-btn');
+        if (testBtn) testBtn.style.display = 'none';
+        
+        // ユーザーに詳細情報を表示
+        const enableBtn = document.getElementById('enable-push-notifications-btn');
+        if (enableBtn) {
+            enableBtn.style.display = 'none';
+        }
+        
+        console.log('🔧 通知非対応ブラウザのため、通知ボタンを非表示にしました');
     }
 }
+
 
