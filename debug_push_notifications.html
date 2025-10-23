@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>プッシュ通知デバッグツール</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: #fff; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #333; border-radius: 5px; }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .warning { color: #ff9800; }
+        .info { color: #2196F3; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .log { background: #2a2a2a; padding: 10px; border-radius: 3px; margin: 10px 0; font-family: monospace; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>🔔 プッシュ通知デバッグツール</h1>
+    
+    <div class="section">
+        <h2>📊 ブラウザ環境の確認</h2>
+        <button onclick="checkBrowserSupport()">ブラウザサポートを確認</button>
+        <div id="browserSupport" class="log"></div>
+    </div>
+
+    <div class="section">
+        <h2>🔐 通知許可の確認・リクエスト</h2>
+        <button onclick="checkNotificationPermission()">通知許可を確認</button>
+        <button onclick="requestNotificationPermission()">通知許可をリクエスト</button>
+        <div id="notificationPermission" class="log"></div>
+    </div>
+
+    <div class="section">
+        <h2>⚙️ Service Workerの確認</h2>
+        <button onclick="checkServiceWorker()">Service Workerを確認</button>
+        <div id="serviceWorker" class="log"></div>
+    </div>
+
+    <div class="section">
+        <h2>🧪 テスト通知の送信</h2>
+        <button onclick="sendTestNotification()">テスト通知を送信</button>
+        <button onclick="sendTestNotificationWithServiceWorker()">Service Worker経由でテスト通知</button>
+        <div id="testNotification" class="log"></div>
+    </div>
+
+    <div class="section">
+        <h2>📡 Supabase接続の確認</h2>
+        <button onclick="checkSupabaseConnection()">Supabase接続を確認</button>
+        <button onclick="testRealtimeSubscription()">リアルタイムサブスクリプションをテスト</button>
+        <div id="supabaseConnection" class="log"></div>
+    </div>
+
+    <div class="section">
+        <h2>🔍 通知の流れをデバッグ</h2>
+        <button onclick="debugNotificationFlow()">通知の流れをデバッグ</button>
+        <div id="notificationFlow" class="log"></div>
+    </div>
+
+    <script>
+        // Supabase設定
+        const SUPABASE_URL = 'https://mrjocjcppjnjxtudebta.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yam9jamNwcGpuanh0dWRlYnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4NTk5NDksImV4cCI6MjA3NjQzNTk0OX0.jflBtUsb7Qq4-p-e-XDUb1DoxHbwjG1DFXPXDC-sN2E';
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        function log(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            element.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+        }
+
+        function checkBrowserSupport() {
+            const elementId = 'browserSupport';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔍 ブラウザサポートを確認中...');
+            
+            // 通知APIサポート
+            if ('Notification' in window) {
+                log(elementId, '✅ Notification API がサポートされています', 'success');
+                log(elementId, `📱 通知許可状態: ${Notification.permission}`, 'info');
+            } else {
+                log(elementId, '❌ Notification API がサポートされていません', 'error');
+            }
+
+            // Service Workerサポート
+            if ('serviceWorker' in navigator) {
+                log(elementId, '✅ Service Worker がサポートされています', 'success');
+            } else {
+                log(elementId, '❌ Service Worker がサポートされていません', 'error');
+            }
+
+            // Push Managerサポート
+            if ('PushManager' in window) {
+                log(elementId, '✅ PushManager がサポートされています', 'success');
+            } else {
+                log(elementId, '❌ PushManager がサポートされていません', 'error');
+            }
+
+            // セキュアコンテキスト
+            if (window.isSecureContext) {
+                log(elementId, '✅ セキュアコンテキスト（HTTPS）です', 'success');
+            } else {
+                log(elementId, '❌ セキュアコンテキストではありません（HTTP）', 'error');
+            }
+
+            // ユーザーエージェント
+            log(elementId, `📱 ユーザーエージェント: ${navigator.userAgent}`, 'info');
+        }
+
+        function checkNotificationPermission() {
+            const elementId = 'notificationPermission';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔍 通知許可状況を確認中...');
+            
+            if ('Notification' in window) {
+                const permission = Notification.permission;
+                log(elementId, `📱 現在の許可状態: ${permission}`, 'info');
+                
+                switch(permission) {
+                    case 'granted':
+                        log(elementId, '✅ 通知が許可されています', 'success');
+                        break;
+                    case 'denied':
+                        log(elementId, '❌ 通知が拒否されています', 'error');
+                        log(elementId, '💡 ブラウザの設定で通知を許可してください', 'warning');
+                        break;
+                    case 'default':
+                        log(elementId, '⚠️ 通知許可がまだリクエストされていません', 'warning');
+                        break;
+                }
+            } else {
+                log(elementId, '❌ Notification API がサポートされていません', 'error');
+            }
+        }
+
+        async function requestNotificationPermission() {
+            const elementId = 'notificationPermission';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔔 通知許可をリクエスト中...');
+            
+            if ('Notification' in window) {
+                try {
+                    const permission = await Notification.requestPermission();
+                    log(elementId, `📱 許可結果: ${permission}`, permission === 'granted' ? 'success' : 'error');
+                    
+                    if (permission === 'granted') {
+                        log(elementId, '✅ 通知が許可されました！', 'success');
+                        // テスト通知を送信
+                        showTestNotification('通知許可が完了しました！', 'これでプッシュ通知が届くはずです。');
+                    } else {
+                        log(elementId, '❌ 通知が拒否されました', 'error');
+                    }
+                } catch (error) {
+                    log(elementId, `❌ 通知許可リクエストでエラー: ${error.message}`, 'error');
+                }
+            } else {
+                log(elementId, '❌ Notification API がサポートされていません', 'error');
+            }
+        }
+
+        function showTestNotification(title, body) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    const notification = new Notification(title, {
+                        body: body,
+                        icon: '/OEM/icon-192.svg',
+                        badge: '/OEM/icon-192.svg',
+                        tag: 'test-notification',
+                        requireInteraction: true
+                    });
+                    
+                    notification.onclick = function() {
+                        console.log('通知がクリックされました');
+                        notification.close();
+                    };
+                    
+                    return notification;
+                } catch (error) {
+                    console.error('通知作成エラー:', error);
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        async function checkServiceWorker() {
+            const elementId = 'serviceWorker';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔍 Service Workerを確認中...');
+            
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.ready;
+                    log(elementId, '✅ Service Worker が登録されています', 'success');
+                    log(elementId, `📱 スコープ: ${registration.scope}`, 'info');
+                    
+                    if (registration.active) {
+                        log(elementId, '✅ Service Worker がアクティブです', 'success');
+                    } else {
+                        log(elementId, '⚠️ Service Worker がアクティブではありません', 'warning');
+                    }
+                    
+                    // プッシュ通知のサブスクリプション確認
+                    if ('PushManager' in window) {
+                        try {
+                            const subscription = await registration.pushManager.getSubscription();
+                            if (subscription) {
+                                log(elementId, '✅ プッシュ通知のサブスクリプションが存在します', 'success');
+                            } else {
+                                log(elementId, '⚠️ プッシュ通知のサブスクリプションが存在しません', 'warning');
+                            }
+                        } catch (error) {
+                            log(elementId, `⚠️ プッシュ通知サブスクリプションの確認でエラー: ${error.message}`, 'warning');
+                        }
+                    }
+                } catch (error) {
+                    log(elementId, `❌ Service Worker の確認でエラー: ${error.message}`, 'error');
+                }
+            } else {
+                log(elementId, '❌ Service Worker がサポートされていません', 'error');
+            }
+        }
+
+        function sendTestNotification() {
+            const elementId = 'testNotification';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🧪 テスト通知を送信中...');
+            
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const notification = showTestNotification(
+                    'MARUGO OEM Special Menu',
+                    'これはテスト通知です。プッシュ通知が正常に動作しています。'
+                );
+                
+                if (notification) {
+                    log(elementId, '✅ テスト通知を送信しました', 'success');
+                } else {
+                    log(elementId, '❌ テスト通知の送信に失敗しました', 'error');
+                }
+            } else {
+                log(elementId, '❌ 通知が許可されていません', 'error');
+            }
+        }
+
+        async function sendTestNotificationWithServiceWorker() {
+            const elementId = 'testNotification';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🧪 Service Worker経由でテスト通知を送信中...');
+            
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                
+                if (registration.active) {
+                    // Service Workerにメッセージを送信
+                    registration.active.postMessage({
+                        type: 'SHOW_NOTIFICATION',
+                        notificationData: {
+                            title: 'MARUGO OEM Special Menu',
+                            message: 'Service Worker経由のテスト通知です',
+                            icon: '/OEM/icon-192.svg',
+                            badge: '/OEM/icon-192.svg',
+                            tag: 'sw-test-notification',
+                            url: '/OEM/',
+                            notification_id: 'test-' + Date.now()
+                        }
+                    });
+                    
+                    log(elementId, '✅ Service Workerに通知メッセージを送信しました', 'success');
+                } else {
+                    log(elementId, '❌ Service Worker がアクティブではありません', 'error');
+                }
+            } catch (error) {
+                log(elementId, `❌ Service Worker経由の通知送信でエラー: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkSupabaseConnection() {
+            const elementId = 'supabaseConnection';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔍 Supabase接続を確認中...');
+            
+            try {
+                // 基本的な接続テスト
+                const { data, error } = await supabase
+                    .from('notifications')
+                    .select('id')
+                    .limit(1);
+                
+                if (error) {
+                    log(elementId, `❌ Supabase接続エラー: ${error.message}`, 'error');
+                } else {
+                    log(elementId, '✅ Supabase接続が正常です', 'success');
+                }
+                
+                // リアルタイム機能のテスト
+                log(elementId, '📡 リアルタイム機能をテスト中...');
+                
+                const channel = supabase
+                    .channel('debug-notifications')
+                    .on('postgres_changes',
+                        { event: 'INSERT', schema: 'public', table: 'notifications' },
+                        (payload) => {
+                            log(elementId, `🔔 リアルタイム通知を受信: ${JSON.stringify(payload)}`, 'success');
+                        }
+                    )
+                    .subscribe((status) => {
+                        log(elementId, `📊 リアルタイムサブスクリプション状態: ${status}`, 'info');
+                    });
+                
+                // 5秒後にサブスクリプションをクリーンアップ
+                setTimeout(() => {
+                    channel.unsubscribe();
+                    log(elementId, '🧹 テスト用サブスクリプションをクリーンアップしました', 'info');
+                }, 5000);
+                
+            } catch (error) {
+                log(elementId, `❌ Supabase接続確認でエラー: ${error.message}`, 'error');
+            }
+        }
+
+        async function testRealtimeSubscription() {
+            const elementId = 'supabaseConnection';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '📡 リアルタイムサブスクリプションをテスト中...');
+            
+            try {
+                // テスト通知を挿入
+                const { data, error } = await supabase
+                    .from('notifications')
+                    .insert([{
+                        message: 'デバッグ用テスト通知',
+                        type: 'debug',
+                        created_by: null
+                    }])
+                    .select();
+                
+                if (error) {
+                    log(elementId, `❌ テスト通知の挿入でエラー: ${error.message}`, 'error');
+                } else {
+                    log(elementId, '✅ テスト通知を挿入しました', 'success');
+                    log(elementId, `📝 挿入された通知: ${JSON.stringify(data)}`, 'info');
+                }
+                
+            } catch (error) {
+                log(elementId, `❌ リアルタイムテストでエラー: ${error.message}`, 'error');
+            }
+        }
+
+        async function debugNotificationFlow() {
+            const elementId = 'notificationFlow';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔍 通知の流れをデバッグ中...');
+            
+            // 1. ブラウザサポート確認
+            log(elementId, '1️⃣ ブラウザサポート確認');
+            if (!('Notification' in window)) {
+                log(elementId, '❌ Notification API がサポートされていません', 'error');
+                return;
+            }
+            if (!('serviceWorker' in navigator)) {
+                log(elementId, '❌ Service Worker がサポートされていません', 'error');
+                return;
+            }
+            log(elementId, '✅ ブラウザサポートOK', 'success');
+            
+            // 2. 通知許可確認
+            log(elementId, '2️⃣ 通知許可確認');
+            if (Notification.permission !== 'granted') {
+                log(elementId, `❌ 通知が許可されていません: ${Notification.permission}`, 'error');
+                return;
+            }
+            log(elementId, '✅ 通知許可OK', 'success');
+            
+            // 3. Service Worker確認
+            log(elementId, '3️⃣ Service Worker確認');
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                if (!registration.active) {
+                    log(elementId, '❌ Service Worker がアクティブではありません', 'error');
+                    return;
+                }
+                log(elementId, '✅ Service Worker OK', 'success');
+            } catch (error) {
+                log(elementId, `❌ Service Worker エラー: ${error.message}`, 'error');
+                return;
+            }
+            
+            // 4. Supabase接続確認
+            log(elementId, '4️⃣ Supabase接続確認');
+            try {
+                const { data, error } = await supabase
+                    .from('notifications')
+                    .select('id')
+                    .limit(1);
+                
+                if (error) {
+                    log(elementId, `❌ Supabase接続エラー: ${error.message}`, 'error');
+                    return;
+                }
+                log(elementId, '✅ Supabase接続OK', 'success');
+            } catch (error) {
+                log(elementId, `❌ Supabase接続エラー: ${error.message}`, 'error');
+                return;
+            }
+            
+            // 5. 総合判定
+            log(elementId, '🎯 総合判定');
+            log(elementId, '✅ すべての条件が満たされています', 'success');
+            log(elementId, '💡 プッシュ通知が届かない場合は、以下を確認してください:', 'info');
+            log(elementId, '   - アプリがフォアグラウンドにいるか', 'info');
+            log(elementId, '   - ブラウザの通知設定', 'info');
+            log(elementId, '   - ネットワーク接続', 'info');
+            log(elementId, '   - Service Workerの状態', 'info');
+        }
+
+        // ページ読み込み時に自動実行
+        window.addEventListener('load', () => {
+            checkBrowserSupport();
+            checkNotificationPermission();
+            checkServiceWorker();
+        });
+    </script>
+</body>
+</html>
