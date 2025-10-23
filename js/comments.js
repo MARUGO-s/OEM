@@ -7,7 +7,7 @@ async function loadComments() {
         
         // Supabaseからコメントを読み込み
         const { data: comments, error } = await supabase
-            .from('comments')
+            .from('task_comments')
             .select('*')
             .order('created_at', { ascending: false });
 

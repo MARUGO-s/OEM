@@ -71,8 +71,23 @@ async function postDiscussionComment() {
         return;
     }
 
-    if (!appState.user) {
-        alert('ログインが必要です');
+    // 認証状態を詳細にチェック
+    console.log('認証状態チェック:', {
+        appState_currentUser: appState.currentUser,
+        appState_currentUser_id: appState.currentUser?.id,
+        appState_currentUser_username: appState.currentUser?.username,
+        supabase_user: supabase.auth.getUser()
+    });
+    
+    if (!appState.currentUser) {
+        console.error('appState.currentUserが設定されていません');
+        alert('ログインが必要です。ページをリロードしてください。');
+        return;
+    }
+    
+    if (!appState.currentUser.id) {
+        console.error('appState.currentUser.idが設定されていません');
+        alert('ユーザー情報が不完全です。ページをリロードしてください。');
         return;
     }
 
@@ -84,8 +99,8 @@ async function postDiscussionComment() {
             .from('discussion_comments')
             .insert({
                 id: commentId,
-                author_id: appState.user.id,
-                author_username: appState.user.username,
+                author_id: appState.currentUser.id,
+                author_username: appState.currentUser.username,
                 content: content
             })
             .select()
