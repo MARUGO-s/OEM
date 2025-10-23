@@ -160,10 +160,10 @@ async function requestNotificationPermission() {
                 console.error('プッシュサブスクリプション再作成エラー:', subscriptionError);
             }
             
-            // テスト通知を表示
-            showBrowserNotification('通知が有効です', {
-                body: 'プッシュ通知が正常に動作しています'
-            });
+            // テスト通知を表示（削除）
+            // showBrowserNotification('通知が有効です', {
+            //     body: 'プッシュ通知が正常に動作しています'
+            // });
             
             return true;
         }
