@@ -322,6 +322,27 @@ async function postComment(content) {
             
             console.log('🔔 createNotification関数の結果:', notificationResult);
             console.log('✅ タスクコメントの通知作成が完了しました');
+            
+            // 通知を手動で読み込み（リアルタイム更新の代替）
+            console.log('🔄 通知を手動で読み込みます...');
+            try {
+                await loadNotifications();
+                console.log('✅ 通知の手動読み込みが完了しました');
+                
+                // 通知バッジも更新
+                if (typeof updateNotificationBadge === 'function') {
+                    updateNotificationBadge();
+                    console.log('✅ 通知バッジを更新しました');
+                }
+                
+                // 通知画面を強制表示更新
+                if (typeof renderNotifications === 'function') {
+                    renderNotifications();
+                    console.log('✅ 通知画面を強制更新しました');
+                }
+            } catch (loadError) {
+                console.error('❌ 通知の手動読み込みエラー:', loadError);
+            }
         } catch (notificationError) {
             console.error('❌ タスクコメント通知送信エラー:', notificationError);
             console.error('エラー詳細:', {
