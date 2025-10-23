@@ -1,5 +1,23 @@
 // コメント・意見交換管理
 
+// タスクコメントをプログラムで投稿する関数
+async function postTaskComment(content) {
+    console.log('🔔 タスクコメントをプログラムで投稿します:', content);
+    return await postComment(content);
+}
+
+// テスト用のタスクコメント投稿（デバッグ用）
+window.testTaskComment = async function() {
+    const testContent = 'テストタスクコメント: ' + new Date().toLocaleTimeString();
+    console.log('🧪 テストタスクコメントを投稿します:', testContent);
+    try {
+        await postTaskComment(testContent);
+        console.log('✅ テストタスクコメント投稿完了');
+    } catch (error) {
+        console.error('❌ テストタスクコメント投稿エラー:', error);
+    }
+};
+
 // コメント一覧の読み込み
 async function loadComments() {
     try {
