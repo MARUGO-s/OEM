@@ -30,6 +30,23 @@ const urlsToCache = [
 // オフライン用のフォールバックページ
 const OFFLINE_URL = '/OEM/offline.html';
 
+async function shouldDisplayPushNotification() {
+  try {
+    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windowClients) {
+      const visibilityState = client.visibilityState;
+      const isFocused = typeof client.focused === 'boolean' ? client.focused : false;
+      if (visibilityState === 'visible' && isFocused) {
+        console.log('🔕 クライアントがフォアグラウンドのためプッシュ通知をスキップします');
+        return false;
+      }
+    }
+  } catch (error) {
+    console.warn('プッシュ通知表示判定でエラー:', error);
+  }
+  return true;
+}
+
 // Install event
 self.addEventListener('install', (event) => {
   console.log('Service Worker: インストール中...', CACHE_NAME);
@@ -180,15 +197,18 @@ self.addEventListener('push', (event) => {
   };
 
   // 確実に通知を表示（アプリが閉じていても）
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-      .then(() => {
-        console.log('✅ プッシュ通知を表示しました');
-      })
-      .catch((error) => {
-        console.error('❌ プッシュ通知の表示に失敗:', error);
-      })
-  );
+  event.waitUntil((async () => {
+    if (!(await shouldDisplayPushNotification())) {
+      return;
+    }
+
+    try {
+      await self.registration.showNotification(title, options);
+      console.log('✅ プッシュ通知を表示しました');
+    } catch (error) {
+      console.error('❌ プッシュ通知の表示に失敗:', error);
+    }
+  })());
 });
 
 // Service Workerメッセージ受信 - アプリが閉じている時も通知を表示
@@ -225,15 +245,18 @@ self.addEventListener('message', (event) => {
       ]
     };
 
-    event.waitUntil(
-      self.registration.showNotification(notificationData.title, options)
-        .then(() => {
-          console.log('✅ Service Worker: 通知を表示しました');
-        })
-        .catch((error) => {
-          console.error('❌ Service Worker: 通知表示エラー:', error);
-        })
-    );
+    event.waitUntil((async () => {
+      if (!(await shouldDisplayPushNotification())) {
+        return;
+      }
+
+      try {
+        await self.registration.showNotification(notificationData.title, options);
+        console.log('✅ Service Worker: 通知を表示しました');
+      } catch (error) {
+        console.error('❌ Service Worker: 通知表示エラー:', error);
+      }
+    })());
   }
 });
 

@@ -110,9 +110,11 @@ async function sendServerPushNotification(notification) {
             }
         };
 
+        const skipUserId = appState.currentUser?.id || null;
         const { error } = await supabase.functions.invoke('send-push', {
             body: {
-                notification: payload
+                notification: payload,
+                skipUserId
             }
         });
 
