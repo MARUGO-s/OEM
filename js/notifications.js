@@ -651,36 +651,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // リアルタイム更新のサブスクリプション
 function subscribeToNotifications() {
-    console.log('通知のリアルタイムサブスクリプションを開始します');
+    console.log('🔔 通知のリアルタイムサブスクリプションを開始します');
+    console.log('📡 Supabase接続情報:', {
+        url: SUPABASE_URL,
+        hasSupabase: typeof supabase !== 'undefined',
+        hasChannel: typeof supabase?.channel === 'function'
+    });
     
-    const channel = supabase
-        .channel('notifications-changes')
-        .on('postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'notifications' },
-            (payload) => {
-                console.log('🔔 新しい通知を受信:', payload);
-                console.log('通知データ:', payload.new);
-                
-                // 新しい通知をリストに追加
-                appState.notifications.unshift(payload.new);
-                renderNotifications();
-                updateNotificationBadge();
-                
-                // プッシュ通知を送信
-                console.log('プッシュ通知を送信します...');
-                sendPushNotification(payload.new);
-            }
-        )
-        .subscribe((status) => {
-            console.log('通知サブスクリプション状態:', status);
-            if (status === 'SUBSCRIBED') {
-                console.log('✅ 通知のリアルタイム更新が有効になりました');
-            } else if (status === 'CHANNEL_ERROR') {
-                console.error('❌ 通知サブスクリプションエラー');
-            }
-        });
+    try {
+        const channel = supabase
+            .channel('notifications-changes')
+            .on('postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'notifications' },
+                (payload) => {
+                    console.log('🔔 新しい通知を受信:', payload);
+                    console.log('通知データ:', payload.new);
+                    
+                    // 新しい通知をリストに追加
+                    appState.notifications.unshift(payload.new);
+                    renderNotifications();
+                    updateNotificationBadge();
+                    
+                    // プッシュ通知を送信
+                    console.log('プッシュ通知を送信します...');
+                    sendPushNotification(payload.new);
+                }
+            )
+            .subscribe((status) => {
+                console.log('📊 通知サブスクリプション状態:', status);
+                if (status === 'SUBSCRIBED') {
+                    console.log('✅ 通知のリアルタイム更新が有効になりました');
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error('❌ 通知サブスクリプションエラー');
+                } else if (status === 'TIMED_OUT') {
+                    console.error('⏰ 通知サブスクリプションタイムアウト');
+                } else if (status === 'CLOSED') {
+                    console.warn('🔒 通知サブスクリプションが閉じられました');
+                }
+            });
 
-    appState.subscriptions.push(channel);
+        appState.subscriptions.push(channel);
+        console.log('📝 通知サブスクリプションを登録しました');
+        
+    } catch (error) {
+        console.error('❌ 通知サブスクリプション作成エラー:', error);
+        console.error('エラー詳細:', error.stack);
+    }
 }
 
 // 通知許可ボタンを表示

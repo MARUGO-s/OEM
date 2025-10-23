@@ -20,15 +20,35 @@ async function loadAllData() {
         ]);
         
         // リアルタイム更新を開始（エラーハンドリング付き）
+        console.log('🔄 リアルタイム機能を初期化します...');
+        console.log('📡 Supabase接続確認:', {
+            url: SUPABASE_URL,
+            hasSupabase: typeof supabase !== 'undefined',
+            hasChannel: typeof supabase?.channel === 'function',
+            hasRealtime: typeof supabase?.channel === 'function'
+        });
+        
         try {
+            console.log('📋 タスクサブスクリプション開始...');
             subscribeToTasks();
+            
+            console.log('💬 コメントサブスクリプション開始...');
             subscribeToComments();
+            
+            console.log('🔔 通知サブスクリプション開始...');
             subscribeToNotifications();
+            
             if (typeof subscribeToMeetings === 'function') {
+                console.log('📅 会議サブスクリプション開始...');
                 subscribeToMeetings();
             }
+            
+            console.log('✅ すべてのリアルタイムサブスクリプションを開始しました');
+            console.log('📊 登録済みサブスクリプション数:', appState.subscriptions.length);
+            
         } catch (error) {
-            console.error('リアルタイム購読エラー:', error);
+            console.error('❌ リアルタイム購読エラー:', error);
+            console.error('エラー詳細:', error.stack);
         }
         
         // ブラウザ通知の許可をリクエスト（エラーハンドリング付き）

@@ -353,16 +353,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // リアルタイム更新のサブスクリプション
 function subscribeToComments() {
-    const channel = supabase
-        .channel('comments-changes')
-        .on('postgres_changes',
-            { event: '*', schema: 'public', table: 'comments' },
-            (payload) => {
-                console.log('コメント変更検知:', payload);
-                loadComments();
-            }
-        )
-        .subscribe();
+    console.log('💬 コメントのリアルタイムサブスクリプションを開始します');
+    console.log('📡 Supabase接続情報:', {
+        url: SUPABASE_URL,
+        hasSupabase: typeof supabase !== 'undefined',
+        hasChannel: typeof supabase?.channel === 'function'
+    });
+    
+    try {
+        const channel = supabase
+            .channel('comments-changes')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'comments' },
+                (payload) => {
+                    console.log('💬 コメント変更検知:', payload);
+                    console.log('イベントタイプ:', payload.eventType);
+                    console.log('変更データ:', payload.new || payload.old);
+                    loadComments();
+                }
+            )
+            .subscribe((status) => {
+                console.log('📊 コメントサブスクリプション状態:', status);
+                if (status === 'SUBSCRIBED') {
+                    console.log('✅ コメントのリアルタイム更新が有効になりました');
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error('❌ コメントサブスクリプションエラー');
+                } else if (status === 'TIMED_OUT') {
+                    console.error('⏰ コメントサブスクリプションタイムアウト');
+                } else if (status === 'CLOSED') {
+                    console.warn('🔒 コメントサブスクリプションが閉じられました');
+                }
+            });
 
-    appState.subscriptions.push(channel);
+        appState.subscriptions.push(channel);
+        console.log('📝 コメントサブスクリプションを登録しました');
+        
+    } catch (error) {
+        console.error('❌ コメントサブスクリプション作成エラー:', error);
+        console.error('エラー詳細:', error.stack);
+    }
 }

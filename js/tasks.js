@@ -813,16 +813,43 @@ async function deleteTask(taskId) {
 
 // リアルタイム更新のサブスクリプション
 function subscribeToTasks() {
-    const channel = supabase
-        .channel('tasks-changes')
-        .on('postgres_changes', 
-            { event: '*', schema: 'public', table: 'tasks' },
-            (payload) => {
-                console.log('タスク変更検知:', payload);
-                loadTasks();
-            }
-        )
-        .subscribe();
+    console.log('📋 タスクのリアルタイムサブスクリプションを開始します');
+    console.log('📡 Supabase接続情報:', {
+        url: SUPABASE_URL,
+        hasSupabase: typeof supabase !== 'undefined',
+        hasChannel: typeof supabase?.channel === 'function'
+    });
+    
+    try {
+        const channel = supabase
+            .channel('tasks-changes')
+            .on('postgres_changes', 
+                { event: '*', schema: 'public', table: 'tasks' },
+                (payload) => {
+                    console.log('📋 タスク変更検知:', payload);
+                    console.log('イベントタイプ:', payload.eventType);
+                    console.log('変更データ:', payload.new || payload.old);
+                    loadTasks();
+                }
+            )
+            .subscribe((status) => {
+                console.log('📊 タスクサブスクリプション状態:', status);
+                if (status === 'SUBSCRIBED') {
+                    console.log('✅ タスクのリアルタイム更新が有効になりました');
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error('❌ タスクサブスクリプションエラー');
+                } else if (status === 'TIMED_OUT') {
+                    console.error('⏰ タスクサブスクリプションタイムアウト');
+                } else if (status === 'CLOSED') {
+                    console.warn('🔒 タスクサブスクリプションが閉じられました');
+                }
+            });
 
-    appState.subscriptions.push(channel);
+        appState.subscriptions.push(channel);
+        console.log('📝 タスクサブスクリプションを登録しました');
+        
+    } catch (error) {
+        console.error('❌ タスクサブスクリプション作成エラー:', error);
+        console.error('エラー詳細:', error.stack);
+    }
 }
