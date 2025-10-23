@@ -270,7 +270,7 @@ async function deleteRoadmapComment(commentId) {
 
         // Supabaseからコメントを削除
         const { error } = await supabase
-            .from('comments')
+            .from('task_comments')
             .delete()
             .eq('id', commentId);
 
@@ -318,7 +318,7 @@ async function deleteTask(taskId) {
 
         // まず関連するコメントを削除
         const { error: commentsError } = await supabase
-            .from('comments')
+            .from('task_comments')
             .delete()
             .eq('task_id', taskId);
 
@@ -365,7 +365,7 @@ async function loadRoadmapComments(taskId) {
     try {
         // Supabaseからコメントを取得
         const { data: comments, error } = await supabase
-            .from('comments')
+            .from('task_comments')
             .select('*')
             .eq('task_id', taskId)
             .order('created_at', { ascending: false });
@@ -578,7 +578,7 @@ async function submitRoadmapComment() {
         let insertedData = null;
         try {
             const { data, error } = await supabase
-                .from('comments')
+                .from('task_comments')
                 .insert([newComment])
                 .select();
 
@@ -985,7 +985,7 @@ async function deleteRoadmapComment(commentId) {
     try {
         // Supabaseからコメントを削除
         const { error } = await supabase
-            .from('comments')
+            .from('task_comments')
             .delete()
             .eq('id', commentId);
 

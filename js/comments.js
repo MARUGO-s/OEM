@@ -244,8 +244,8 @@ async function postComment(content) {
         // Supabaseに保存
         let insertedData = null;
         try {
-            const { data, error } = await supabase
-                .from('comments')
+        const { data, error } = await supabase
+            .from('task_comments')
                 .insert([newComment])
                 .select();
 
@@ -392,7 +392,7 @@ function subscribeToComments() {
         const channel = supabase
             .channel('comments-changes')
             .on('postgres_changes',
-                { event: '*', schema: 'public', table: 'comments' },
+                { event: '*', schema: 'public', table: 'task_comments' },
                 (payload) => {
                     console.log('💬 コメント変更検知:', payload);
                     console.log('イベントタイプ:', payload.eventType);

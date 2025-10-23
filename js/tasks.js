@@ -730,7 +730,7 @@ async function deleteTimelineComment(commentId) {
 
         // Supabaseからコメントを削除
         const { error } = await supabase
-            .from('comments')
+            .from('task_comments')
             .delete()
             .eq('id', commentId);
 
@@ -772,7 +772,7 @@ async function deleteTask(taskId) {
 
         // まず関連するコメントを削除
         const { error: commentsError } = await supabase
-            .from('comments')
+            .from('task_comments')
             .delete()
             .eq('task_id', taskId);
 
