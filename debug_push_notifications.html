@@ -948,11 +948,12 @@
             log(elementId, '   - サーバー経由で配信', 'info');
             log(elementId, '   - インターネット接続必要', 'info');
             log(elementId, '   - 例: チャットメッセージ、ニュース', 'info');
-            log(elementId, '   - 実装: VAPIDキー + Push API', 'info');
+            log(elementId, '   - 実装: Supabase Edge Function send-push + VAPIDキー', 'info');
             log(elementId, '', 'info');
             log(elementId, '🎯 現在の実装状況:', 'info');
             log(elementId, '✅ ローカル通知: Service Worker経由で実装済み', 'success');
-            log(elementId, '❌ リモート通知: VAPIDキーが必要で未実装', 'warning');
+            log(elementId, '✅ リモート通知: Edge Function経由で配信', 'success');
+            log(elementId, '   - 環境変数: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT', 'info');
             log(elementId, '', 'info');
             log(elementId, '💡 参考記事: https://gist.github.com/pine/8b7e58ff7fa259df17351d959c6118f7', 'info');
         }

@@ -23,6 +23,15 @@
 - セッション情報はsessionStorageに一時保存（永続化なし）
 - すべてのデータはSupabaseの暗号化通信で保護されます
 
+### プッシュ通知設定
+- `push_subscriptions` テーブルにデバイスが登録されると、Supabase Edge Function `send-push` がサーバー経由のプッシュ通知を配信します
+- 必要な環境変数（SupabaseプロジェクトのFunctions設定）
+  - `VAPID_PUBLIC_KEY`（クライアントで使用する公開鍵）
+  - `VAPID_PRIVATE_KEY`（Edge Functionで使用する秘密鍵）
+  - `VAPID_SUBJECT`（通知の連絡先。例: `mailto:notifications@example.com`）
+- Edge Function をデプロイ後、ブラウザで通知を許可するとデバイスが自動登録されます
+- フォアグラウンドでアプリを表示している場合は重複を避けるためシステム通知を抑制します
+
 ### サポート
 問題が発生した場合は、ブラウザを再読み込みしてください。
 

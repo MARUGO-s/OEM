@@ -120,11 +120,23 @@ async function sendServerPushNotification(notification) {
 
         if (error) {
             console.error('サーバープッシュ送信エラー:', error);
+            if (typeof showNotification === 'function') {
+                const rawMessage = error.message || '';
+                if (rawMessage.includes('Missing VAPID')) {
+                    showNotification('⚠️ VAPIDキーが設定されていません。Supabase Edge Functionの環境変数を確認してください。', 'warning');
+                } else {
+                    const message = rawMessage || 'サーバーへのプッシュ通知連携に失敗しました';
+                    showNotification(`⚠️ ${message}`, 'warning');
+                }
+            }
         } else {
             console.log('📡 サーバープッシュを要求しました');
         }
     } catch (error) {
         console.error('サーバープッシュ送信例外:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('⚠️ プッシュ通知バックエンドとの通信で例外が発生しました', 'warning');
+        }
     }
 }
 

@@ -70,11 +70,33 @@ navigator.serviceWorker.ready.then(registration => {
 #### **設定確認**
 ```javascript
 // ブラウザの開発者ツール（Console）で実行
-console.log('Local Storage - pushNotificationsEnabled:', localStorage.getItem('pushNotificationsEnabled'));
-console.log('Local Storage - notificationPermission:', localStorage.getItem('notificationPermission'));
+console.log('Session Storage - pushNotificationsEnabled:', sessionStorage.getItem('pushNotificationsEnabled'));
+console.log('Session Storage - notificationPermission:', sessionStorage.getItem('notificationPermission'));
 ```
 
-### 5. リアルタイム機能の確認
+### 5. Supabaseへの登録確認（新しいサーバープッシュ経路）
+
+#### **push_subscriptionsテーブルの確認**
+1. Supabaseダッシュボード → Table editor → `push_subscriptions`
+2. `endpoint` に登録された行が存在するか確認
+3. `last_notified_at` が更新されているか確認
+
+#### **通知APIを直接テスト**
+```javascript
+// ブラウザのConsoleで、ログイン中に実行
+await supabase.functions.invoke('send-push', {
+  body: {
+    notification: {
+      title: 'テスト通知',
+      body: 'Edge Function経由のサーバープッシュです',
+      url: '/OEM/'
+    }
+  }
+});
+```
+**期待される結果**: 200レスポンス + クライアントログに `📡 サーバープッシュを要求しました`
+
+### 6. リアルタイム機能の確認
 
 #### **リアルタイムサブスクリプションの確認**
 ```javascript
@@ -87,7 +109,7 @@ console.log('App State Notifications:', window.appState?.notifications?.length);
 - ✅ `App State Subscriptions: 3` (タスク、コメント、通知のサブスクリプション)
 - ✅ `App State Notifications: 数値` (通知の数)
 
-### 6. 通知の流れをデバッグ
+### 7. 通知の流れをデバッグ
 
 #### **通知作成のテスト**
 1. **別のブラウザ/タブでアプリを開く**
@@ -100,9 +122,10 @@ console.log('App State Notifications:', window.appState?.notifications?.length);
 🔔 新しい通知を受信: {通知データ}
 📡 Service Workerにプッシュ通知を送信します...
 ✅ Service Workerに通知メッセージを送信しました
+📡 サーバープッシュを要求しました
 ```
 
-### 7. よくある問題と対処法
+### 8. よくある問題と対処法
 
 #### **問題1: 通知が許可されていない**
 **症状**: 通知が全く届かない
@@ -126,13 +149,33 @@ console.log('App State Notifications:', window.appState?.notifications?.length);
 3. ネットワーク接続を確認
 
 #### **問題4: アプリがフォアグラウンドにいる**
-**症状**: アプリを開いている時は通知が届かない
+**症状**: アプリを開いている時にプッシュ通知が表示されない
 **対処法**:
-1. アプリを最小化または別のタブに移動
-2. 別のアプリに切り替える
-3. スマートフォンの場合はホーム画面に戻る
+1. 正常な挙動です（フォアグラウンド時はService Workerが重複通知を抑制します）
+2. バックグラウンドにした状態で再テストしてください
 
-### 8. デバッグツールの使用方法
+#### **問題5: Supabase Edge Functionが失敗する**
+**症状**: スマートフォンを閉じても通知が届かない / サーバーログにエラー
+**対処法**:
+1. Supabaseプロジェクトの環境変数に以下を設定
+   - `VAPID_PUBLIC_KEY`
+   - `VAPID_PRIVATE_KEY`
+   - `VAPID_SUBJECT`（例: `mailto:ops@example.com`）
+2. Edge Function `send-push` を再デプロイ
+3. `push_subscriptions` テーブルで無効なエンドポイント（410/404ステータス）を削除
+4. VAPIDキーが未生成の場合は、ローカルで以下を実行して鍵ペアを作成
+   ```bash
+   node - <<'NODE'
+   const crypto = require('crypto');
+   const toBase64Url = (buffer) => buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+   const ecdh = crypto.createECDH('prime256v1');
+   ecdh.generateKeys();
+   console.log('VAPID_PUBLIC_KEY=', toBase64Url(ecdh.getPublicKey()));
+   console.log('VAPID_PRIVATE_KEY=', toBase64Url(ecdh.getPrivateKey()));
+   NODE
+   ```
+
+### 9. デバッグツールの使用方法
 
 #### **専用デバッグツール**
 1. **ファイル**: `debug_push_notifications.html` を開く

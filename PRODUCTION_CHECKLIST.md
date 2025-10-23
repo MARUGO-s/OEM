@@ -133,6 +133,7 @@ git push origin main
 - [ ] オフラインモードで動作確認
 - [ ] 各種ブラウザで動作確認（Chrome, Safari, Edge）
 - [ ] モバイルデバイスで確認（iOS, Android）
+- [ ] Supabase Edge Function `send-push` に対するテストリクエストが 200 を返し、端末で通知を受信
 
 ## 🔧 メンテナンス
 
@@ -175,6 +176,5 @@ const CACHE_NAME = 'oem-app-v33'; // 次回は33
 - モバイル最適化
 
 **デプロイ準備OK！** 🚀
-
 
 
