@@ -835,67 +835,110 @@ body {
 /* スマートフォン対応 - 中心軸に被らない左右交互タイムライン */
 /* iPhone表示時のフォントサイズを2段階下げる */
 @media (max-width: 480px) {
-    /* 基本フォントサイズを2段階下げる */
+    /* 基本フォントサイズをさらに3段階下げる（合計5段階下げ） */
     body {
-        font-size: 0.875rem; /* 14px (16px → 14px) */
+        font-size: 0.75rem; /* 12px (16px → 12px) */
     }
     
     h1 {
-        font-size: 1.5rem; /* 24px (32px → 24px) */
+        font-size: 1.125rem; /* 18px (32px → 18px) */
     }
     
     h2 {
-        font-size: 1.25rem; /* 20px (24px → 20px) */
+        font-size: 1rem; /* 16px (24px → 16px) */
     }
     
     h3 {
-        font-size: 1.125rem; /* 18px (20px → 18px) */
+        font-size: 0.875rem; /* 14px (20px → 14px) */
     }
     
     .btn {
-        font-size: 0.875rem; /* 14px (16px → 14px) */
-        padding: 0.5rem 1rem; /* パディングも調整 */
+        font-size: 0.75rem; /* 12px (16px → 12px) */
+        padding: 0.375rem 0.75rem; /* パディングも調整 */
     }
     
     .card {
-        font-size: 0.875rem; /* 14px */
+        font-size: 0.75rem; /* 12px */
     }
     
     /* 入力欄のフォントサイズ調整 */
     input, textarea, select {
-        font-size: 0.875rem; /* 14px */
+        font-size: 0.75rem; /* 12px */
     }
     
     /* 通知のフォントサイズ調整 */
     .notification-item {
-        font-size: 0.875rem; /* 14px */
+        font-size: 0.75rem; /* 12px */
     }
     
     .notification-message {
-        font-size: 0.875rem; /* 14px */
+        font-size: 0.75rem; /* 12px */
     }
     
     /* コメントのフォントサイズ調整 */
     .comment-content {
-        font-size: 0.875rem; /* 14px */
+        font-size: 0.75rem; /* 12px */
     }
     
     /* タスクのフォントサイズ調整 */
     .roadmap-task-title {
-        font-size: 1rem; /* 16px (18px → 16px) */
+        font-size: 0.875rem; /* 14px (18px → 14px) */
     }
     
     .roadmap-task-description {
-        font-size: 0.875rem; /* 14px */
+        font-size: 0.75rem; /* 12px */
     }
     
     /* モーダルのフォントサイズ調整 */
     .modal-content {
-        font-size: 0.875rem; /* 14px */
+        font-size: 0.75rem; /* 12px */
     }
     
     .modal-content h2 {
-        font-size: 1.25rem; /* 20px (24px → 20px) */
+        font-size: 1rem; /* 16px (24px → 16px) */
+    }
+    
+    /* 追加の要素のフォントサイズ調整 */
+    .roadmap-task-comments .comment-text {
+        font-size: 0.75rem; /* 12px */
+    }
+    
+    .roadmap-task-meta {
+        font-size: 0.75rem; /* 12px */
+    }
+    
+    .roadmap-task-date {
+        font-size: 0.75rem; /* 12px */
+    }
+    
+    .roadmap-task-status {
+        font-size: 0.75rem; /* 12px */
+    }
+    
+    .roadmap-task-priority {
+        font-size: 0.75rem; /* 12px */
+    }
+    
+    /* 会議関連のフォントサイズ調整 */
+    .meeting-item {
+        font-size: 0.75rem; /* 12px */
+    }
+    
+    .meeting-title {
+        font-size: 0.875rem; /* 14px */
+    }
+    
+    .meeting-time {
+        font-size: 0.75rem; /* 12px */
+    }
+    
+    /* ログイン画面のフォントサイズ調整 */
+    .login-container h1 {
+        font-size: 1.5rem; /* 24px (32px → 24px) */
+    }
+    
+    .login-container p {
+        font-size: 0.75rem; /* 12px */
     }
     
     .roadmap-container::before {
