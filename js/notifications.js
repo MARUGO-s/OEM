@@ -542,6 +542,17 @@ function setupNotificationEventListeners() {
 function renderNotifications() {
     const container = document.getElementById('notification-list');
     
+    console.log('🔔 通知を表示します:', {
+        container: container,
+        notificationsCount: appState.notifications.length,
+        notifications: appState.notifications.map(n => ({
+            id: n.id,
+            type: n.type,
+            message: n.message,
+            read: n.read
+        }))
+    });
+    
     if (appState.notifications.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">通知はありません</p>';
         return;
@@ -614,6 +625,13 @@ async function createNotification(notificationData) {
         };
 
         console.log('Supabaseに通知を保存します:', notification);
+        console.log('通知データの詳細:', {
+            type: notification.type,
+            message: notification.message,
+            created_by: notification.created_by,
+            related_id: notification.related_id
+        });
+        
         const { data, error } = await supabase
             .from('notifications')
             .insert([notification])
@@ -850,9 +868,13 @@ function subscribeToNotifications() {
                 (payload) => {
                     console.log('🔔 新しい通知を受信:', payload);
                     console.log('通知データ:', payload.new);
+                    console.log('通知タイプ:', payload.new?.type);
+                    console.log('通知メッセージ:', payload.new?.message);
                     
                     // 新しい通知をリストに追加
                     appState.notifications.unshift(payload.new);
+                    console.log('通知リストに追加後の総数:', appState.notifications.length);
+                    
                     renderNotifications();
                     updateNotificationBadge();
                     

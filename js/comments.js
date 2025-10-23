@@ -288,13 +288,26 @@ async function postComment(content) {
 
         // 通知を送信（エラーが発生してもコメント投稿は成功とする）
         try {
+            console.log('🔔 タスクコメントの通知を作成します:', {
+                type: 'new_comment',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがコメントしました: ${content.substring(0, 50)}...`,
+                related_id: newComment.id,
+                currentUser: appState.currentUser
+            });
+            
             await createNotification({
                 type: 'new_comment',
                 message: `${appState.currentUser?.username || 'ユーザー'}さんがコメントしました: ${content.substring(0, 50)}...`,
                 related_id: newComment.id
             });
+            
+            console.log('✅ タスクコメントの通知作成が完了しました');
         } catch (notificationError) {
-            console.error('通知送信エラー:', notificationError);
+            console.error('❌ タスクコメント通知送信エラー:', notificationError);
+            console.error('エラー詳細:', {
+                message: notificationError.message,
+                stack: notificationError.stack
+            });
             // 通知エラーはコメント投稿を阻害しない
         }
 
