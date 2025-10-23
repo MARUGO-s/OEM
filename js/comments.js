@@ -133,8 +133,28 @@ async function deleteComment(commentId) {
 
         console.log('コメント削除成功:', commentId);
 
-        // コメントを再読み込み
-        await loadComments();
+        // ローカル状態を即座に更新（Android対応）
+        appState.comments = appState.comments.filter(comment => comment.id !== commentId);
+        console.log('ローカルコメント配列を更新:', appState.comments.length);
+        
+        // 画面を即座に更新（Android対応）
+        renderComments();
+        
+        // タイムライン側も更新
+        if (typeof renderTasks === 'function') {
+            renderTasks();
+        }
+        
+        // Androidでの表示更新を確実にする
+        setTimeout(() => {
+            renderComments();
+            if (typeof renderTasks === 'function') {
+                renderTasks();
+            }
+        }, 100);
+        
+        // バックグラウンドでデータを再読み込み（整合性確保）
+        loadComments().catch(err => console.error('コメント再読み込みエラー:', err));
 
         // 通知を表示
         showNotification('コメントを削除しました', 'success');
@@ -378,16 +398,35 @@ function subscribeToComments() {
                     console.log('イベントタイプ:', payload.eventType);
                     console.log('変更データ:', payload.new || payload.old);
                     
-                    // スマートフォンでのリアルタイム更新を確実にする
-                    loadComments().then(() => {
-                        // 追加の表示更新（スマートフォン対応）
+                    // Androidでの削除処理を特別に処理
+                    if (payload.eventType === 'DELETE') {
+                        console.log('🗑️ コメント削除を検知（Android対応）');
+                        // ローカル状態を即座に更新
+                        appState.comments = appState.comments.filter(comment => comment.id !== payload.old.id);
+                        // 画面を即座に更新
+                        renderComments();
+                        if (typeof renderTasks === 'function') {
+                            renderTasks();
+                        }
+                        // Androidでの表示更新を確実にする
                         setTimeout(() => {
                             renderComments();
                             if (typeof renderTasks === 'function') {
                                 renderTasks();
                             }
-                        }, 50);
-                    });
+                        }, 100);
+                    } else {
+                        // スマートフォンでのリアルタイム更新を確実にする
+                        loadComments().then(() => {
+                            // 追加の表示更新（スマートフォン対応）
+                            setTimeout(() => {
+                                renderComments();
+                                if (typeof renderTasks === 'function') {
+                                    renderTasks();
+                                }
+                            }, 50);
+                        });
+                    }
                 }
             )
             .subscribe((status) => {
