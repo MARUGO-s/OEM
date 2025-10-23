@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Service Role Key でリアルタイム機能を修正</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>🔧 Supabase Service Role Key でリアルタイム機能を修正</h1>
+    <div id="status"></div>
+    <button onclick="diagnoseAndFix()">リアルタイム機能を診断・修正</button>
+    <div id="results"></div>
+
+    <script>
+        // Service Role Key（管理者権限）
+        const SUPABASE_URL = 'https://mrjocjcppjnjxtudebta.supabase.co';
+        const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yam9jamNwcGpuanh0dWRlYnRhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDg1OTk0OSwiZXhwIjoyMDc2NDM1OTQ5fQ.JRjv6UowDMwLQ1sIKTSK1_04PXmIL5JQk91u8MDMy9c';
+
+        // Service Role クライアントを作成（管理者権限）
+        const supabaseAdmin = supabase.createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        });
+
+        async function diagnoseAndFix() {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            
+            statusDiv.innerHTML = '🔍 リアルタイム機能を診断中...';
+            resultsDiv.innerHTML = '';
+
+            try {
+                // 1. データベース接続テスト
+                statusDiv.innerHTML = '📡 データベース接続をテスト中...';
+                
+                const { data: tasks, error: tasksError } = await supabaseAdmin
+                    .from('tasks')
+                    .select('id')
+                    .limit(1);
+                
+                if (tasksError) {
+                    resultsDiv.innerHTML += `<p>❌ タスクテーブルアクセスエラー: ${tasksError.message}</p>`;
+                } else {
+                    resultsDiv.innerHTML += `<p>✅ タスクテーブルにアクセスできました</p>`;
+                }
+
+                const { data: comments, error: commentsError } = await supabaseAdmin
+                    .from('comments')
+                    .select('id')
+                    .limit(1);
+                
+                if (commentsError) {
+                    resultsDiv.innerHTML += `<p>❌ コメントテーブルアクセスエラー: ${commentsError.message}</p>`;
+                } else {
+                    resultsDiv.innerHTML += `<p>✅ コメントテーブルにアクセスできました</p>`;
+                }
+
+                const { data: notifications, error: notificationsError } = await supabaseAdmin
+                    .from('notifications')
+                    .select('id')
+                    .limit(1);
+                
+                if (notificationsError) {
+                    resultsDiv.innerHTML += `<p>❌ 通知テーブルアクセスエラー: ${notificationsError.message}</p>`;
+                } else {
+                    resultsDiv.innerHTML += `<p>✅ 通知テーブルにアクセスできました</p>`;
+                }
+
+                // 2. リアルタイム機能のテスト
+                statusDiv.innerHTML = '🔔 リアルタイム機能をテスト中...';
+                
+                // タスクのリアルタイムサブスクリプションをテスト
+                const tasksChannel = supabaseAdmin
+                    .channel('test-tasks-realtime')
+                    .on('postgres_changes', 
+                        { event: '*', schema: 'public', table: 'tasks' },
+                        (payload) => {
+                            resultsDiv.innerHTML += `<p>✅ タスクのリアルタイム更新を受信: ${JSON.stringify(payload)}</p>`;
+                        }
+                    )
+                    .subscribe((status) => {
+                        resultsDiv.innerHTML += `<p>📊 タスクサブスクリプション状態: ${status}</p>`;
+                    });
+
+                // コメントのリアルタイムサブスクリプションをテスト
+                const commentsChannel = supabaseAdmin
+                    .channel('test-comments-realtime')
+                    .on('postgres_changes', 
+                        { event: '*', schema: 'public', table: 'comments' },
+                        (payload) => {
+                            resultsDiv.innerHTML += `<p>✅ コメントのリアルタイム更新を受信: ${JSON.stringify(payload)}</p>`;
+                        }
+                    )
+                    .subscribe((status) => {
+                        resultsDiv.innerHTML += `<p>📊 コメントサブスクリプション状態: ${status}</p>`;
+                    });
+
+                // 通知のリアルタイムサブスクリプションをテスト
+                const notificationsChannel = supabaseAdmin
+                    .channel('test-notifications-realtime')
+                    .on('postgres_changes', 
+                        { event: '*', schema: 'public', table: 'notifications' },
+                        (payload) => {
+                            resultsDiv.innerHTML += `<p>✅ 通知のリアルタイム更新を受信: ${JSON.stringify(payload)}</p>`;
+                        }
+                    )
+                    .subscribe((status) => {
+                        resultsDiv.innerHTML += `<p>📊 通知サブスクリプション状態: ${status}</p>`;
+                    });
+
+                // 3. テストデータの挿入（リアルタイム機能の動作確認）
+                statusDiv.innerHTML = '🧪 テストデータを挿入してリアルタイム機能を確認中...';
+                
+                // テスト通知を挿入
+                const { data: testNotification, error: testError } = await supabaseAdmin
+                    .from('notifications')
+                    .insert([{
+                        message: 'Service Role Key によるリアルタイム機能テスト',
+                        type: 'test',
+                        created_by: null
+                    }])
+                    .select();
+
+                if (testError) {
+                    resultsDiv.innerHTML += `<p>❌ テスト通知挿入エラー: ${testError.message}</p>`;
+                } else {
+                    resultsDiv.innerHTML += `<p>✅ テスト通知を挿入しました: ${JSON.stringify(testNotification)}</p>`;
+                }
+
+                statusDiv.innerHTML = '🎉 診断完了！結果を確認してください。';
+                
+                // 5秒後にサブスクリプションをクリーンアップ
+                setTimeout(() => {
+                    tasksChannel.unsubscribe();
+                    commentsChannel.unsubscribe();
+                    notificationsChannel.unsubscribe();
+                    resultsDiv.innerHTML += `<p>🧹 テスト用サブスクリプションをクリーンアップしました</p>`;
+                }, 5000);
+
+            } catch (error) {
+                statusDiv.innerHTML = '❌ エラーが発生しました';
+                resultsDiv.innerHTML += `<p>❌ エラー: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
