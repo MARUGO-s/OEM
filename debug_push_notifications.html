@@ -64,6 +64,12 @@
         <div id="notificationFlow" class="log"></div>
     </div>
 
+    <div class="section">
+        <h2>📱 iPhoneでのPWAインストール手順</h2>
+        <button onclick="showPWAInstallInstructions()">PWAインストール手順を表示</button>
+        <div id="pwaInstallInstructions" class="log"></div>
+    </div>
+
     <script>
         // Supabase設定
         const SUPABASE_URL = 'https://mrjocjcppjnjxtudebta.supabase.co';
@@ -115,6 +121,20 @@
 
             // ユーザーエージェント
             log(elementId, `📱 ユーザーエージェント: ${navigator.userAgent}`, 'info');
+            
+            // iOS/Android の特別な処理
+            const isIOS = navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad');
+            const isAndroid = navigator.userAgent.includes('Android');
+            
+            if (isIOS) {
+                log(elementId, '🍎 iOS デバイスが検出されました', 'info');
+                log(elementId, '⚠️ iOS Safari ではプッシュ通知に制限があります', 'warning');
+                log(elementId, '💡 PWAとしてホーム画面に追加すると通知が可能です', 'info');
+                log(elementId, '💡 ブラウザでは通知が制限されています', 'warning');
+            } else if (isAndroid) {
+                log(elementId, '🤖 Android デバイスが検出されました', 'info');
+                log(elementId, '💡 Android ではChrome/Firefoxで通知が可能です', 'info');
+            }
         }
 
         function checkNotificationPermission() {
@@ -759,6 +779,26 @@
                 log(elementId, `❌ サブスクリプション確認でエラー: ${error.message}`, 'error');
                 log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
             }
+        }
+
+        function showPWAInstallInstructions() {
+            const elementId = 'pwaInstallInstructions';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '📱 iPhoneでのPWAインストール手順', 'info');
+            log(elementId, '', 'info');
+            log(elementId, '🍎 iOS Safari ではプッシュ通知に制限があります', 'warning');
+            log(elementId, '💡 PWAとしてホーム画面に追加すると通知が可能です', 'info');
+            log(elementId, '', 'info');
+            log(elementId, '📋 インストール手順:', 'info');
+            log(elementId, '1. Safari で https://marugo-s.github.io/OEM/ にアクセス', 'info');
+            log(elementId, '2. 画面下部の「共有」ボタンをタップ', 'info');
+            log(elementId, '3. 「ホーム画面に追加」を選択', 'info');
+            log(elementId, '4. 「追加」をタップ', 'info');
+            log(elementId, '5. ホーム画面からアプリを起動', 'info');
+            log(elementId, '', 'info');
+            log(elementId, '✅ PWAとしてインストール後は通知が可能です', 'success');
+            log(elementId, '⚠️ ブラウザから直接アクセスした場合は通知が制限されます', 'warning');
         }
 
         // ページ読み込み時に自動実行
