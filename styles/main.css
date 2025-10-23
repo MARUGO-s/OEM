@@ -882,54 +882,54 @@ body {
     
     /* タスクのフォントサイズ調整 */
     .roadmap-task-title {
-        font-size: 0.875rem; /* 14px (18px → 14px) */
+        font-size: 0.75rem; /* 12px */
     }
     
     .roadmap-task-description {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     /* モーダルのフォントサイズ調整 */
     .modal-content {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     .modal-content h2 {
-        font-size: 1rem; /* 16px (24px → 16px) */
+        font-size: 0.75rem; /* 12px */
     }
     
     /* 追加の要素のフォントサイズ調整 */
     .roadmap-task-comments .comment-text {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     .roadmap-task-meta {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     .roadmap-task-date {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     .roadmap-task-status {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     .roadmap-task-priority {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     /* 会議関連のフォントサイズ調整 */
     .meeting-item {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     .meeting-title {
-        font-size: 0.875rem; /* 14px */
+        font-size: 0.75rem; /* 12px */
     }
     
     .meeting-time {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     /* ログイン画面のフォントサイズ調整 */
@@ -938,7 +938,7 @@ body {
     }
     
     .login-container p {
-        font-size: 0.75rem; /* 12px */
+        font-size: 0.625rem; /* 10px */
     }
     
     .roadmap-container::before {
