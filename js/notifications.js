@@ -168,14 +168,14 @@ async function requestNotificationPermission() {
             return true;
         }
 
-        // HTTPS接続の確認
+        // HTTPS接続の確認（表示を削除）
         if (!window.isSecureContext) {
             console.warn('⚠️ HTTPS接続が必要です');
-            alert('通知機能を使用するにはHTTPS接続が必要です。\n\n現在の接続: ' + window.location.protocol + '//' + window.location.host);
+            // alert('通知機能を使用するにはHTTPS接続が必要です。\n\n現在の接続: ' + window.location.protocol + '//' + window.location.host);
             return false;
         }
 
-        // 通知がサポートされていない場合
+        // 通知がサポートされていない場合（表示を削除）
         if (!('Notification' in window)) {
             console.warn('⚠️ このブラウザは通知をサポートしていません');
             console.log('🔍 ブラウザ情報:', {
@@ -187,21 +187,8 @@ async function requestNotificationPermission() {
                 protocol: window.location.protocol
             });
             
-            // より詳細なエラーメッセージを表示
-            const errorMessage = `このブラウザは通知をサポートしていません。
-
-対応ブラウザ:
-• Chrome 50以上
-• Firefox 44以上  
-• Safari 16以上
-• Edge 79以上
-
-現在のブラウザ: ${navigator.userAgent.split(' ')[0]}
-接続: ${window.location.protocol}//${window.location.host}
-
-HTTPS接続が必要です。`;
-            
-            alert(errorMessage);
+            // エラーメッセージの表示を削除
+            // alert(errorMessage);
             return false;
         }
 
@@ -244,7 +231,7 @@ HTTPS接続が必要です。`;
             } catch (storageError) {
                 console.warn('通知拒否状態を保存できませんでした:', storageError);
             }
-            alert('通知が拒否されました。ブラウザの設定から通知を許可してください。');
+            // alert('通知が拒否されました。ブラウザの設定から通知を許可してください。');
             return false;
         } else {
             console.log('通知許可が保留されました');
@@ -253,7 +240,7 @@ HTTPS接続が必要です。`;
     } catch (error) {
         console.error('通知許可リクエストエラー:', error);
         console.error('エラー詳細:', error.stack);
-        alert('通知の設定中にエラーが発生しました: ' + error.message);
+        // alert('通知の設定中にエラーが発生しました: ' + error.message);
         return false;
     }
 }
