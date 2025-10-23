@@ -608,6 +608,12 @@ function updateNotificationBadge() {
 async function createNotification(notificationData) {
     try {
         console.log('📝 通知を作成します:', notificationData);
+        console.log('📝 createNotification関数が呼び出されました');
+        console.log('📝 通知データの詳細:', {
+            type: notificationData.type,
+            message: notificationData.message,
+            related_id: notificationData.related_id
+        });
         
         const notification = {
             ...notificationData,
@@ -639,11 +645,19 @@ async function createNotification(notificationData) {
         } else {
             const insertedNotification = Array.isArray(data) ? data[0] : data;
             console.log('✅ 通知をデータベースに保存しました:', insertedNotification);
+            console.log('✅ 保存された通知の詳細:', {
+                id: insertedNotification?.id,
+                type: insertedNotification?.type,
+                message: insertedNotification?.message,
+                created_by: insertedNotification?.created_by
+            });
 
             if (insertedNotification) {
+                console.log('📡 サーバープッシュ通知を送信します...');
                 await sendServerPushNotification(insertedNotification);
             }
 
+            console.log('✅ createNotification関数が正常に完了しました');
             return insertedNotification;
         }
         

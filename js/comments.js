@@ -313,12 +313,14 @@ async function postComment(content) {
                 currentUser: appState.currentUser
             });
             
-            await createNotification({
+            console.log('🔔 createNotification関数を呼び出します...');
+            const notificationResult = await createNotification({
                 type: 'new_comment',
                 message: `${appState.currentUser?.username || 'ユーザー'}さんがコメントしました: ${content.substring(0, 50)}...`,
                 related_id: newComment.id
             });
             
+            console.log('🔔 createNotification関数の結果:', notificationResult);
             console.log('✅ タスクコメントの通知作成が完了しました');
         } catch (notificationError) {
             console.error('❌ タスクコメント通知送信エラー:', notificationError);
