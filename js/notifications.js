@@ -213,15 +213,15 @@ async function requestNotificationPermission() {
                 console.error('プッシュサブスクリプション作成エラー:', subscriptionError);
             }
             
-            // テスト通知を表示
-            showBrowserNotification('プッシュ通知が有効になりました！', {
-                body: '今後、コメントや会議の通知が届きます'
-            });
+            // テスト通知を表示（削除）
+            // showBrowserNotification('プッシュ通知が有効になりました！', {
+            //     body: '今後、コメントや会議の通知が届きます'
+            // });
             
-            // 成功メッセージ
-            if (typeof showNotification === 'function') {
-                showNotification('プッシュ通知が有効になりました！', 'success');
-            }
+            // 成功メッセージ（削除）
+            // if (typeof showNotification === 'function') {
+            //     showNotification('プッシュ通知が有効になりました！', 'success');
+            // }
             
             return true;
         } else if (permission === 'denied') {
@@ -299,9 +299,9 @@ async function subscribeToPushNotifications() {
         }
 
         console.log('💾 プッシュ通知設定を保存しました');
-        if (typeof showNotification === 'function') {
-            showNotification('🔔 プッシュ通知が有効になりました（ホーム画面に追加済みのPWAでも通知されます）', 'success');
-        }
+        // if (typeof showNotification === 'function') {
+        //     showNotification('🔔 プッシュ通知が有効になりました（ホーム画面に追加済みのPWAでも通知されます）', 'success');
+        // }
 
         checkAndShowNotificationButtons();
         return subscription;
