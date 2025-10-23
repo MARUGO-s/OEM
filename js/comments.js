@@ -247,13 +247,21 @@ async function postComment(content) {
         appState.comments.unshift(insertedData);
         console.log('ローカルコメント配列を更新:', appState.comments.length);
         
-        // 画面を即座に更新
+        // 画面を即座に更新（スマートフォン対応）
         renderComments();
         
         // タイムライン側も更新
         if (typeof renderTasks === 'function') {
             renderTasks();
         }
+        
+        // スマートフォンでの表示更新を確実にする
+        setTimeout(() => {
+            renderComments();
+            if (typeof renderTasks === 'function') {
+                renderTasks();
+            }
+        }, 100);
         
         // バックグラウンドでデータを再読み込み（整合性確保）
         loadComments().catch(err => console.error('コメント再読み込みエラー:', err));
@@ -369,7 +377,17 @@ function subscribeToComments() {
                     console.log('💬 コメント変更検知:', payload);
                     console.log('イベントタイプ:', payload.eventType);
                     console.log('変更データ:', payload.new || payload.old);
-                    loadComments();
+                    
+                    // スマートフォンでのリアルタイム更新を確実にする
+                    loadComments().then(() => {
+                        // 追加の表示更新（スマートフォン対応）
+                        setTimeout(() => {
+                            renderComments();
+                            if (typeof renderTasks === 'function') {
+                                renderTasks();
+                            }
+                        }, 50);
+                    });
                 }
             )
             .subscribe((status) => {
