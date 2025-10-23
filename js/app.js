@@ -96,6 +96,7 @@ async function loadAllData() {
         await Promise.allSettled([
             loadTasks().catch(err => console.error('タスク読み込みエラー:', err)),
             loadComments().catch(err => console.error('コメント読み込みエラー:', err)),
+            loadDiscussionComments().catch(err => console.error('意見交換コメント読み込みエラー:', err)),
             loadNotifications().catch(err => console.error('通知読み込みエラー:', err)),
             typeof loadMeetings === 'function' ? loadMeetings().catch(err => console.error('会議読み込みエラー:', err)) : Promise.resolve()
         ]);
@@ -136,6 +137,9 @@ async function loadAllData() {
             
             console.log('💬 コメントサブスクリプション開始...');
             subscribeToComments();
+            
+            console.log('💬 意見交換コメントサブスクリプション開始...');
+            subscribeToDiscussionComments();
             
             console.log('🔔 通知サブスクリプション開始...');
             subscribeToNotifications();
