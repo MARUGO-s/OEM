@@ -127,6 +127,18 @@ async function postDiscussionComment() {
         if (typeof showNotification === 'function') {
             showNotification('意見交換コメントを投稿しました', 'success');
         }
+        
+        // 通知を送信（エラーが発生してもコメント投稿は成功とする）
+        try {
+            await createNotification({
+                type: 'new_discussion_comment',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんが意見交換にコメントしました: ${content.substring(0, 50)}...`,
+                related_id: data.id
+            });
+        } catch (notificationError) {
+            console.error('通知送信エラー:', notificationError);
+            // 通知エラーはコメント投稿を阻害しない
+        }
 
     } catch (error) {
         console.error('意見交換コメント投稿例外:', error);

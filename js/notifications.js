@@ -389,6 +389,12 @@ async function loadNotifications() {
         appState.notifications = data || [];
         console.log('読み込まれた通知:', appState.notifications);
         console.log('通知IDの例:', appState.notifications.length > 0 ? appState.notifications[0].id : 'なし');
+        console.log('通知の種類別カウント:', {
+            total: appState.notifications.length,
+            new_comment: appState.notifications.filter(n => n.type === 'new_comment').length,
+            new_discussion_comment: appState.notifications.filter(n => n.type === 'new_discussion_comment').length,
+            meeting_scheduled: appState.notifications.filter(n => n.type === 'meeting_scheduled').length
+        });
         renderNotifications();
         updateNotificationBadge();
         
@@ -577,6 +583,8 @@ function getNotificationIcon(type) {
         task_deleted: '🗑️',
         brainstorm_idea_created: '🧠',
         new_comment: '💬',
+        new_discussion_comment: '💭',
+        meeting_scheduled: '📅',
         general: '📢'
     };
     return icons[type] || icons.general;
