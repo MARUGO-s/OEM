@@ -2,6 +2,130 @@
 
 let notificationCount = 0;
 
+// Push通知の登録状態を管理
+const pushRegistrationState = {
+    isSubscribing: false,
+    lastSubscriptionEndpoint: null
+};
+
+// VAPID公開鍵をUint8Arrayに変換
+function urlBase64ToUint8Array(base64String) {
+    if (!base64String) {
+        throw new Error('VAPIDキーが設定されていません');
+    }
+
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; i++) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+
+    return outputArray;
+}
+
+// SupabaseにPushサブスクリプションを保存
+async function registerPushSubscription(subscription) {
+    try {
+        if (!subscription) {
+            return null;
+        }
+
+        // 認証済みユーザーが必要
+        let currentUser = appState.currentUser;
+        if (!currentUser || !currentUser.id) {
+            if (typeof refreshCurrentUser === 'function') {
+                currentUser = await refreshCurrentUser();
+            }
+        }
+
+        if (!currentUser || !currentUser.id) {
+            console.warn('ユーザー情報が取得できないためプッシュサブスクリプションを保存できません');
+            return null;
+        }
+
+        const subscriptionJson = subscription.toJSON();
+        const payload = {
+            user_id: currentUser.id,
+            endpoint: subscriptionJson.endpoint,
+            p256dh: subscriptionJson.keys?.p256dh || null,
+            auth: subscriptionJson.keys?.auth || null,
+            expiration_time: subscription.expirationTime ? new Date(subscription.expirationTime).toISOString() : null,
+            user_agent: navigator.userAgent,
+            platform: navigator.platform || null
+        };
+
+        const { data, error } = await supabase
+            .from('push_subscriptions')
+            .upsert(payload, { onConflict: 'endpoint' })
+            .select();
+
+        if (error) {
+            console.error('プッシュサブスクリプション保存エラー:', error);
+            return null;
+        }
+
+        const savedRecord = Array.isArray(data) ? data[0] : data;
+        console.log('✅ プッシュサブスクリプションを保存しました:', savedRecord?.id || subscriptionJson.endpoint);
+        pushRegistrationState.lastSubscriptionEndpoint = subscriptionJson.endpoint;
+        
+        // セッション単位でサブスクリプション情報を保持
+        try {
+            sessionStorage.setItem('pushSubscriptionEndpoint', subscriptionJson.endpoint);
+        } catch (storageError) {
+            console.warn('セッションストレージへの保存に失敗しました:', storageError);
+        }
+
+        return savedRecord;
+    } catch (error) {
+        console.error('プッシュサブスクリプション登録例外:', error);
+        return null;
+    }
+}
+
+async function sendServerPushNotification(notification) {
+    try {
+        if (!supabase?.functions || typeof supabase.functions.invoke !== 'function') {
+            console.warn('Supabase Edge Functionが利用できないため、サーバープッシュをスキップします');
+            return;
+        }
+
+        const payload = {
+            title: notification.title || 'MARUGO OEM Special Menu',
+            body: notification.message || notification.body || '新しい通知があります',
+            icon: '/OEM/icon-192.svg',
+            badge: '/OEM/icon-192.svg',
+            url: notification.url || '/OEM/',
+            vibration: [200, 100, 200],
+            tag: notification.related_id || 'oem-notification',
+            data: {
+                notification_id: notification.id,
+                type: notification.type || 'general',
+                url: notification.url || '/OEM/'
+            }
+        };
+
+        const { error } = await supabase.functions.invoke('send-push', {
+            body: {
+                notification: payload
+            }
+        });
+
+        if (error) {
+            console.error('サーバープッシュ送信エラー:', error);
+        } else {
+            console.log('📡 サーバープッシュを要求しました');
+        }
+    } catch (error) {
+        console.error('サーバープッシュ送信例外:', error);
+    }
+}
+
 // プッシュ通知の許可をリクエスト
 async function requestNotificationPermission() {
     try {
@@ -10,7 +134,17 @@ async function requestNotificationPermission() {
         // 既に許可されている場合は何もしない
         if ('Notification' in window && Notification.permission === 'granted') {
             console.log('通知は既に許可されています');
-            localStorage.setItem('notificationPermission', 'granted');
+            try {
+                sessionStorage.setItem('notificationPermission', 'granted');
+            } catch (storageError) {
+                console.warn('通知許可状態を保存できませんでした:', storageError);
+            }
+
+            try {
+                await subscribeToPushNotifications();
+            } catch (subscriptionError) {
+                console.error('プッシュサブスクリプション再作成エラー:', subscriptionError);
+            }
             
             // テスト通知を表示
             showBrowserNotification('通知が有効です', {
@@ -66,7 +200,17 @@ HTTPS接続が必要です。`;
             console.log('通知が許可されました！');
             
             // 許可状態を保存
-            localStorage.setItem('notificationPermission', 'granted');
+            try {
+                sessionStorage.setItem('notificationPermission', 'granted');
+            } catch (storageError) {
+                console.warn('通知許可状態を保存できませんでした:', storageError);
+            }
+
+            try {
+                await subscribeToPushNotifications();
+            } catch (subscriptionError) {
+                console.error('プッシュサブスクリプション作成エラー:', subscriptionError);
+            }
             
             // テスト通知を表示
             showBrowserNotification('プッシュ通知が有効になりました！', {
@@ -81,7 +225,11 @@ HTTPS接続が必要です。`;
             return true;
         } else if (permission === 'denied') {
             console.log('通知が拒否されました');
-            localStorage.setItem('notificationPermission', 'denied');
+            try {
+                sessionStorage.setItem('notificationPermission', 'denied');
+            } catch (storageError) {
+                console.warn('通知拒否状態を保存できませんでした:', storageError);
+            }
             alert('通知が拒否されました。ブラウザの設定から通知を許可してください。');
             return false;
         } else {
@@ -98,9 +246,19 @@ HTTPS接続が必要です。`;
 
 // プッシュ通知のサブスクリプション
 async function subscribeToPushNotifications() {
+    if (pushRegistrationState.isSubscribing) {
+        console.log('プッシュサブスクリプションの作成中です');
+        return null;
+    }
+
     try {
         console.log('🔔 プッシュ通知のサブスクリプションを開始します...');
-        
+
+        if (!VAPID_PUBLIC_KEY) {
+            console.warn('⚠️ VAPID公開鍵が設定されていないため、プッシュ通知を登録できません');
+            return null;
+        }
+
         if (!('serviceWorker' in navigator)) {
             console.warn('⚠️ Service Workerがサポートされていません');
             return null;
@@ -111,41 +269,50 @@ async function subscribeToPushNotifications() {
             return null;
         }
 
+        pushRegistrationState.isSubscribing = true;
+
         const registration = await navigator.serviceWorker.ready;
         console.log('✅ Service Worker登録確認:', registration);
-        
-        // 既存のサブスクリプションを確認
+
         let subscription = await registration.pushManager.getSubscription();
         console.log('📋 既存のサブスクリプション:', subscription);
-        
+
         if (!subscription) {
-            // 新しいサブスクリプションを作成
             console.log('🆕 新しいプッシュ通知サブスクリプションを作成します...');
+            const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
             subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true, // ユーザーに表示される通知のみ
-                applicationServerKey: null // VAPIDキーは実際の実装では必要
+                userVisibleOnly: true,
+                applicationServerKey
             });
             console.log('✅ プッシュ通知にサブスクライブしました:', subscription);
         } else {
             console.log('✅ 既存のプッシュ通知サブスクリプションを使用します');
         }
 
-        // サブスクリプション情報を保存（実際の実装ではサーバーに送信）
-        localStorage.setItem('pushSubscription', JSON.stringify(subscription));
-        localStorage.setItem('pushNotificationsEnabled', 'true');
-        
+        await registerPushSubscription(subscription);
+
+        try {
+            sessionStorage.setItem('pushNotificationsEnabled', 'true');
+        } catch (storageError) {
+            console.warn('プッシュ通知状態を保存できませんでした:', storageError);
+        }
+
         console.log('💾 プッシュ通知設定を保存しました');
-        showNotification('🔔 プッシュ通知が有効になりました（アプリが閉じていても通知されます）', 'success');
-        
-        // 通知ボタンの表示を更新
+        if (typeof showNotification === 'function') {
+            showNotification('🔔 プッシュ通知が有効になりました（ホーム画面に追加済みのPWAでも通知されます）', 'success');
+        }
+
         checkAndShowNotificationButtons();
-        
         return subscription;
     } catch (error) {
         console.error('❌ プッシュ通知サブスクリプションエラー:', error);
         console.error('エラー詳細:', error.stack);
-        showNotification('プッシュ通知の設定に失敗しました', 'error');
+        if (typeof showNotification === 'function') {
+            showNotification('プッシュ通知の設定に失敗しました', 'error');
+        }
         return null;
+    } finally {
+        pushRegistrationState.isSubscribing = false;
     }
 }
 
@@ -453,8 +620,14 @@ async function createNotification(notificationData) {
             });
             // 通知作成エラーはコメント投稿を阻害しない
         } else {
-            console.log('✅ 通知をデータベースに保存しました:', data);
-            console.log('リアルタイムサブスクリプションが自動的にプッシュ通知を送信します');
+            const insertedNotification = Array.isArray(data) ? data[0] : data;
+            console.log('✅ 通知をデータベースに保存しました:', insertedNotification);
+
+            if (insertedNotification) {
+                await sendServerPushNotification(insertedNotification);
+            }
+
+            return insertedNotification;
         }
         
     } catch (error) {
@@ -462,6 +635,8 @@ async function createNotification(notificationData) {
         console.error('スタック:', error.stack);
         // 通知作成エラーはコメント投稿を阻害しない
     }
+
+    return null;
 }
 
 // プッシュ通知を送信 - アプリが閉じている時も確実に通知
@@ -771,5 +946,3 @@ function checkAndShowNotificationButtons() {
         console.log('🔧 通知非対応ブラウザのため、通知ボタンを非表示にしました');
     }
 }
-
-

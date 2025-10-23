@@ -3,6 +3,11 @@
 const SUPABASE_URL = 'https://mrjocjcppjnjxtudebta.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yam9jamNwcGpuanh0dWRlYnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4NTk5NDksImV4cCI6MjA3NjQzNTk0OX0.jflBtUsb7Qq4-p-e-XDUb1DoxHbwjG1DFXPXDC-sN2E';
 
+// VAPID公開鍵（Web Push通知用）
+// この値はサービスワーカーの PushManager.subscribe で使用されます。
+// 秘密鍵は Supabase Edge Function の環境変数に設定してください。
+const VAPID_PUBLIC_KEY = 'BKpv4Pl31gOSCwZ4n77LodaaKbCwurLsuWI-iY0_L68gNTTcUJbBvfjdRlkDqUk3zj_g-iApV5X2mAnELiwdxEI';
+
 /**
  * カスタムストレージアダプター（Safari対応）
  * 
