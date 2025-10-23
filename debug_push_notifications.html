@@ -38,6 +38,7 @@
         <button onclick="checkServiceWorker()">Service Workerを確認</button>
         <button onclick="resetServiceWorker()">Service Workerをリセット</button>
         <button onclick="registerServiceWorker()">Service Workerを登録</button>
+        <button onclick="forceActivateServiceWorker()">Service Workerを強制アクティブ化</button>
         <button onclick="subscribeToPushNotifications()">プッシュ通知をサブスクライブ</button>
         <button onclick="checkExistingSubscription()">既存のサブスクリプションを確認</button>
         <div id="serviceWorker" class="log"></div>
@@ -510,6 +511,11 @@
                 log(elementId, '✅ Service Worker のリセットが完了しました', 'success');
                 log(elementId, '💡 ページをリロードしてから再度確認してください', 'info');
                 
+                // 自動的に再登録を試行
+                log(elementId, '🔄 自動的にService Workerを再登録中...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                await registerServiceWorker();
+                
             } catch (error) {
                 log(elementId, `❌ Service Worker のリセットでエラー: ${error.message}`, 'error');
             }
@@ -665,6 +671,53 @@
                 
             } catch (error) {
                 log(elementId, `❌ テスト通知の送信でエラー: ${error.message}`, 'error');
+                log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
+            }
+        }
+
+        async function forceActivateServiceWorker() {
+            const elementId = 'serviceWorker';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔄 Service Worker を強制アクティブ化中...');
+            
+            try {
+                // Service Workerの登録を確認
+                const registration = await navigator.serviceWorker.ready;
+                log(elementId, '✅ Service Worker が準備完了しました', 'success');
+                
+                if (registration.active) {
+                    log(elementId, '✅ Service Worker は既にアクティブです', 'success');
+                    return;
+                }
+                
+                // Service Workerを強制的にアクティブ化
+                if (registration.installing) {
+                    log(elementId, '🔄 Service Worker がインストール中です...', 'info');
+                    await new Promise(resolve => {
+                        registration.installing.addEventListener('statechange', () => {
+                            if (registration.installing.state === 'activated') {
+                                resolve();
+                            }
+                        });
+                    });
+                } else if (registration.waiting) {
+                    log(elementId, '🔄 Service Worker が待機中です...', 'info');
+                    // 待機中のService Workerをアクティブ化
+                    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                
+                // 最終確認
+                if (registration.active) {
+                    log(elementId, '✅ Service Worker がアクティブになりました', 'success');
+                } else {
+                    log(elementId, '⚠️ Service Worker のアクティブ化に失敗しました', 'warning');
+                    log(elementId, '💡 ページをリロードしてから再度確認してください', 'info');
+                }
+                
+            } catch (error) {
+                log(elementId, `❌ Service Worker の強制アクティブ化でエラー: ${error.message}`, 'error');
                 log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
             }
         }
