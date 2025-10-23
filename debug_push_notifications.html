@@ -38,13 +38,14 @@
         <button onclick="checkServiceWorker()">Service Workerを確認</button>
         <button onclick="resetServiceWorker()">Service Workerをリセット</button>
         <button onclick="registerServiceWorker()">Service Workerを登録</button>
+        <button onclick="subscribeToPushNotifications()">プッシュ通知をサブスクライブ</button>
         <div id="serviceWorker" class="log"></div>
     </div>
 
     <div class="section">
         <h2>🧪 テスト通知の送信</h2>
         <button onclick="sendTestNotification()">テスト通知を送信</button>
-        <button onclick="sendTestNotificationWithServiceWorker()">Service Worker経由でテスト通知</button>
+        <button onclick="sendTestNotificationViaServiceWorker()">Service Worker経由でテスト通知</button>
         <div id="testNotification" class="log"></div>
     </div>
 
@@ -550,6 +551,84 @@
                 
             } catch (error) {
                 log(elementId, `❌ Service Worker の登録でエラー: ${error.message}`, 'error');
+                log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
+            }
+        }
+
+        async function subscribeToPushNotifications() {
+            const elementId = 'serviceWorker';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔄 プッシュ通知のサブスクリプションを作成中...');
+            
+            try {
+                // Service Workerの登録を確認
+                const registration = await navigator.serviceWorker.ready;
+                log(elementId, '✅ Service Worker が準備完了しました', 'success');
+                
+                // プッシュ通知のサブスクリプションを作成
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: null // VAPIDキーが設定されていない場合
+                });
+                
+                log(elementId, '✅ プッシュ通知のサブスクリプションを作成しました', 'success');
+                log(elementId, `📱 エンドポイント: ${subscription.endpoint}`, 'info');
+                
+                // サブスクリプション情報を表示
+                const key = subscription.getKey('p256dh');
+                const auth = subscription.getKey('auth');
+                
+                if (key) {
+                    log(elementId, `🔑 P256DH キー: ${btoa(String.fromCharCode.apply(null, new Uint8Array(key)))}`, 'info');
+                }
+                if (auth) {
+                    log(elementId, `🔐 Auth キー: ${btoa(String.fromCharCode.apply(null, new Uint8Array(auth)))}`, 'info');
+                }
+                
+                return subscription;
+                
+            } catch (error) {
+                log(elementId, `❌ プッシュ通知のサブスクリプション作成でエラー: ${error.message}`, 'error');
+                log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
+                return null;
+            }
+        }
+
+        async function sendTestNotificationViaServiceWorker() {
+            const elementId = 'testNotification';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔄 Service Worker経由でテスト通知を送信中...');
+            
+            try {
+                // Service Workerの登録を確認
+                const registration = await navigator.serviceWorker.ready;
+                log(elementId, '✅ Service Worker が準備完了しました', 'success');
+                
+                // Service Workerにメッセージを送信
+                if (registration.active) {
+                    registration.active.postMessage({
+                        type: 'SHOW_NOTIFICATION',
+                        title: 'テスト通知',
+                        options: {
+                            body: 'Service Worker経由のテスト通知です',
+                            icon: '/OEM/icon-192.svg',
+                            badge: '/OEM/icon-192.svg',
+                            tag: 'test-notification',
+                            requireInteraction: true,
+                            silent: false
+                        }
+                    });
+                    
+                    log(elementId, '✅ Service Worker にメッセージを送信しました', 'success');
+                    log(elementId, '📱 通知が表示されるはずです', 'info');
+                } else {
+                    log(elementId, '❌ Service Worker がアクティブではありません', 'error');
+                }
+                
+            } catch (error) {
+                log(elementId, `❌ テスト通知の送信でエラー: ${error.message}`, 'error');
                 log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
             }
         }
