@@ -81,15 +81,50 @@ const sessionStorageAdapter = {
     }
 };
 
-// Supabaseクライアントの初期化（sessionStorageを使用、localStorageは使用しない）
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+// モバイル環境の検出
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+const isAndroid = /Android/.test(navigator.userAgent);
+
+// モバイル環境でのSupabase設定を最適化
+const supabaseConfig = {
     auth: {
         storage: sessionStorageAdapter,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true
     }
-});
+};
+
+// モバイル環境での追加設定
+if (isMobile) {
+    console.log('📱 モバイル環境を検出、Supabase設定を最適化します');
+    
+    // モバイル環境でのリアルタイム設定
+    supabaseConfig.realtime = {
+        // モバイル環境での接続タイムアウトを延長
+        timeout: 30000,
+        // モバイル環境での再接続間隔を短縮
+        heartbeatIntervalMs: 10000,
+        // モバイル環境での接続リトライ回数を増加
+        maxRetries: 5
+    };
+    
+    // iOS環境での特別な設定
+    if (isIOS) {
+        console.log('🍎 iOS環境を検出、特別な設定を適用します');
+        supabaseConfig.realtime.heartbeatIntervalMs = 15000; // iOSでは少し長めに
+    }
+    
+    // Android環境での特別な設定
+    if (isAndroid) {
+        console.log('🤖 Android環境を検出、特別な設定を適用します');
+        supabaseConfig.realtime.heartbeatIntervalMs = 8000; // Androidでは少し短めに
+    }
+}
+
+// Supabaseクライアントの初期化（モバイル最適化版）
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, supabaseConfig);
 
 // グローバル状態
 const appState = {
