@@ -119,24 +119,14 @@ async function sendServerPushNotification(notification) {
         });
 
         if (error) {
-            console.error('サーバープッシュ送信エラー:', error);
-            if (typeof showNotification === 'function') {
-                const rawMessage = error.message || '';
-                if (rawMessage.includes('Missing VAPID')) {
-                    showNotification('⚠️ VAPIDキーが設定されていません。Supabase Edge Functionの環境変数を確認してください。', 'warning');
-                } else {
-                    const message = rawMessage || 'サーバーへのプッシュ通知連携に失敗しました';
-                    showNotification(`⚠️ ${message}`, 'warning');
-                }
-            }
+            console.warn('サーバープッシュ送信エラー（無視）:', error.message);
+            // CORSエラーやVAPIDキー未設定は無視（ローカル通知で代替）
         } else {
             console.log('📡 サーバープッシュを要求しました');
         }
     } catch (error) {
-        console.error('サーバープッシュ送信例外:', error);
-        if (typeof showNotification === 'function') {
-            showNotification('⚠️ プッシュ通知バックエンドとの通信で例外が発生しました', 'warning');
-        }
+        console.warn('サーバープッシュ送信例外（無視）:', error.message);
+        // CORSエラーやVAPIDキー未設定は無視（ローカル通知で代替）
     }
 }
 
@@ -680,6 +670,16 @@ async function sendPushNotification(notificationData) {
         const permission = checkNotificationPermission();
         if (permission !== 'granted') {
             console.log('⚠️ 通知許可がないため、プッシュ通知をスキップします。現在の許可状態:', permission);
+            // 許可が拒否されていても、ローカル通知は表示する
+            console.log('📱 ローカル通知を表示します');
+            showBrowserNotification('MARUGO OEM Special Menu', {
+                body: notificationData.message || '新しい通知があります',
+                icon: '/OEM/icon-192.svg',
+                badge: '/OEM/icon-192.svg',
+                tag: 'marugo-notification',
+                requireInteraction: true,
+                silent: false
+            });
             return;
         }
 
