@@ -72,6 +72,12 @@
         <div id="pwaInstallInstructions" class="log"></div>
     </div>
 
+    <div class="section">
+        <h2>📚 プッシュ通知の種類と実装方法</h2>
+        <button onclick="showNotificationTypes()">通知の種類を説明</button>
+        <div id="notificationTypes" class="log"></div>
+    </div>
+
     <script>
         // Supabase設定
         const SUPABASE_URL = 'https://mrjocjcppjnjxtudebta.supabase.co';
@@ -878,6 +884,7 @@
             document.getElementById(elementId).innerHTML = '';
             
             log(elementId, '🧪 VAPIDキーなしでテスト通知を送信中...');
+            log(elementId, '📚 参考: ローカル通知（アプリから直接発火）', 'info');
             
             try {
                 // Service Workerの登録を確認
@@ -885,23 +892,33 @@
                 log(elementId, '✅ Service Worker が準備完了しました', 'success');
                 
                 if (registration.active) {
-                    // Service Workerにメッセージを送信（VAPIDキーなし）
-                    registration.active.postMessage({
+                    // 記事の実装方法を参考にした通知データ
+                    const notificationData = {
                         type: 'SHOW_NOTIFICATION',
                         title: 'MARUGO OEM Special Menu',
                         options: {
-                            body: 'VAPIDキーなしのテスト通知です',
+                            body: 'VAPIDキーなしのローカル通知です（Service Worker経由）',
                             icon: '/OEM/icon-192.svg',
                             badge: '/OEM/icon-192.svg',
                             tag: 'test-without-vapid',
                             requireInteraction: true,
-                            silent: false
+                            silent: false,
+                            // 記事の実装方法を参考にした追加オプション
+                            data: {
+                                url: '/OEM/',
+                                timestamp: Date.now(),
+                                type: 'local-notification'
+                            }
                         }
-                    });
+                    };
+                    
+                    // Service Workerにメッセージを送信
+                    registration.active.postMessage(notificationData);
                     
                     log(elementId, '✅ Service Worker にメッセージを送信しました', 'success');
                     log(elementId, '📱 通知が表示されるはずです', 'info');
-                    log(elementId, '💡 VAPIDキーなしでもService Worker経由の通知は可能です', 'info');
+                    log(elementId, '💡 これはローカル通知（アプリから直接発火）です', 'info');
+                    log(elementId, '💡 インターネット接続不要で動作します', 'info');
                 } else {
                     log(elementId, '❌ Service Worker がアクティブではありません', 'error');
                     log(elementId, '💡 「Service Workerを強制アクティブ化」をクリックしてください', 'info');
@@ -911,6 +928,33 @@
                 log(elementId, `❌ VAPIDキーなしのテスト通知でエラー: ${error.message}`, 'error');
                 log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
             }
+        }
+
+        function showNotificationTypes() {
+            const elementId = 'notificationTypes';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '📚 プッシュ通知の種類と実装方法', 'info');
+            log(elementId, '', 'info');
+            log(elementId, '🔔 プッシュ通知には大きく2種類あります:', 'info');
+            log(elementId, '', 'info');
+            log(elementId, '1️⃣ ローカル通知（Local Notification）', 'info');
+            log(elementId, '   - アプリから直接発火', 'info');
+            log(elementId, '   - インターネット接続不要', 'info');
+            log(elementId, '   - 例: アラームアプリ、タイマー', 'info');
+            log(elementId, '   - 実装: Service Worker経由', 'info');
+            log(elementId, '', 'info');
+            log(elementId, '2️⃣ リモート通知（Remote Notification）', 'info');
+            log(elementId, '   - サーバー経由で配信', 'info');
+            log(elementId, '   - インターネット接続必要', 'info');
+            log(elementId, '   - 例: チャットメッセージ、ニュース', 'info');
+            log(elementId, '   - 実装: VAPIDキー + Push API', 'info');
+            log(elementId, '', 'info');
+            log(elementId, '🎯 現在の実装状況:', 'info');
+            log(elementId, '✅ ローカル通知: Service Worker経由で実装済み', 'success');
+            log(elementId, '❌ リモート通知: VAPIDキーが必要で未実装', 'warning');
+            log(elementId, '', 'info');
+            log(elementId, '💡 参考記事: https://gist.github.com/pine/8b7e58ff7fa259df17351d959c6118f7', 'info');
         }
 
         // ページ読み込み時に自動実行
