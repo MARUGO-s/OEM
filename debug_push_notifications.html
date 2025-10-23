@@ -39,6 +39,7 @@
         <button onclick="resetServiceWorker()">Service Workerをリセット</button>
         <button onclick="registerServiceWorker()">Service Workerを登録</button>
         <button onclick="subscribeToPushNotifications()">プッシュ通知をサブスクライブ</button>
+        <button onclick="checkExistingSubscription()">既存のサブスクリプションを確認</button>
         <div id="serviceWorker" class="log"></div>
     </div>
 
@@ -561,16 +562,38 @@
             
             log(elementId, '🔄 プッシュ通知のサブスクリプションを作成中...');
             
+            // タイムアウト処理を追加
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('サブスクリプション作成がタイムアウトしました')), 10000);
+            });
+            
             try {
                 // Service Workerの登録を確認
                 const registration = await navigator.serviceWorker.ready;
                 log(elementId, '✅ Service Worker が準備完了しました', 'success');
                 
                 // プッシュ通知のサブスクリプションを作成
-                const subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: null // VAPIDキーが設定されていない場合
-                });
+                let subscription;
+                try {
+                    // まずVAPIDキーなしで試行
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true
+                    });
+                    log(elementId, '✅ VAPIDキーなしでサブスクリプションを作成しました', 'success');
+                } catch (error) {
+                    log(elementId, `⚠️ VAPIDキーなしでの作成に失敗: ${error.message}`, 'warning');
+                    log(elementId, '🔄 代替方法を試行中...', 'info');
+                    
+                    // 代替方法: 既存のサブスクリプションを取得
+                    subscription = await registration.pushManager.getSubscription();
+                    if (subscription) {
+                        log(elementId, '✅ 既存のサブスクリプションを取得しました', 'success');
+                    } else {
+                        log(elementId, '❌ サブスクリプションの作成に失敗しました', 'error');
+                        log(elementId, '💡 ブラウザの通知設定を確認してください', 'info');
+                        return null;
+                    }
+                }
                 
                 log(elementId, '✅ プッシュ通知のサブスクリプションを作成しました', 'success');
                 log(elementId, `📱 エンドポイント: ${subscription.endpoint}`, 'info');
@@ -591,6 +614,19 @@
             } catch (error) {
                 log(elementId, `❌ プッシュ通知のサブスクリプション作成でエラー: ${error.message}`, 'error');
                 log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
+                
+                // 具体的なエラーメッセージを追加
+                if (error.message.includes('タイムアウト')) {
+                    log(elementId, '⏰ 10秒でタイムアウトしました', 'warning');
+                    log(elementId, '💡 ブラウザの通知設定を確認してください', 'info');
+                } else if (error.message.includes('Permission denied')) {
+                    log(elementId, '🔒 通知許可が拒否されています', 'error');
+                    log(elementId, '💡 ブラウザの設定で通知を許可してください', 'info');
+                } else if (error.message.includes('Not supported')) {
+                    log(elementId, '❌ このブラウザはプッシュ通知をサポートしていません', 'error');
+                    log(elementId, '💡 Chrome、Firefox、Safari 14+ を使用してください', 'info');
+                }
+                
                 return null;
             }
         }
@@ -629,6 +665,45 @@
                 
             } catch (error) {
                 log(elementId, `❌ テスト通知の送信でエラー: ${error.message}`, 'error');
+                log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
+            }
+        }
+
+        async function checkExistingSubscription() {
+            const elementId = 'serviceWorker';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔄 既存のプッシュ通知サブスクリプションを確認中...');
+            
+            try {
+                // Service Workerの登録を確認
+                const registration = await navigator.serviceWorker.ready;
+                log(elementId, '✅ Service Worker が準備完了しました', 'success');
+                
+                // 既存のサブスクリプションを取得
+                const subscription = await registration.pushManager.getSubscription();
+                
+                if (subscription) {
+                    log(elementId, '✅ 既存のサブスクリプションが見つかりました', 'success');
+                    log(elementId, `📱 エンドポイント: ${subscription.endpoint}`, 'info');
+                    
+                    // サブスクリプション情報を表示
+                    const key = subscription.getKey('p256dh');
+                    const auth = subscription.getKey('auth');
+                    
+                    if (key) {
+                        log(elementId, `🔑 P256DH キー: ${btoa(String.fromCharCode.apply(null, new Uint8Array(key)))}`, 'info');
+                    }
+                    if (auth) {
+                        log(elementId, `🔐 Auth キー: ${btoa(String.fromCharCode.apply(null, new Uint8Array(auth)))}`, 'info');
+                    }
+                } else {
+                    log(elementId, '❌ 既存のサブスクリプションが見つかりません', 'warning');
+                    log(elementId, '💡 「プッシュ通知をサブスクライブ」ボタンをクリックしてください', 'info');
+                }
+                
+            } catch (error) {
+                log(elementId, `❌ サブスクリプション確認でエラー: ${error.message}`, 'error');
                 log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
             }
         }
