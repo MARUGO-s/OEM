@@ -48,6 +48,8 @@
         <h2>🧪 テスト通知の送信</h2>
         <button onclick="sendTestNotification()">テスト通知を送信</button>
         <button onclick="sendTestNotificationViaServiceWorker()">Service Worker経由でテスト通知</button>
+        <button onclick="sendTestNotificationWithoutVAPID()">VAPIDキーなしでテスト通知</button>
+        <button onclick="resetNotificationState()">通知状態をリセット</button>
         <div id="testNotification" class="log"></div>
     </div>
 
@@ -321,19 +323,49 @@
             
             log(elementId, '🧪 テスト通知を送信中...');
             
-            if ('Notification' in window && Notification.permission === 'granted') {
-                const notification = showTestNotification(
-                    'MARUGO OEM Special Menu',
-                    'これはテスト通知です。プッシュ通知が正常に動作しています。'
-                );
-                
-                if (notification) {
-                    log(elementId, '✅ テスト通知を送信しました', 'success');
-                } else {
-                    log(elementId, '❌ テスト通知の送信に失敗しました', 'error');
-                }
-            } else {
+            // 詳細な診断情報を表示
+            log(elementId, `📱 現在の通知許可状態: ${Notification.permission}`, 'info');
+            log(elementId, `📱 ブラウザサポート: ${'Notification' in window ? 'あり' : 'なし'}`, 'info');
+            log(elementId, `📱 セキュアコンテキスト: ${window.isSecureContext ? 'あり' : 'なし'}`, 'info');
+            log(elementId, `📱 ユーザーエージェント: ${navigator.userAgent.includes('iPhone') ? 'iPhone' : navigator.userAgent.includes('Android') ? 'Android' : 'PC'}`, 'info');
+            
+            if (!('Notification' in window)) {
+                log(elementId, '❌ Notification API がサポートされていません', 'error');
+                log(elementId, '💡 このブラウザでは通知がサポートされていません', 'warning');
+                return;
+            }
+            
+            if (Notification.permission !== 'granted') {
                 log(elementId, '❌ 通知が許可されていません', 'error');
+                log(elementId, '💡 通知許可をリクエストしてください', 'info');
+                return;
+            }
+            
+            const notification = showTestNotification(
+                'MARUGO OEM Special Menu',
+                'これはテスト通知です。プッシュ通知が正常に動作しています。'
+            );
+            
+            if (notification) {
+                log(elementId, '✅ テスト通知を送信しました', 'success');
+                log(elementId, '📱 通知が表示されるはずです', 'info');
+                
+                // 通知のイベントリスナーを追加
+                notification.onclick = () => {
+                    log(elementId, '📱 通知がクリックされました', 'info');
+                    window.focus();
+                };
+                
+                notification.onerror = (error) => {
+                    log(elementId, `❌ 通知エラー: ${error}`, 'error');
+                };
+                
+                // 5秒後に通知の状態を確認
+                setTimeout(() => {
+                    log(elementId, '📱 通知の状態確認完了', 'info');
+                }, 5000);
+            } else {
+                log(elementId, '❌ テスト通知の送信に失敗しました', 'error');
             }
         }
 
@@ -616,7 +648,8 @@
                         log(elementId, '✅ 既存のサブスクリプションを取得しました', 'success');
                     } else {
                         log(elementId, '❌ サブスクリプションの作成に失敗しました', 'error');
-                        log(elementId, '💡 ブラウザの通知設定を確認してください', 'info');
+                        log(elementId, '💡 VAPIDキーが必要です', 'warning');
+                        log(elementId, '💡 現在はService Worker経由の通知のみ可能です', 'info');
                         return null;
                     }
                 }
@@ -799,6 +832,85 @@
             log(elementId, '', 'info');
             log(elementId, '✅ PWAとしてインストール後は通知が可能です', 'success');
             log(elementId, '⚠️ ブラウザから直接アクセスした場合は通知が制限されます', 'warning');
+        }
+
+        async function resetNotificationState() {
+            const elementId = 'testNotification';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🔄 通知状態をリセット中...');
+            
+            try {
+                // 既存の通知をすべて閉じる
+                if ('Notification' in window) {
+                    log(elementId, '📱 既存の通知を閉じています...', 'info');
+                }
+                
+                // Service Workerをリセット
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                log(elementId, `📊 既存のService Worker数: ${registrations.length}`, 'info');
+                
+                for (const registration of registrations) {
+                    await registration.unregister();
+                    log(elementId, `✅ Service Worker を削除しました: ${registration.scope}`, 'success');
+                }
+                
+                // 通知許可をリセット（可能な場合）
+                if ('Notification' in window) {
+                    log(elementId, `📱 現在の通知許可状態: ${Notification.permission}`, 'info');
+                    if (Notification.permission === 'denied') {
+                        log(elementId, '⚠️ 通知が拒否されています', 'warning');
+                        log(elementId, '💡 ブラウザの設定で通知を許可してください', 'info');
+                    }
+                }
+                
+                log(elementId, '✅ 通知状態のリセットが完了しました', 'success');
+                log(elementId, '💡 ページをリロードしてから再度テストしてください', 'info');
+                
+            } catch (error) {
+                log(elementId, `❌ 通知状態のリセットでエラー: ${error.message}`, 'error');
+                log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
+            }
+        }
+
+        async function sendTestNotificationWithoutVAPID() {
+            const elementId = 'testNotification';
+            document.getElementById(elementId).innerHTML = '';
+            
+            log(elementId, '🧪 VAPIDキーなしでテスト通知を送信中...');
+            
+            try {
+                // Service Workerの登録を確認
+                const registration = await navigator.serviceWorker.ready;
+                log(elementId, '✅ Service Worker が準備完了しました', 'success');
+                
+                if (registration.active) {
+                    // Service Workerにメッセージを送信（VAPIDキーなし）
+                    registration.active.postMessage({
+                        type: 'SHOW_NOTIFICATION',
+                        title: 'MARUGO OEM Special Menu',
+                        options: {
+                            body: 'VAPIDキーなしのテスト通知です',
+                            icon: '/OEM/icon-192.svg',
+                            badge: '/OEM/icon-192.svg',
+                            tag: 'test-without-vapid',
+                            requireInteraction: true,
+                            silent: false
+                        }
+                    });
+                    
+                    log(elementId, '✅ Service Worker にメッセージを送信しました', 'success');
+                    log(elementId, '📱 通知が表示されるはずです', 'info');
+                    log(elementId, '💡 VAPIDキーなしでもService Worker経由の通知は可能です', 'info');
+                } else {
+                    log(elementId, '❌ Service Worker がアクティブではありません', 'error');
+                    log(elementId, '💡 「Service Workerを強制アクティブ化」をクリックしてください', 'info');
+                }
+                
+            } catch (error) {
+                log(elementId, `❌ VAPIDキーなしのテスト通知でエラー: ${error.message}`, 'error');
+                log(elementId, `📝 エラー詳細: ${error.stack}`, 'error');
+            }
         }
 
         // ページ読み込み時に自動実行
