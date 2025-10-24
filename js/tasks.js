@@ -866,10 +866,25 @@ function subscribeToTasks() {
                     console.log('✅ タスクのリアルタイム更新が有効になりました');
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error('❌ タスクサブスクリプションエラー');
+                    // エラー時の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 タスクサブスクリプションの再接続を試行します');
+                        subscribeToTasks();
+                    }, 5000);
                 } else if (status === 'TIMED_OUT') {
                     console.error('⏰ タスクサブスクリプションタイムアウト');
+                    // タイムアウト時の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 タスクサブスクリプションの再接続を試行します');
+                        subscribeToTasks();
+                    }, 3000);
                 } else if (status === 'CLOSED') {
                     console.warn('🔒 タスクサブスクリプションが閉じられました');
+                    // 閉じられた場合の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 タスクサブスクリプションの再接続を試行します');
+                        subscribeToTasks();
+                    }, 2000);
                 }
             });
 

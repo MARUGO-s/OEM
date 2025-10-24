@@ -515,10 +515,25 @@ function subscribeToComments() {
                     console.log('✅ コメントのリアルタイム更新が有効になりました');
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error('❌ コメントサブスクリプションエラー');
+                    // エラー時の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 コメントサブスクリプションの再接続を試行します');
+                        subscribeToComments();
+                    }, 5000);
                 } else if (status === 'TIMED_OUT') {
                     console.error('⏰ コメントサブスクリプションタイムアウト');
+                    // タイムアウト時の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 コメントサブスクリプションの再接続を試行します');
+                        subscribeToComments();
+                    }, 3000);
                 } else if (status === 'CLOSED') {
                     console.warn('🔒 コメントサブスクリプションが閉じられました');
+                    // 閉じられた場合の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 コメントサブスクリプションの再接続を試行します');
+                        subscribeToComments();
+                    }, 2000);
                 }
             });
 

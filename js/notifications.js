@@ -1029,10 +1029,25 @@ function subscribeToNotifications() {
                     console.log('✅ 通知のリアルタイム更新が有効になりました');
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error('❌ 通知サブスクリプションエラー');
+                    // エラー時の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 通知サブスクリプションの再接続を試行します');
+                        subscribeToNotifications();
+                    }, 5000);
                 } else if (status === 'TIMED_OUT') {
                     console.error('⏰ 通知サブスクリプションタイムアウト');
+                    // タイムアウト時の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 通知サブスクリプションの再接続を試行します');
+                        subscribeToNotifications();
+                    }, 3000);
                 } else if (status === 'CLOSED') {
                     console.warn('🔒 通知サブスクリプションが閉じられました');
+                    // 閉じられた場合の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 通知サブスクリプションの再接続を試行します');
+                        subscribeToNotifications();
+                    }, 2000);
                 }
             });
 
