@@ -15,7 +15,7 @@
     --bg-color: #f8fafc;
     --card-bg: #ffffff;
     --text-primary: #1e293b;
-    --text-secondary: #64748b;
+    --text-secondary: #475569;
     --border-color: #e2e8f0;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
@@ -2020,7 +2020,13 @@ body {
 
 .roadmap-comment-empty {
     font-size: 0.82rem;
-    color: var(--text-secondary);
+    color: #475569;
+    font-weight: 500;
+    background-color: #f1f5f9;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    text-align: center;
 }
 
 .roadmap-task-comments .roadmap-comment-empty {
@@ -2275,7 +2281,9 @@ body {
     }
 
     .roadmap-comment-empty {
-        color: rgba(226, 232, 240, 0.7);
+        color: #475569;
+        background-color: #f1f5f9;
+        font-weight: 500;
     }
 }
 
