@@ -481,60 +481,24 @@ async function markNotificationAsRead(notificationId) {
             throw new Error('指定された通知が見つかりません');
         }
         
-        // ユーザー別の既読状態を作成/更新
+        // ユーザー別の既読状態を作成/更新（重複エラーを許容）
         console.log('ユーザー別既読状態を更新中...');
-        
-        // まず既存のレコードを確認
-        const { data: existingRecord, error: checkError } = await supabase
+
+        const upsertResult = await supabase
             .from('notification_read_status')
-            .select('id')
-            .eq('notification_id', notificationId)
-            .eq('user_id', appState.currentUser.id)
-            .maybeSingle();
+            .upsert({
+                notification_id: notificationId,
+                user_id: appState.currentUser.id,
+                read_at: new Date().toISOString()
+            }, { onConflict: 'notification_id,user_id' })
+            .select();
 
-        if (checkError) {
-            console.error('既存レコード確認エラー:', checkError);
-            throw checkError;
+        if (upsertResult.error && upsertResult.error.code !== '23505') {
+            console.error('既読状態更新エラー:', upsertResult.error);
+            throw upsertResult.error;
         }
 
-        let data, error;
-
-        if (existingRecord) {
-            // 既存レコードがある場合は更新
-            console.log('既存レコードを更新します:', existingRecord.id);
-            const updateResult = await supabase
-                .from('notification_read_status')
-                .update({ read_at: new Date().toISOString() })
-                .eq('id', existingRecord.id)
-                .select();
-            
-            data = updateResult.data;
-            error = updateResult.error;
-        } else {
-            // 既存レコードがない場合は新規作成
-            console.log('新規レコードを作成します');
-            const readStatusId = 'read_status_' + Date.now() + '_' + appState.currentUser.id;
-            
-            const insertResult = await supabase
-                .from('notification_read_status')
-                .insert({
-                    id: readStatusId,
-                    notification_id: notificationId,
-                    user_id: appState.currentUser.id,
-                    read_at: new Date().toISOString()
-                })
-                .select();
-            
-            data = insertResult.data;
-            error = insertResult.error;
-        }
-
-        if (error) {
-            console.error('既読状態更新エラー:', error);
-            throw error;
-        }
-        
-        console.log('既読状態更新成功:', data);
+        console.log('既読状態更新成功:', upsertResult.data);
 
         // ローカル状態を更新
         const notificationIndex = appState.notifications.findIndex(n => n.id === notificationId);
@@ -579,79 +543,30 @@ async function markAllNotificationsAsRead() {
 
         // ユーザー別の既読状態を一括作成
         console.log('ユーザー別既読状態を一括作成中...');
-        
-        // 個別処理で確実に処理（重複エラーを避けるため）
-        const individualResults = [];
-        for (const notification of unreadNotifications) {
-            try {
-                // まず既存のレコードを確認
-                const { data: existingRecord, error: checkError } = await supabase
-                    .from('notification_read_status')
-                    .select('id')
-                    .eq('notification_id', notification.id)
-                    .eq('user_id', appState.currentUser.id)
-                    .maybeSingle();
 
-                if (checkError) {
-                    console.error('既存レコード確認エラー:', checkError);
-                    continue;
-                }
+        const upsertPayload = unreadNotifications.map(notification => ({
+            notification_id: notification.id,
+            user_id: appState.currentUser.id,
+            read_at: new Date().toISOString()
+        }));
 
-                if (existingRecord) {
-                    // 既存レコードがある場合は更新
-                    console.log('既存レコードを更新します:', existingRecord.id);
-                    const updateResult = await supabase
-                        .from('notification_read_status')
-                        .update({ read_at: new Date().toISOString() })
-                        .eq('id', existingRecord.id)
-                        .select();
-                    
-                    if (updateResult.error) {
-                        console.error('更新エラー:', updateResult.error);
-                    } else {
-                        individualResults.push(updateResult.data);
-                    }
-                } else {
-                    // 既存レコードがない場合は新規作成
-                    console.log('新規レコードを作成します:', notification.id);
-                    const readStatusId = 'read_status_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9) + '_' + appState.currentUser.id;
-                    
-                    const insertResult = await supabase
-                        .from('notification_read_status')
-                        .insert({
-                            id: readStatusId,
-                            notification_id: notification.id,
-                            user_id: appState.currentUser.id,
-                            read_at: new Date().toISOString()
-                        })
-                        .select();
-                    
-                    if (insertResult.error) {
-                        console.error('挿入エラー:', insertResult.error);
-                    } else {
-                        individualResults.push(insertResult.data);
-                    }
-                }
-            } catch (individualError) {
-                console.error('個別処理例外:', individualError);
-            }
-        }
-        
-        const data = individualResults.flat();
-        const error = null;
+        const upsertResult = await supabase
+            .from('notification_read_status')
+            .upsert(upsertPayload, { onConflict: 'notification_id,user_id' })
+            .select();
 
-        if (error) {
-            console.error('一括更新エラー:', error);
+        if (upsertResult.error && upsertResult.error.code !== '23505') {
+            console.error('一括更新エラー:', upsertResult.error);
             console.error('エラー詳細:', {
-                message: error.message,
-                details: error.details,
-                hint: error.hint,
-                code: error.code
+                message: upsertResult.error.message,
+                details: upsertResult.error.details,
+                hint: upsertResult.error.hint,
+                code: upsertResult.error.code
             });
-            throw error;
+            throw upsertResult.error;
         }
-        
-        console.log('一括更新成功:', data);
+
+        console.log('一括更新成功:', upsertResult.data);
 
         // ローカル状態を更新
         appState.notifications.forEach(notification => {
