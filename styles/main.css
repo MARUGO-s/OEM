@@ -1898,8 +1898,8 @@ body {
 }
 
 .roadmap-side-comments.left .roadmap-task-comments {
-    align-items: flex-start;
-    text-align: left;
+    align-items: flex-end;
+    text-align: right;
     margin-right: 1.25rem;
 }
 
@@ -2076,8 +2076,8 @@ body {
 }
 
 .roadmap-side-comments.left .roadmap-task-comments {
-    align-items: flex-start;
-    text-align: left;
+    align-items: flex-end;
+    text-align: right;
 }
 
 .roadmap-side-comments.right .roadmap-task-comments {
@@ -2105,10 +2105,14 @@ body {
 
     .roadmap-side-comments.left .roadmap-task-comments {
         margin-right: 1rem;
+        align-items: flex-end;
+        text-align: right;
     }
 
     .roadmap-side-comments.right .roadmap-task-comments {
         margin-left: 1rem;
+        align-items: flex-start;
+        text-align: left;
     }
 }
 
