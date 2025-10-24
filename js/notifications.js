@@ -391,6 +391,7 @@ async function loadNotifications() {
         // ユーザー情報がある場合のみ既読状態を取得
         if (appState.currentUser && appState.currentUser.id) {
             console.log('ユーザー別既読状態を取得中...');
+            console.log('現在のユーザーID:', appState.currentUser.id);
             
             // ユーザー別の既読状態を取得
             const { data: readStatusData, error: readStatusError } = await supabase
@@ -402,26 +403,46 @@ async function loadNotifications() {
                 console.warn('既読状態取得エラー:', readStatusError);
             }
 
+            console.log('取得された既読状態データ:', readStatusData);
+            console.log('既読状態データ数:', readStatusData?.length || 0);
+
             // 既読状態のマップを作成
             const readStatusMap = new Map();
             if (readStatusData) {
                 readStatusData.forEach(status => {
                     readStatusMap.set(status.notification_id, status);
+                    console.log('既読状態マップに追加:', {
+                        notification_id: status.notification_id,
+                        user_id: status.user_id,
+                        read_at: status.read_at
+                    });
                 });
             }
+
+            console.log('既読状態マップのサイズ:', readStatusMap.size);
 
             // 通知データを処理してユーザー別の既読状態を設定
             appState.notifications = (notificationsData || []).map(notification => {
                 const userReadStatus = readStatusMap.get(notification.id);
+                const isRead = !!userReadStatus;
+                
+                console.log('通知の既読状態を設定:', {
+                    notification_id: notification.id,
+                    user_id: appState.currentUser.id,
+                    hasReadStatus: !!userReadStatus,
+                    isRead: isRead,
+                    read_at: userReadStatus?.read_at || null
+                });
                 
                 return {
                     ...notification,
-                    read: !!userReadStatus, // ユーザー別の既読状態
+                    read: isRead, // ユーザー別の既読状態
                     read_at: userReadStatus?.read_at || null
                 };
             });
         } else {
             console.warn('ユーザー情報が取得できないため、既読状態なしで通知を読み込みます');
+            console.log('appState.currentUser:', appState.currentUser);
             // ユーザー情報がない場合は既読状態なしで表示
             appState.notifications = (notificationsData || []).map(notification => ({
                 ...notification,
@@ -483,6 +504,11 @@ async function markNotificationAsRead(notificationId) {
         
         // ユーザー別の既読状態を作成/更新（重複エラーを許容）
         console.log('ユーザー別既読状態を更新中...');
+        console.log('更新するデータ:', {
+            notification_id: notificationId,
+            user_id: appState.currentUser.id,
+            read_at: new Date().toISOString()
+        });
 
         const upsertResult = await supabase
             .from('notification_read_status')
@@ -495,10 +521,17 @@ async function markNotificationAsRead(notificationId) {
 
         if (upsertResult.error && upsertResult.error.code !== '23505') {
             console.error('既読状態更新エラー:', upsertResult.error);
+            console.error('エラー詳細:', {
+                message: upsertResult.error.message,
+                details: upsertResult.error.details,
+                hint: upsertResult.error.hint,
+                code: upsertResult.error.code
+            });
             throw upsertResult.error;
         }
 
         console.log('既読状態更新成功:', upsertResult.data);
+        console.log('更新されたレコード数:', upsertResult.data?.length || 0);
 
         // ローカル状態を更新
         const notificationIndex = appState.notifications.findIndex(n => n.id === notificationId);
@@ -543,12 +576,16 @@ async function markAllNotificationsAsRead() {
 
         // ユーザー別の既読状態を一括作成
         console.log('ユーザー別既読状態を一括作成中...');
+        console.log('一括更新する通知数:', unreadNotifications.length);
+        console.log('一括更新する通知ID一覧:', unreadNotifications.map(n => n.id));
 
         const upsertPayload = unreadNotifications.map(notification => ({
             notification_id: notification.id,
             user_id: appState.currentUser.id,
             read_at: new Date().toISOString()
         }));
+
+        console.log('一括更新ペイロード:', upsertPayload);
 
         const upsertResult = await supabase
             .from('notification_read_status')
