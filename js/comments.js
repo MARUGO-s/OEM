@@ -309,8 +309,26 @@ async function postComment(content) {
             }
         }, 500);
         
+        // 最終的な確実性のためのリロード（オプション）
+        // コメントが表示されない場合の最終手段として1.5秒後にリロード
+        setTimeout(() => {
+            console.log('🔄 最終確認: コメント表示の確実性をチェックします');
+            const commentContainer = document.getElementById('comments-container');
+            if (commentContainer && commentContainer.innerHTML.includes('まだコメントがありません')) {
+                console.log('⚠️ コメントが表示されていないため、最終リロードを実行します');
+                window.location.reload();
+            }
+        }, 1500);
+        
         // バックグラウンドでデータを再読み込み（整合性確保）
-        loadComments().catch(err => console.error('コメント再読み込みエラー:', err));
+        loadComments().catch(err => {
+            console.error('コメント再読み込みエラー:', err);
+            // エラー時はフォールバックとしてリロード
+            console.log('🔄 コメント表示エラーのため、フォールバックリロードを実行します');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        });
 
         // 通知を送信（エラーが発生してもコメント投稿は成功とする）
         try {
