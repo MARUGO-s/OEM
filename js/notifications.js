@@ -971,6 +971,14 @@ function toggleNotificationPanel() {
     }
 }
 
+// 通知パネルを閉じる
+function closeNotificationPanel() {
+    const panel = document.getElementById('notification-panel');
+    if (panel) {
+        panel.classList.remove('open');
+    }
+}
+
 // イベントリスナー（DOMContentLoaded後に登録、重複防止）
 document.addEventListener('DOMContentLoaded', () => {
     const notificationBell = document.getElementById('notification-bell');
@@ -1007,6 +1015,20 @@ document.addEventListener('DOMContentLoaded', () => {
         markAllReadBtn.addEventListener('click', markAllNotificationsAsRead);
         markAllReadBtn.dataset.listenerAttached = 'true';
     }
+    
+    // 枠外クリックで通知パネルを閉じる
+    document.addEventListener('click', (event) => {
+        const panel = document.getElementById('notification-panel');
+        const notificationBell = document.getElementById('notification-bell');
+        
+        // 通知パネルが開いている場合のみ処理
+        if (panel && panel.classList.contains('open')) {
+            // クリックされた要素が通知パネル内または通知ベルでない場合
+            if (!panel.contains(event.target) && !notificationBell.contains(event.target)) {
+                closeNotificationPanel();
+            }
+        }
+    });
     
     // ページ読み込み時に通知許可状態をチェック
     checkAndShowNotificationButtons();
