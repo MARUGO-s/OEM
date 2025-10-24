@@ -95,6 +95,8 @@ async function sendServerPushNotification(notification) {
             return;
         }
 
+        const unreadCount = appState.notifications.filter(n => !n.read).length;
+
         const payload = {
             title: notification.title || 'MARUGO OEM Special Menu',
             body: notification.message || notification.body || '新しい通知があります',
@@ -114,7 +116,8 @@ async function sendServerPushNotification(notification) {
         const { error } = await supabase.functions.invoke('send-push', {
             body: {
                 notification: payload,
-                skipUserId
+                skipUserId,
+                badgeCount: unreadCount
             }
         });
 
@@ -368,19 +371,50 @@ function checkNotificationPermission() {
 // 通知一覧の読み込み
 async function loadNotifications() {
     try {
+        // ユーザー情報の確認
+        if (!appState.currentUser || !appState.currentUser.id) {
+            console.warn('ユーザー情報が取得できないため、通知を読み込めません');
+            appState.notifications = [];
+            renderNotifications();
+            return;
+        }
+
+        // 通知とユーザー別の既読状態を結合して取得
         const { data, error } = await supabase
             .from('notifications')
-            .select('*')
+            .select(`
+                *,
+                notification_read_status!left(
+                    id,
+                    read_at,
+                    user_id
+                )
+            `)
             .order('created_at', { ascending: false })
             .limit(50);
 
         if (error) throw error;
 
-        appState.notifications = data || [];
-        console.log('読み込まれた通知:', appState.notifications);
+        // 通知データを処理してユーザー別の既読状態を設定
+        appState.notifications = (data || []).map(notification => {
+            // 現在のユーザーの既読状態を確認
+            const userReadStatus = notification.notification_read_status?.find(
+                status => status.user_id === appState.currentUser.id
+            );
+            
+            return {
+                ...notification,
+                read: !!userReadStatus, // ユーザー別の既読状態
+                read_at: userReadStatus?.read_at || null
+            };
+        });
+
+        console.log('読み込まれた通知（ユーザー別既読状態）:', appState.notifications);
         console.log('通知IDの例:', appState.notifications.length > 0 ? appState.notifications[0].id : 'なし');
         console.log('通知の種類別カウント:', {
             total: appState.notifications.length,
+            read: appState.notifications.filter(n => n.read).length,
+            unread: appState.notifications.filter(n => !n.read).length,
             new_comment: appState.notifications.filter(n => n.type === 'new_comment').length,
             new_discussion_comment: appState.notifications.filter(n => n.type === 'new_discussion_comment').length,
             meeting_scheduled: appState.notifications.filter(n => n.type === 'meeting_scheduled').length
@@ -393,16 +427,20 @@ async function loadNotifications() {
     }
 }
 
-// 通知を既読にする
+// 通知を既読にする（ユーザー別）
 async function markNotificationAsRead(notificationId) {
     try {
         console.log('既読にする通知ID:', notificationId);
-        console.log('通知IDの型:', typeof notificationId);
-        console.log('通知IDの長さ:', notificationId ? notificationId.length : 'null');
+        console.log('現在のユーザー:', appState.currentUser);
         
         // 通知IDの検証
         if (!notificationId) {
             throw new Error('通知IDが指定されていません');
+        }
+        
+        // ユーザー情報の確認
+        if (!appState.currentUser || !appState.currentUser.id) {
+            throw new Error('ユーザー情報が取得できません');
         }
         
         // 現在の通知データを確認
@@ -413,33 +451,23 @@ async function markNotificationAsRead(notificationId) {
             throw new Error('指定された通知が見つかりません');
         }
         
-        // 通知IDの形式を確認（UUID形式の場合はそのまま使用）
-        console.log('通知ID形式確認:', {
-            id: notificationId,
-            isUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notificationId),
-            hasPrefix: notificationId.startsWith('notification_')
-        });
-        
-        // Supabaseで通知を既読に更新
-        console.log('Supabase更新開始...');
+        // ユーザー別の既読状態を作成/更新
+        console.log('ユーザー別既読状態を更新中...');
         const { data, error } = await supabase
-            .from('notifications')
-            .update({ read: true })
-            .eq('id', notificationId)
+            .from('notification_read_status')
+            .upsert({
+                notification_id: notificationId,
+                user_id: appState.currentUser.id,
+                read_at: new Date().toISOString()
+            })
             .select();
 
         if (error) {
-            console.error('Supabase更新エラー:', error);
-            console.error('エラー詳細:', {
-                message: error.message,
-                details: error.details,
-                hint: error.hint,
-                code: error.code
-            });
+            console.error('既読状態更新エラー:', error);
             throw error;
         }
         
-        console.log('Supabase更新成功:', data);
+        console.log('既読状態更新成功:', data);
 
         // ローカル状態を更新
         const notificationIndex = appState.notifications.findIndex(n => n.id === notificationId);
@@ -464,9 +492,14 @@ async function markNotificationAsRead(notificationId) {
     }
 }
 
-// すべての通知を既読にする
+// すべての通知を既読にする（ユーザー別）
 async function markAllNotificationsAsRead() {
     try {
+        // ユーザー情報の確認
+        if (!appState.currentUser || !appState.currentUser.id) {
+            throw new Error('ユーザー情報が取得できません');
+        }
+
         // 未読の通知のみを取得
         const unreadNotifications = appState.notifications.filter(n => !n.read);
         console.log('未読通知数:', unreadNotifications.length);
@@ -477,12 +510,17 @@ async function markAllNotificationsAsRead() {
             return;
         }
 
-        // Supabaseで一括更新
-        console.log('一括更新開始...');
+        // ユーザー別の既読状態を一括作成
+        console.log('ユーザー別既読状態を一括作成中...');
+        const readStatusData = unreadNotifications.map(notification => ({
+            notification_id: notification.id,
+            user_id: appState.currentUser.id,
+            read_at: new Date().toISOString()
+        }));
+
         const { data, error } = await supabase
-            .from('notifications')
-            .update({ read: true })
-            .in('id', unreadNotifications.map(n => n.id))
+            .from('notification_read_status')
+            .upsert(readStatusData)
             .select();
 
         if (error) {
@@ -595,12 +633,39 @@ function getNotificationIcon(type) {
 function updateNotificationBadge() {
     const unreadCount = appState.notifications.filter(n => !n.read).length;
     const badge = document.getElementById('notification-badge');
-    
+
     if (unreadCount > 0) {
         badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
         badge.classList.remove('hidden');
     } else {
         badge.classList.add('hidden');
+    }
+
+    updateAppIconBadge(unreadCount);
+}
+
+// PWAアイコンのバッジ更新
+function updateAppIconBadge(unreadCount) {
+    try {
+        if (navigator.setAppBadge) {
+            if (unreadCount > 0) {
+                navigator.setAppBadge(unreadCount).catch(err => {
+                    console.warn('setAppBadge失敗:', err);
+                });
+            } else if (navigator.clearAppBadge) {
+                navigator.clearAppBadge().catch(err => {
+                    console.warn('clearAppBadge失敗:', err);
+                });
+            }
+        } else if (navigator.experimentalSetAppBadge) {
+            if (unreadCount > 0) {
+                navigator.experimentalSetAppBadge(unreadCount);
+            } else if (navigator.experimentalClearAppBadge) {
+                navigator.experimentalClearAppBadge();
+            }
+        }
+    } catch (error) {
+        console.warn('アプリアイコンバッジ更新エラー:', error);
     }
 }
 
@@ -680,6 +745,9 @@ async function sendPushNotification(notificationData) {
             notificationData: notificationData
         });
 
+        const unreadCount = appState.notifications.filter(n => !n.read).length;
+        updateAppIconBadge(unreadCount);
+
         // 通知許可が得られているか確認
         const permission = checkNotificationPermission();
         if (permission !== 'granted') {
@@ -718,7 +786,8 @@ async function sendPushNotification(notificationData) {
                             tag: notificationData.related_id || 'oem-notification',
                             url: '/OEM/',
                             notification_id: notificationData.id,
-                            type: notificationData.type || 'general'
+                            type: notificationData.type || 'general',
+                            badgeCount: unreadCount
                         }
                     });
                     console.log('✅ Service Workerに通知メッセージを送信しました');
@@ -816,7 +885,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const notificationBell = document.getElementById('notification-bell');
     const closeNotifications = document.getElementById('close-notifications');
     const enablePushBtn = document.getElementById('enable-push-notifications-btn');
-    const testNotificationBtn = document.getElementById('test-notification-btn');
     const markAllReadBtn = document.getElementById('mark-all-read-btn');
     
     if (notificationBell && !notificationBell.dataset.listenerAttached) {
@@ -839,21 +907,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const granted = await requestNotificationPermission();
             if (granted) {
                 hideNotificationPermissionButton();
-                showTestNotificationButton();
             }
         });
         enablePushBtn.dataset.listenerAttached = 'true';
-    }
-    
-    if (testNotificationBtn && !testNotificationBtn.dataset.listenerAttached) {
-        testNotificationBtn.addEventListener('click', () => {
-            console.log('テスト通知ボタンがクリックされました');
-            showBrowserNotification('テスト通知', {
-                body: 'これはテスト通知です。通知が正常に動作しています！',
-                tag: 'test-notification'
-            });
-        });
-        testNotificationBtn.dataset.listenerAttached = 'true';
     }
     
     if (markAllReadBtn && !markAllReadBtn.dataset.listenerAttached) {
@@ -935,14 +991,6 @@ function hideNotificationPermissionButton() {
     }
 }
 
-// テスト通知ボタンを表示
-function showTestNotificationButton() {
-    const button = document.getElementById('test-notification-btn');
-    if (button && 'Notification' in window && Notification.permission === 'granted') {
-        button.style.display = 'inline-block';
-    }
-}
-
 // 通知ボタンの表示状態をチェック
 function checkAndShowNotificationButtons() {
     console.log('🔍 通知ボタン表示チェック開始');
@@ -960,27 +1008,19 @@ function checkAndShowNotificationButtons() {
         console.log('現在の通知許可状態:', permission);
         
         if (permission === 'default') {
-            // 未許可の場合は許可ボタンを表示
             console.log('📝 通知許可ボタンを表示します');
             showNotificationPermissionButton();
         } else if (permission === 'granted') {
-            // 許可済みの場合はテストボタンを表示
-            console.log('✅ 通知テストボタンを表示します');
+            console.log('✅ 通知は許可済みのためボタンを整理します');
             hideNotificationPermissionButton();
-            showTestNotificationButton();
         } else if (permission === 'denied') {
-            // 拒否されている場合は両方非表示
             console.log('❌ 通知が拒否されているため、ボタンを非表示にします');
             hideNotificationPermissionButton();
-            const testBtn = document.getElementById('test-notification-btn');
-            if (testBtn) testBtn.style.display = 'none';
         }
     } else {
         console.warn('⚠️ 通知がサポートされていません');
         // 通知がサポートされていない場合の対応
         hideNotificationPermissionButton();
-        const testBtn = document.getElementById('test-notification-btn');
-        if (testBtn) testBtn.style.display = 'none';
         
         // ユーザーに詳細情報を表示
         const enableBtn = document.getElementById('enable-push-notifications-btn');

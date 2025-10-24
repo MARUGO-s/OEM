@@ -1,5 +1,5 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'oem-app-v39';
+const CACHE_NAME = 'oem-app-v40';
 
 // ベースパスを自動検出（GitHub Pages対応）
 const BASE_PATH = self.registration.scope;
@@ -170,6 +170,8 @@ self.addEventListener('push', (event) => {
   
   console.log('📢 通知を表示:', { title, message });
 
+  const badgeCount = typeof notificationData.badgeCount === 'number' ? notificationData.badgeCount : undefined;
+
   const options = {
     body: message,
     icon: '/OEM/icon-192.svg',
@@ -205,6 +207,18 @@ self.addEventListener('push', (event) => {
     try {
       await self.registration.showNotification(title, options);
       console.log('✅ プッシュ通知を表示しました');
+
+      if (typeof badgeCount === 'number') {
+        if (self.registration.setAppBadge && badgeCount > 0) {
+          self.registration.setAppBadge(badgeCount).catch(err => {
+            console.warn('Service Worker setAppBadge失敗:', err);
+          });
+        } else if (self.registration.clearAppBadge) {
+          self.registration.clearAppBadge().catch(err => {
+            console.warn('Service Worker clearAppBadge失敗:', err);
+          });
+        }
+      }
     } catch (error) {
       console.error('❌ プッシュ通知の表示に失敗:', error);
     }
@@ -219,6 +233,8 @@ self.addEventListener('message', (event) => {
     const notificationData = event.data.notificationData;
     console.log('🔔 通知を表示します:', notificationData);
     
+    const badgeCount = typeof notificationData.badgeCount === 'number' ? notificationData.badgeCount : undefined;
+
     const options = {
       body: notificationData.message,
       icon: notificationData.icon,
@@ -253,6 +269,18 @@ self.addEventListener('message', (event) => {
       try {
         await self.registration.showNotification(notificationData.title, options);
         console.log('✅ Service Worker: 通知を表示しました');
+
+        if (typeof badgeCount === 'number') {
+          if (self.registration.setAppBadge && badgeCount > 0) {
+            self.registration.setAppBadge(badgeCount).catch(err => {
+              console.warn('Service Worker setAppBadge失敗:', err);
+            });
+          } else if (self.registration.clearAppBadge) {
+            self.registration.clearAppBadge().catch(err => {
+              console.warn('Service Worker clearAppBadge失敗:', err);
+            });
+          }
+        }
       } catch (error) {
         console.error('❌ Service Worker: 通知表示エラー:', error);
       }

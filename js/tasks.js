@@ -742,8 +742,36 @@ async function deleteTimelineComment(commentId) {
 
         console.log('タイムラインコメント削除成功:', commentId);
 
-        // タスクを再読み込み
+        // ローカル状態を更新
+        appState.comments = appState.comments.filter(comment => comment.id !== commentId);
+
+        // コメント一覧とタイムラインを再描画
+        if (typeof renderComments === 'function') {
+            renderComments();
+        }
+
+        if (typeof renderTasks === 'function') {
+            renderTasks();
+            setTimeout(() => renderTasks(), 100);
+        }
+
+        // タスクを再読み込み（非同期整合性）
         await loadTasks();
+
+        // バックグラウンドでコメントを再同期
+        setTimeout(() => {
+            loadComments()
+                .then(() => {
+                    appState.comments = appState.comments.filter(comment => comment.id !== commentId);
+                    if (typeof renderComments === 'function') {
+                        renderComments();
+                    }
+                    if (typeof renderTasks === 'function') {
+                        renderTasks();
+                    }
+                })
+                .catch(err => console.error('コメント再読み込みエラー:', err));
+        }, 400);
 
         // 通知を表示
         showNotification('コメントを削除しました', 'success');

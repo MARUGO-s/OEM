@@ -252,54 +252,6 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ロードマップコメント削除機能
-async function deleteRoadmapComment(commentId) {
-    try {
-        // ユーザー情報のバリデーション
-        if (!appState.currentUser || !appState.currentUser.username) {
-            alert('コメントを削除するにはログインが必要です。');
-            return;
-        }
-
-        // 確認ダイアログ
-        if (!confirm('このコメントを削除しますか？')) {
-            return;
-        }
-
-        console.log('ロードマップコメント削除開始:', commentId);
-
-        // Supabaseからコメントを削除
-        const { error } = await supabase
-            .from('task_comments')
-            .delete()
-            .eq('id', commentId);
-
-        if (error) {
-            console.error('ロードマップコメント削除エラー:', error);
-            alert('コメントの削除に失敗しました。しばらく待ってから再度お試しください。');
-            return;
-        }
-
-        console.log('ロードマップコメント削除成功:', commentId);
-
-        // モーダルからタスクIDを取得
-        const modal = document.getElementById('roadmap-item-modal');
-        const taskId = modal ? modal.dataset.taskId : null;
-
-        if (taskId) {
-            // コメントを再読み込み
-            await loadRoadmapComments(taskId);
-        }
-
-        // 通知を表示
-        showNotification('コメントを削除しました', 'success');
-
-    } catch (error) {
-        console.error('ロードマップコメント削除エラー:', error);
-        alert('コメントの削除に失敗しました');
-    }
-}
-
 // タスク削除機能
 async function deleteTask(taskId) {
     try {
@@ -575,7 +527,7 @@ async function submitRoadmapComment() {
         };
 
         // Supabaseに保存
-        let insertedData = null;
+        let insertedComment = null;
         try {
             const { data, error } = await supabase
                 .from('task_comments')
@@ -588,8 +540,8 @@ async function submitRoadmapComment() {
                 return;
             }
             
-            insertedData = data;
-            console.log('Supabaseコメント投稿成功:', insertedData);
+            insertedComment = Array.isArray(data) && data.length > 0 ? data[0] : newComment;
+            console.log('Supabaseコメント投稿成功:', insertedComment);
         } catch (insertError) {
             console.error('Supabaseコメント投稿例外:', insertError);
             alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
@@ -602,14 +554,81 @@ async function submitRoadmapComment() {
             roadmapCommentInput.value = '';
         }
         
-        // Supabaseコメント一覧を再読み込み
-        await loadRoadmapComments(taskId);
-        
+        // ロードマップモーダルとローカル状態を即時更新
+        if (insertedComment) {
+            roadmapCommentCache = [
+                insertedComment,
+                ...roadmapCommentCache.filter(comment => comment.id !== insertedComment.id)
+            ];
+            renderRoadmapComments(roadmapCommentCache);
+
+            appState.comments = [
+                insertedComment,
+                ...appState.comments.filter(comment => comment.id !== insertedComment.id)
+            ];
+        }
+
         // タイムラインを再描画して最新コメントを反映
         if (typeof renderTasks === 'function') {
             renderTasks();
         }
-        
+
+        if (typeof renderComments === 'function') {
+            renderComments();
+        }
+
+        // バックグラウンドで全コメント/ロードマップコメントを再同期
+        setTimeout(() => {
+            loadRoadmapComments(taskId).catch(err => console.error('コメント再読み込みエラー (ロードマップ):', err));
+
+            loadComments()
+                .then(() => {
+                    if (insertedComment && !appState.comments.some(comment => comment.id === insertedComment.id)) {
+                        appState.comments = [
+                            insertedComment,
+                            ...appState.comments
+                        ];
+                        if (typeof renderComments === 'function') {
+                            renderComments();
+                        }
+                        if (typeof renderTasks === 'function') {
+                            renderTasks();
+                        }
+                    }
+                })
+                .catch(err => console.error('コメント再読み込みエラー:', err));
+        }, 600);
+
+        // 通知を送信（エラーが発生してもコメント投稿は成功とする）
+        try {
+            const previewText = content.length > 50 ? content.substring(0, 50) + '…' : content;
+            console.log('🔔 ロードマップコメントの通知を作成します:', {
+                type: 'new_comment',
+                message: `${currentUser?.username || 'ユーザー'}さんがタスクにコメントしました: ${previewText}`,
+                related_id: insertedComment?.id
+            });
+
+            const notificationResult = await createNotification({
+                type: 'new_comment',
+                message: `${currentUser?.username || 'ユーザー'}さんがタスクにコメントしました: ${previewText}`,
+                related_id: insertedComment?.id || newComment.id
+            });
+
+            console.log('🔔 ロードマップコメント通知作成結果:', notificationResult);
+
+            await loadNotifications();
+
+            if (typeof updateNotificationBadge === 'function') {
+                updateNotificationBadge();
+            }
+
+            if (typeof renderNotifications === 'function') {
+                renderNotifications();
+            }
+        } catch (notificationError) {
+            console.error('❌ ロードマップコメント通知送信エラー:', notificationError);
+        }
+
         // 通知を表示（エラーが発生してもコメント投稿は成功とする）
         try {
             showNotification('コメントを投稿しました', 'success');
@@ -618,7 +637,7 @@ async function submitRoadmapComment() {
             // 通知エラーはコメント投稿を阻害しない
         }
         
-        console.log('コメント投稿完了:', insertedData);
+        console.log('コメント投稿完了:', insertedComment);
         
     } catch (error) {
         console.error('コメント投稿エラー:', error);
@@ -627,7 +646,7 @@ async function submitRoadmapComment() {
 }
 
 // コメント詳細ポップアップの表示
-window.showCommentPopup = function(commentId) {
+window.showCommentPopup = async function(commentId) {
     try {
         // commentIdの検証
         if (!commentId) {
@@ -641,9 +660,39 @@ window.showCommentPopup = function(commentId) {
             existingPopup.remove();
         }
         
-        // キャッシュからコメントを取得
-        const comment = roadmapCommentCache.find(c => c.id === commentId);
-        
+        // コメントを段階的に探索（モーダルキャッシュ → 全体キャッシュ → Supabase）
+        let comment = roadmapCommentCache.find(c => c.id === commentId);
+
+        if (!comment && Array.isArray(appState.comments)) {
+            comment = appState.comments.find(c => c.id === commentId);
+        }
+
+        if (!comment) {
+            console.log('🛰️ コメントキャッシュに存在しないためSupabaseから取得します:', commentId);
+            try {
+                const { data, error } = await supabase
+                    .from('task_comments')
+                    .select('*')
+                    .eq('id', commentId)
+                    .maybeSingle();
+
+                if (error) {
+                    console.error('コメント単体取得エラー:', error);
+                }
+
+                if (data) {
+                    comment = data;
+                    // キャッシュに追加して次回以降の検索を高速化
+                    roadmapCommentCache = [comment, ...roadmapCommentCache.filter(c => c.id !== comment.id)];
+                    if (Array.isArray(appState.comments)) {
+                        appState.comments = [comment, ...appState.comments.filter(c => c.id !== comment.id)];
+                    }
+                }
+            } catch (fetchError) {
+                console.error('コメント取得例外:', fetchError);
+            }
+        }
+
         if (!comment) {
             alert('コメントが見つかりません');
             return;
@@ -977,11 +1026,17 @@ async function deleteRoadmapComment(commentId) {
         console.error('commentIdが指定されていません');
         return;
     }
-    
+
+    // ユーザー情報のバリデーション
+    if (!appState.currentUser || !appState.currentUser.username) {
+        alert('コメントを削除するにはログインが必要です。');
+        return;
+    }
+
     if (!confirm('このコメントを削除しますか？')) {
         return;
     }
-    
+
     try {
         // Supabaseからコメントを削除
         const { error } = await supabase
@@ -993,23 +1048,51 @@ async function deleteRoadmapComment(commentId) {
             console.error('コメント削除エラー:', error);
             throw error;
         }
-        
-        // モーダル内のコメント一覧を再読み込み
-        const modal = document.getElementById('roadmap-item-modal');
-        if (modal && modal.dataset.taskId) {
-            await loadRoadmapComments(modal.dataset.taskId);
-        }
-        
-        // タイムラインを再描画
+
+        // ローカル状態を更新（即時反映）
+        appState.comments = appState.comments.filter(comment => comment.id !== commentId);
+
+        // モーダルキャッシュを即時更新
+        roadmapCommentCache = roadmapCommentCache.filter(comment => comment.id !== commentId);
+        renderRoadmapComments(roadmapCommentCache);
+
+        // タイムラインとコメント一覧を再描画
         if (typeof renderTasks === 'function') {
             renderTasks();
+            setTimeout(() => renderTasks(), 100);
         }
-        
+
+        if (typeof renderComments === 'function') {
+            renderComments();
+        }
+
+        // バックグラウンドで全コメント/ロードマップコメントを再同期
+        const modal = document.getElementById('roadmap-item-modal');
+        const taskId = modal ? modal.dataset.taskId : null;
+
+        setTimeout(() => {
+            if (taskId) {
+                loadRoadmapComments(taskId).catch(err => console.error('コメント再読み込みエラー (ロードマップ):', err));
+            }
+
+            loadComments()
+                .then(() => {
+                    appState.comments = appState.comments.filter(comment => comment.id !== commentId);
+                    if (typeof renderComments === 'function') {
+                        renderComments();
+                    }
+                    if (typeof renderTasks === 'function') {
+                        renderTasks();
+                    }
+                })
+                .catch(err => console.error('コメント再読み込みエラー:', err));
+        }, 500);
+
         // 通知を表示
         showNotification('コメントを削除しました', 'success');
-        
+
         console.log('コメント削除完了:', commentId);
-        
+
     } catch (error) {
         console.error('コメント削除エラー:', error);
         showNotification('コメントの削除に失敗しました', 'error');
