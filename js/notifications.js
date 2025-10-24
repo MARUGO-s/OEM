@@ -517,17 +517,51 @@ async function markAllNotificationsAsRead() {
 
         // ユーザー別の既読状態を一括作成
         console.log('ユーザー別既読状態を一括作成中...');
+        const baseTime = Date.now();
         const readStatusData = unreadNotifications.map((notification, index) => ({
-            id: 'read_status_' + Date.now() + '_' + index + '_' + appState.currentUser.id,
+            id: 'read_status_' + (baseTime + index) + '_' + Math.random().toString(36).substr(2, 9) + '_' + appState.currentUser.id,
             notification_id: notification.id,
             user_id: appState.currentUser.id,
             read_at: new Date().toISOString()
         }));
 
-        const { data, error } = await supabase
-            .from('notification_read_status')
-            .upsert(readStatusData)
-            .select();
+        // 一括処理を試行、失敗時は個別処理にフォールバック
+        let data, error;
+        
+        try {
+            console.log('一括upsertを試行中...');
+            const result = await supabase
+                .from('notification_read_status')
+                .upsert(readStatusData)
+                .select();
+            
+            data = result.data;
+            error = result.error;
+        } catch (upsertError) {
+            console.warn('一括upsertが失敗、個別処理にフォールバック:', upsertError);
+            
+            // 個別処理にフォールバック
+            const individualResults = [];
+            for (const readStatus of readStatusData) {
+                try {
+                    const individualResult = await supabase
+                        .from('notification_read_status')
+                        .upsert([readStatus])
+                        .select();
+                    
+                    if (individualResult.error) {
+                        console.error('個別処理エラー:', individualResult.error);
+                    } else {
+                        individualResults.push(individualResult.data);
+                    }
+                } catch (individualError) {
+                    console.error('個別処理例外:', individualError);
+                }
+            }
+            
+            data = individualResults.flat();
+            error = null;
+        }
 
         if (error) {
             console.error('一括更新エラー:', error);
