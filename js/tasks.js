@@ -831,22 +831,7 @@ async function deleteTimelineComment(commentId) {
                 .catch(err => console.error('コメント再読み込みエラー:', err));
         }, 400);
 
-        try {
-            await createNotification({
-                type: 'task_comment_deleted',
-                message: `${appState.currentUser?.username || 'ユーザー'}さんがタスクコメントを削除しました。`,
-                related_id: commentId
-            });
-            await loadNotifications();
-            if (typeof updateNotificationBadge === 'function') {
-                updateNotificationBadge();
-            }
-            if (typeof renderNotifications === 'function') {
-                renderNotifications();
-            }
-        } catch (notificationError) {
-            console.error('タスクコメント削除通知エラー:', notificationError);
-        }
+        // 通知はcomments.jsで作成されるため、ここでは作成しない
 
         // 通知を表示
         showNotification('コメントを削除しました', 'success');
