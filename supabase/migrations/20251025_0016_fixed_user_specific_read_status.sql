@@ -66,3 +66,4 @@ END $$;
 
 -- 古いreadカラムを削除（オプション - 後で削除可能）
 -- ALTER TABLE notifications DROP COLUMN IF EXISTS read;
+
