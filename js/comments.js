@@ -139,7 +139,7 @@ async function deleteComment(commentId) {
 
         // Supabaseからコメントを削除
         const { error } = await supabase
-            .from('comments')
+            .from('task_comments')
             .delete()
             .eq('id', commentId);
 
@@ -293,13 +293,21 @@ async function postComment(content) {
             renderTasks();
         }
         
-        // スマートフォンでの表示更新を確実にする
+        // スマートフォンでの表示更新を確実にする（複数回実行）
         setTimeout(() => {
             renderComments();
             if (typeof renderTasks === 'function') {
                 renderTasks();
             }
         }, 100);
+        
+        // 追加の表示更新（確実性を高める）
+        setTimeout(() => {
+            renderComments();
+            if (typeof renderTasks === 'function') {
+                renderTasks();
+            }
+        }, 500);
         
         // バックグラウンドでデータを再読み込み（整合性確保）
         loadComments().catch(err => console.error('コメント再読み込みエラー:', err));

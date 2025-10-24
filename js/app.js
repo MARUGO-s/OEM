@@ -101,6 +101,18 @@ async function loadAllData() {
             typeof loadMeetings === 'function' ? loadMeetings().catch(err => console.error('会議読み込みエラー:', err)) : Promise.resolve()
         ]);
         
+        // データ読み込み後にUIを強制更新
+        console.log('🔄 データ読み込み後のUI更新を実行します');
+        if (typeof renderTasks === 'function') {
+            renderTasks();
+        }
+        if (typeof renderComments === 'function') {
+            renderComments();
+        }
+        if (typeof renderDiscussionComments === 'function') {
+            renderDiscussionComments();
+        }
+        
         // リアルタイム更新を開始（エラーハンドリング付き）
         console.log('🔄 リアルタイム機能を初期化します...');
         
@@ -151,6 +163,20 @@ async function loadAllData() {
             
             console.log('✅ すべてのリアルタイムサブスクリプションを開始しました');
             console.log('📊 登録済みサブスクリプション数:', appState.subscriptions.length);
+            
+            // リアルタイムサブスクリプション開始後にUIを再更新
+            console.log('🔄 リアルタイムサブスクリプション開始後のUI更新を実行します');
+            setTimeout(() => {
+                if (typeof renderTasks === 'function') {
+                    renderTasks();
+                }
+                if (typeof renderComments === 'function') {
+                    renderComments();
+                }
+                if (typeof renderDiscussionComments === 'function') {
+                    renderDiscussionComments();
+                }
+            }, 1000); // 1秒後にUI更新
             
             // モバイル環境での再接続機能
             if (isMobile) {
