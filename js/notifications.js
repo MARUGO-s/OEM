@@ -453,9 +453,14 @@ async function markNotificationAsRead(notificationId) {
         
         // ユーザー別の既読状態を作成/更新
         console.log('ユーザー別既読状態を更新中...');
+        
+        // 一意のIDを生成
+        const readStatusId = 'read_status_' + Date.now() + '_' + appState.currentUser.id;
+        
         const { data, error } = await supabase
             .from('notification_read_status')
             .upsert({
+                id: readStatusId,
                 notification_id: notificationId,
                 user_id: appState.currentUser.id,
                 read_at: new Date().toISOString()
@@ -512,7 +517,8 @@ async function markAllNotificationsAsRead() {
 
         // ユーザー別の既読状態を一括作成
         console.log('ユーザー別既読状態を一括作成中...');
-        const readStatusData = unreadNotifications.map(notification => ({
+        const readStatusData = unreadNotifications.map((notification, index) => ({
+            id: 'read_status_' + Date.now() + '_' + index + '_' + appState.currentUser.id,
             notification_id: notification.id,
             user_id: appState.currentUser.id,
             read_at: new Date().toISOString()
