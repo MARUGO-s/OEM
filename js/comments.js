@@ -131,7 +131,7 @@ async function deleteComment(commentId) {
         }
 
         // 確認ダイアログ
-        if (!confirm('このコメントを削除しますか？')) {
+        if (!confirm('このコメントを削除しますか？\nこの操作は取り消せません。')) {
             return;
         }
 
@@ -173,6 +173,24 @@ async function deleteComment(commentId) {
         
         // バックグラウンドでデータを再読み込み（整合性確保）
         loadComments().catch(err => console.error('コメント再読み込みエラー:', err));
+
+        try {
+            await createNotification({
+                type: 'task_comment_deleted',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがタスクコメントを削除しました。`,
+                related_id: commentId
+            });
+
+            await loadNotifications();
+            if (typeof updateNotificationBadge === 'function') {
+                updateNotificationBadge();
+            }
+            if (typeof renderNotifications === 'function') {
+                renderNotifications();
+            }
+        } catch (notificationError) {
+            console.error('コメント削除通知エラー:', notificationError);
+        }
 
         // 通知を表示
         showNotification('コメントを削除しました', 'success');

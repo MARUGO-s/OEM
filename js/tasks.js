@@ -647,28 +647,6 @@ async function updateTask(taskId, updates) {
     }
 }
 
-// タスク削除
-async function deleteTask(taskId, taskTitle = '') {
-    try {
-        const { error } = await supabase
-            .from('tasks')
-            .delete()
-            .eq('id', taskId);
-
-        if (error) {
-            throw error;
-        }
-
-        await loadTasks();
-        hideTaskDetailModal();
-        currentEditingTask = null;
-        
-    } catch (error) {
-        console.error('タスク削除エラー:', error);
-        alert('タスクの削除に失敗しました');
-    }
-}
-
 // タスク編集
 function editTask(taskId) {
     const task = appState.tasks.find(t => t.id === taskId);
@@ -712,16 +690,45 @@ function hideLoadingScreen() {
 // モーダル操作（modal-utils.jsの関数を直接使用）
 function openTaskModal() {
     console.log('tasks.js の openTaskModal関数が呼び出されました');
-    return window.openModal('task-modal');
+    if (typeof window.openModal === 'function') {
+        return window.openModal('task-modal');
+    }
+
+    const modal = document.getElementById('task-modal');
+    if (!modal) {
+        console.error('task-modal 要素が見つかりません');
+        return null;
+    }
+
+    modal.classList.add('active');
+
+    if (!document.body.dataset.prevOverflow) {
+        document.body.dataset.prevOverflow = window.getComputedStyle(document.body).overflow || '';
+    }
+    document.body.style.overflow = 'hidden';
+
+    return modal;
 }
 
 function closeTaskModal() {
     console.log('tasks.js の closeTaskModal関数が呼び出されました');
-    
-    // 新しいモーダルマネージャーを使用
-    window.closeModal('task-modal');
-    window.resetModalState();
-    
+    if (typeof window.closeModal === 'function') {
+        window.closeModal('task-modal');
+    } else {
+        const modal = document.getElementById('task-modal');
+        if (modal) {
+            modal.classList.remove('active');
+        }
+    }
+
+    const prevOverflow = document.body.dataset.prevOverflow;
+    document.body.style.overflow = prevOverflow || '';
+    delete document.body.dataset.prevOverflow;
+
+    if (typeof window.resetModalState === 'function') {
+        window.resetModalState();
+    }
+
     // フォームをリセット
     const form = document.getElementById('task-form');
     if (form) {
@@ -773,7 +780,7 @@ async function deleteTimelineComment(commentId) {
         }
 
         // 確認ダイアログ
-        if (!confirm('このコメントを削除しますか？')) {
+        if (!confirm('このコメントを削除しますか？\nこの操作は取り消せません。')) {
             return;
         }
 
@@ -824,6 +831,23 @@ async function deleteTimelineComment(commentId) {
                 .catch(err => console.error('コメント再読み込みエラー:', err));
         }, 400);
 
+        try {
+            await createNotification({
+                type: 'task_comment_deleted',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがタスクコメントを削除しました。`,
+                related_id: commentId
+            });
+            await loadNotifications();
+            if (typeof updateNotificationBadge === 'function') {
+                updateNotificationBadge();
+            }
+            if (typeof renderNotifications === 'function') {
+                renderNotifications();
+            }
+        } catch (notificationError) {
+            console.error('タスクコメント削除通知エラー:', notificationError);
+        }
+
         // 通知を表示
         showNotification('コメントを削除しました', 'success');
 
@@ -834,7 +858,7 @@ async function deleteTimelineComment(commentId) {
 }
 
 // タスク削除機能
-async function deleteTask(taskId) {
+async function deleteTask(taskId, taskTitle = '') {
     try {
         // ユーザー情報のバリデーション
         if (!appState.currentUser || !appState.currentUser.username) {
@@ -843,7 +867,7 @@ async function deleteTask(taskId) {
         }
 
         // 確認ダイアログ
-        if (!confirm('このタスクを削除しますか？\n\n注意: 関連するコメントもすべて削除されます。')) {
+        if (!confirm('このタスクを削除しますか？\nこの操作は取り消せません。\n\n注意: 関連するコメントもすべて削除されます。')) {
             return;
         }
 
@@ -879,6 +903,25 @@ async function deleteTask(taskId) {
 
         // モーダルを閉じる
         closeTaskModal();
+
+        try {
+            const titlePreview = (taskTitle || '').trim() || '無題のタスク';
+            await createNotification({
+                type: 'task_deleted',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがタスク「${titlePreview}」を削除しました。`,
+                related_id: taskId
+            });
+
+            await loadNotifications();
+            if (typeof updateNotificationBadge === 'function') {
+                updateNotificationBadge();
+            }
+            if (typeof renderNotifications === 'function') {
+                renderNotifications();
+            }
+        } catch (notificationError) {
+            console.error('タスク削除通知エラー:', notificationError);
+        }
 
         // 通知を表示
         showNotification('タスクを削除しました', 'success');

@@ -652,10 +652,14 @@ function getNotificationIcon(type) {
         task_created: '✨',
         task_updated: '🔄',
         task_deleted: '🗑️',
+        task_comment_deleted: '🗑️',
+        roadmap_comment_deleted: '🗑️',
+        discussion_comment_deleted: '🗑️',
         brainstorm_idea_created: '🧠',
         new_comment: '💬',
         new_discussion_comment: '💭',
         meeting_scheduled: '📅',
+        meeting_deleted: '🗑️',
         general: '📢'
     };
     return icons[type] || icons.general;

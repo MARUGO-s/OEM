@@ -371,7 +371,7 @@ window.editMeeting = function(meetingId) {
 
 // 会議の削除
 window.deleteMeeting = async function(meetingId) {
-    if (!confirm('この会議を削除しますか？')) return;
+    if (!confirm('この会議を削除しますか？\nこの操作は取り消せません。')) return;
     try {
         const { error } = await supabase
             .from('meetings')
@@ -379,6 +379,26 @@ window.deleteMeeting = async function(meetingId) {
             .eq('id', meetingId);
         if (error) throw error;
         await loadMeetings();
+
+        try {
+            await createNotification({
+                type: 'meeting_deleted',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんが会議を削除しました。`,
+                related_id: meetingId
+            });
+
+            await loadNotifications();
+            if (typeof updateNotificationBadge === 'function') {
+                updateNotificationBadge();
+            }
+            if (typeof renderNotifications === 'function') {
+                renderNotifications();
+            }
+        } catch (notificationError) {
+            console.error('会議削除通知エラー:', notificationError);
+        }
+
+        showNotification('会議を削除しました', 'success');
     } catch (error) {
         console.error('会議削除エラー:', error);
         alert('会議の削除に失敗しました');
@@ -511,7 +531,11 @@ window.showMeetingForm = function() {
     if (form) {
         form.style.display = 'block';
         // フォームを表示したら少しスクロール
-        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        requestAnimationFrame(() => {
+            const rect = form.getBoundingClientRect();
+            const offset = rect.top + window.scrollY - 120; // 固定ヘッダー分を調整
+            window.scrollTo({ top: offset, behavior: 'smooth' });
+        });
     }
 };
 

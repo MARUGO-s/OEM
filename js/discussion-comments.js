@@ -148,7 +148,7 @@ async function postDiscussionComment() {
 
 // 意見交換コメントを削除
 async function deleteDiscussionComment(commentId) {
-    if (!confirm('このコメントを削除しますか？')) {
+    if (!confirm('このコメントを削除しますか？\nこの操作は取り消せません。')) {
         return;
     }
 
@@ -177,6 +177,24 @@ async function deleteDiscussionComment(commentId) {
         // 成功通知
         if (typeof showNotification === 'function') {
             showNotification('意見交換コメントを削除しました', 'success');
+        }
+
+        try {
+            await createNotification({
+                type: 'discussion_comment_deleted',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんが意見交換コメントを削除しました。`,
+                related_id: commentId
+            });
+
+            await loadNotifications();
+            if (typeof updateNotificationBadge === 'function') {
+                updateNotificationBadge();
+            }
+            if (typeof renderNotifications === 'function') {
+                renderNotifications();
+            }
+        } catch (notificationError) {
+            console.error('意見交換コメント削除通知エラー:', notificationError);
         }
 
     } catch (error) {

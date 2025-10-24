@@ -262,7 +262,7 @@ async function deleteTask(taskId) {
         }
 
         // 確認ダイアログ
-        if (!confirm('このタスクを削除しますか？\n\n注意: 関連するコメントもすべて削除されます。')) {
+        if (!confirm('このタスクを削除しますか？\nこの操作は取り消せません。\n\n注意: 関連するコメントもすべて削除されます。')) {
             return;
         }
 
@@ -1033,7 +1033,7 @@ async function deleteRoadmapComment(commentId) {
         return;
     }
 
-    if (!confirm('このコメントを削除しますか？')) {
+    if (!confirm('このコメントを削除しますか？\nこの操作は取り消せません。')) {
         return;
     }
 
@@ -1088,9 +1088,27 @@ async function deleteRoadmapComment(commentId) {
                 .catch(err => console.error('コメント再読み込みエラー:', err));
         }, 500);
 
+        try {
+            await createNotification({
+                type: 'roadmap_comment_deleted',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがロードマップコメントを削除しました。`,
+                related_id: commentId
+            });
+
+            await loadNotifications();
+            if (typeof updateNotificationBadge === 'function') {
+                updateNotificationBadge();
+            }
+            if (typeof renderNotifications === 'function') {
+                renderNotifications();
+            }
+        } catch (notificationError) {
+            console.error('ロードマップコメント削除通知エラー:', notificationError);
+        }
+
         // 通知を表示
         showNotification('コメントを削除しました', 'success');
-
+        
         console.log('コメント削除完了:', commentId);
 
     } catch (error) {
