@@ -841,6 +841,10 @@ body {
 
 /* モバイル対応 - 左右交互のまま圧縮 */
 @media (max-width: 768px) {
+    .login-container {
+        margin: 1rem;
+    }
+    
     .roadmap-container {
         padding: 1.25rem 0;
     }
@@ -3011,7 +3015,7 @@ body {
     }
 
     .login-container {
-        margin: 1rem;
+        margin: 1.5rem;
         padding: 1.5rem;
     }
 
