@@ -513,6 +513,37 @@ async function addTask(taskData) {
             return;
         }
 
+        // ユーザープロファイルの存在確認（不足時は作成）
+        try {
+            const { data: existingProfile, error: profileError } = await supabase
+                .from('user_profiles')
+                .select('id')
+                .eq('id', appState.currentUser.id)
+                .maybeSingle();
+
+            if (profileError && profileError.code !== 'PGRST116') {
+                console.warn('ユーザープロファイル確認エラー（継続）:', profileError);
+            }
+
+            if (!existingProfile) {
+                console.log('ユーザープロファイルが存在しないため作成します');
+                const { error: createProfileError } = await supabase
+                    .from('user_profiles')
+                    .insert({
+                        id: appState.currentUser.id,
+                        username: appState.currentUser.username,
+                        display_name: appState.currentUser.username,
+                        email: appState.currentUser.email || `${appState.currentUser.username || 'user'}@example.com`
+                    });
+
+                if (createProfileError && createProfileError.code !== '23505') {
+                    console.warn('ユーザープロファイル作成エラー（無視）:', createProfileError);
+                }
+            }
+        } catch (profileCheckException) {
+            console.warn('ユーザープロファイル確認例外（継続）:', profileCheckException);
+        }
+
         const now = new Date().toISOString();
         const newTask = {
             id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -547,7 +578,27 @@ async function addTask(taskData) {
             renderTasks();
             updateSummary();
         }
-        
+
+        // タスク作成通知
+        try {
+            const previewTitle = taskData.title.trim();
+            await createNotification({
+                type: 'task_created',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがタスク「${previewTitle}」を追加しました。`,
+                related_id: newTask.id
+            });
+
+            await loadNotifications();
+            if (typeof updateNotificationBadge === 'function') {
+                updateNotificationBadge();
+            }
+            if (typeof renderNotifications === 'function') {
+                renderNotifications();
+            }
+        } catch (notificationError) {
+            console.error('タスク作成通知エラー:', notificationError);
+        }
+
         // 通知を表示
         showNotification('タスクが正常に追加されました！', 'success');
         
