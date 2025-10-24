@@ -371,43 +371,64 @@ function checkNotificationPermission() {
 // 通知一覧の読み込み
 async function loadNotifications() {
     try {
-        // ユーザー情報の確認
-        if (!appState.currentUser || !appState.currentUser.id) {
-            console.warn('ユーザー情報が取得できないため、通知を読み込めません');
-            appState.notifications = [];
-            renderNotifications();
-            return;
-        }
+        console.log('通知読み込み開始...');
+        console.log('現在のユーザー:', appState.currentUser);
 
-        // 通知とユーザー別の既読状態を結合して取得
-        const { data, error } = await supabase
+        // まず通知を読み込み（ユーザー情報に関係なく）
+        const { data: notificationsData, error: notificationsError } = await supabase
             .from('notifications')
-            .select(`
-                *,
-                notification_read_status!left(
-                    id,
-                    read_at,
-                    user_id
-                )
-            `)
+            .select('*')
             .order('created_at', { ascending: false })
             .limit(50);
 
-        if (error) throw error;
+        if (notificationsError) {
+            console.error('通知読み込みエラー:', notificationsError);
+            throw notificationsError;
+        }
 
-        // 通知データを処理してユーザー別の既読状態を設定
-        appState.notifications = (data || []).map(notification => {
-            // 現在のユーザーの既読状態を確認
-            const userReadStatus = notification.notification_read_status?.find(
-                status => status.user_id === appState.currentUser.id
-            );
+        console.log('読み込まれた通知数:', notificationsData?.length || 0);
+
+        // ユーザー情報がある場合のみ既読状態を取得
+        if (appState.currentUser && appState.currentUser.id) {
+            console.log('ユーザー別既読状態を取得中...');
             
-            return {
+            // ユーザー別の既読状態を取得
+            const { data: readStatusData, error: readStatusError } = await supabase
+                .from('notification_read_status')
+                .select('notification_id, read_at, user_id')
+                .eq('user_id', appState.currentUser.id);
+
+            if (readStatusError) {
+                console.warn('既読状態取得エラー:', readStatusError);
+            }
+
+            // 既読状態のマップを作成
+            const readStatusMap = new Map();
+            if (readStatusData) {
+                readStatusData.forEach(status => {
+                    readStatusMap.set(status.notification_id, status);
+                });
+            }
+
+            // 通知データを処理してユーザー別の既読状態を設定
+            appState.notifications = (notificationsData || []).map(notification => {
+                const userReadStatus = readStatusMap.get(notification.id);
+                
+                return {
+                    ...notification,
+                    read: !!userReadStatus, // ユーザー別の既読状態
+                    read_at: userReadStatus?.read_at || null
+                };
+            });
+        } else {
+            console.warn('ユーザー情報が取得できないため、既読状態なしで通知を読み込みます');
+            // ユーザー情報がない場合は既読状態なしで表示
+            appState.notifications = (notificationsData || []).map(notification => ({
                 ...notification,
-                read: !!userReadStatus, // ユーザー別の既読状態
-                read_at: userReadStatus?.read_at || null
-            };
-        });
+                read: false,
+                read_at: null
+            }));
+        }
 
         console.log('読み込まれた通知（ユーザー別既読状態）:', appState.notifications);
         console.log('通知IDの例:', appState.notifications.length > 0 ? appState.notifications[0].id : 'なし');
@@ -424,6 +445,15 @@ async function loadNotifications() {
         
     } catch (error) {
         console.error('通知読み込みエラー:', error);
+        console.error('エラー詳細:', {
+            message: error.message,
+            stack: error.stack
+        });
+        
+        // エラー時でも空の配列を設定してUIを更新
+        appState.notifications = [];
+        renderNotifications();
+        updateNotificationBadge();
     }
 }
 
