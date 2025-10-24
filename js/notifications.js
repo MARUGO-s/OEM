@@ -513,6 +513,7 @@ async function markNotificationAsRead(notificationId) {
         const upsertResult = await supabase
             .from('notification_read_status')
             .upsert({
+                id: `read_status_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 notification_id: notificationId,
                 user_id: appState.currentUser.id,
                 read_at: new Date().toISOString()
@@ -579,7 +580,8 @@ async function markAllNotificationsAsRead() {
         console.log('一括更新する通知数:', unreadNotifications.length);
         console.log('一括更新する通知ID一覧:', unreadNotifications.map(n => n.id));
 
-        const upsertPayload = unreadNotifications.map(notification => ({
+        const upsertPayload = unreadNotifications.map((notification, index) => ({
+            id: `read_status_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
             notification_id: notification.id,
             user_id: appState.currentUser.id,
             read_at: new Date().toISOString()
@@ -600,6 +602,22 @@ async function markAllNotificationsAsRead() {
                 hint: upsertResult.error.hint,
                 code: upsertResult.error.code
             });
+            
+            // 409エラーの場合は個別処理にフォールバック
+            if (upsertResult.error.code === '409') {
+                console.log('409エラーが発生したため、個別処理にフォールバックします');
+                try {
+                    for (const notification of unreadNotifications) {
+                        await markNotificationAsRead(notification.id);
+                    }
+                    console.log('個別処理による既読化が完了しました');
+                    return;
+                } catch (fallbackError) {
+                    console.error('個別処理フォールバックエラー:', fallbackError);
+                    throw fallbackError;
+                }
+            }
+            
             throw upsertResult.error;
         }
 
