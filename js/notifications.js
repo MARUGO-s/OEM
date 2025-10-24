@@ -683,7 +683,12 @@ function renderNotifications() {
                     <div class="notification-message">${getNotificationIcon(notification.type)} ${escapeHtml(notification.message)}</div>
                     <div class="time">${timeAgo}</div>
                 </div>
-                ${isNew ? '<div class="unread-indicator"></div>' : ''}
+                <div class="notification-actions">
+                    ${isNew ? '<div class="unread-indicator"></div>' : ''}
+                    <button class="delete-notification-btn" data-notification-id="${notification.id}" title="通知を削除">
+                        <span>×</span>
+                    </button>
+                </div>
             </div>
         `;
     }).join('');
@@ -696,6 +701,17 @@ function renderNotifications() {
             console.log('クリックされた通知ID:', notificationId);
             if (notificationId) {
                 markNotificationAsRead(notificationId);
+            }
+        });
+    });
+    
+    // 削除ボタンのイベントリスナーを追加
+    container.querySelectorAll('.delete-notification-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation(); // 親要素のクリックイベントを防ぐ
+            const notificationId = button.getAttribute('data-notification-id');
+            if (notificationId) {
+                deleteNotification(notificationId);
             }
         });
     });
@@ -976,6 +992,46 @@ function closeNotificationPanel() {
     const panel = document.getElementById('notification-panel');
     if (panel) {
         panel.classList.remove('open');
+    }
+}
+
+// 通知を削除
+async function deleteNotification(notificationId) {
+    try {
+        // 確認ダイアログ
+        if (!confirm('この通知を削除しますか？\nこの操作は取り消せません。')) {
+            return;
+        }
+
+        console.log('通知削除開始:', notificationId);
+
+        // Supabaseから通知を削除
+        const { error } = await supabase
+            .from('notifications')
+            .delete()
+            .eq('id', notificationId);
+
+        if (error) {
+            console.error('通知削除エラー:', error);
+            alert('通知の削除に失敗しました。しばらく待ってから再度お試しください。');
+            return;
+        }
+
+        console.log('通知削除成功:', notificationId);
+
+        // ローカル状態を即座に更新
+        appState.notifications = appState.notifications.filter(notification => notification.id !== notificationId);
+        
+        // 画面を即座に更新
+        renderNotifications();
+        updateNotificationBadge();
+
+        // 通知を表示
+        showNotification('通知を削除しました', 'success');
+
+    } catch (error) {
+        console.error('通知削除エラー:', error);
+        alert('通知の削除に失敗しました。しばらく待ってから再度お試しください。');
     }
 }
 
