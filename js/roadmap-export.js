@@ -309,9 +309,56 @@
 </html>`;
 
             // 新しいウィンドウで開いて印刷ダイアログを表示
-            const printWindow = window.open('', '_blank');
+            let printWindow = null;
+            try {
+                printWindow = window.open('', '_blank');
+            } catch (e) {
+                console.warn('window.open がブロックされました:', e);
+            }
+
+            // Safari等で window.open が null の場合は iframe フォールバック
+            if (!printWindow || !printWindow.document) {
+                console.log('Safariフォールバック: iframeで印刷処理を行います');
+                const iframe = document.createElement('iframe');
+                iframe.style.position = 'fixed';
+                iframe.style.right = '0';
+                iframe.style.bottom = '0';
+                iframe.style.width = '0';
+                iframe.style.height = '0';
+                iframe.style.border = '0';
+                document.body.appendChild(iframe);
+
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                iframeDoc.open();
+                iframeDoc.write(html);
+                iframeDoc.close();
+
+                // 印刷
+                setTimeout(() => {
+                    try {
+                        (iframe.contentWindow || iframe).focus();
+                        (iframe.contentWindow || iframe).print();
+                        setTimeout(() => {
+                            document.body.removeChild(iframe);
+                        }, 1500);
+                    } catch (err) {
+                        console.error('iframe印刷エラー:', err);
+                        alert('PDF出力中にエラーが発生しました: ' + err.message);
+                    }
+                }, 600);
+
+                // 成功通知
+                if (typeof showNotification === 'function') {
+                    showNotification('印刷ダイアログを開きました。「PDFとして保存」を選択してください。', 'success');
+                }
+                return;
+            }
+
+            // 新しいウィンドウ方式
+            printWindow.document.open();
             printWindow.document.write(html);
             printWindow.document.close();
+            try { printWindow.focus(); } catch(_) {}
 
             // 印刷ダイアログを表示
             printWindow.onload = function() {
