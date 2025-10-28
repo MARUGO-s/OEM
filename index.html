@@ -185,7 +185,10 @@
                     <div class="card">
                         <div class="card-header">
                             <h2>🗺️ ロードマップ</h2>
-                            <button id="add-task-btn" class="btn btn-primary">+ 新規タスク追加</button>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <button id="export-roadmap-pdf-btn" class="btn btn-secondary">📄 PDFダウンロード</button>
+                                <button id="add-task-btn" class="btn btn-primary">+ 新規タスク追加</button>
+                            </div>
                         </div>
                         <div id="roadmap-container" class="roadmap-container">
                             <!-- ロードマップがここに表示されます -->
@@ -495,6 +498,10 @@
     <script src="./js/tasks.js"></script>
     <script src="./js/comments.js"></script>
     <script src="./js/discussion-comments.js"></script>
+    <!-- ロードマップPDF出力用ライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="./js/roadmap-export.js"></script>
     <!-- loadAllData 定義 -->
     <script src="./js/app.js"></script>
     <!-- 最後にセッション起動などを行うauth -->
