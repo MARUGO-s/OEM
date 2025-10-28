@@ -231,7 +231,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 description: document.getElementById('task-description').value,
                 status: document.getElementById('task-status').value,
                 priority: document.getElementById('task-priority').value,
-                deadline: document.getElementById('task-deadline').value || null
+                deadline: (() => {
+                    const deadlineValue = document.getElementById('task-deadline').value;
+                    return deadlineValue && deadlineValue.trim() !== '' ? deadlineValue : null;
+                })()
             };
 
             if (currentEditingTask) {
@@ -307,8 +310,18 @@ function renderTasks(retryCount = 0) {
         
         console.log('タスク表示開始:', appState.tasks.length, '個のタスク');
 
-    // タスクを日付順でソート
+    // タスクをソート（カスタム順序優先、次に日付順）
     const sortedTasks = [...appState.tasks].sort((a, b) => {
+        // display_order が設定されている場合は優先
+        if (a.display_order !== null && a.display_order !== undefined &&
+            b.display_order !== null && b.display_order !== undefined) {
+            return a.display_order - b.display_order;
+        }
+        // 片方だけ display_order が設定されている場合、設定されている方を優先
+        if (a.display_order !== null && a.display_order !== undefined) return -1;
+        if (b.display_order !== null && b.display_order !== undefined) return 1;
+
+        // display_order が未設定の場合は従来通り日付順
         if (a.deadline && b.deadline) {
             return new Date(a.deadline) - new Date(b.deadline);
         }
@@ -407,7 +420,7 @@ function renderTasks(retryCount = 0) {
         }
 
         return `
-            <div class="roadmap-item ${task.status}" data-task-id="${task.id}">
+            <div class="roadmap-item ${task.status}" data-task-id="${task.id}" draggable="true">
                 <div class="roadmap-side roadmap-side-task ${taskSideClass}">
                     <div class="roadmap-task" data-task-id="${task.id}">
                         <div class="roadmap-task-header">
@@ -443,6 +456,9 @@ function renderTasks(retryCount = 0) {
                    showRoadmapItemModal(taskId);
                });
            });
+
+           // ドラッグ&ドロップイベントの設定
+           setupDragAndDrop();
            
            // コメント関連のイベントリスナーを安全に追加（XSS対策）
            container.querySelectorAll('.roadmap-comment-bullet.comment').forEach(element => {
@@ -917,6 +933,203 @@ async function deleteTask(taskId, taskTitle = '') {
     }
 }
 
+
+// ドラッグ&ドロップの設定
+let draggedTaskId = null;
+
+function setupDragAndDrop() {
+    const container = document.getElementById('roadmap-container');
+    if (!container) return;
+
+    const items = container.querySelectorAll('.roadmap-item');
+
+    items.forEach(item => {
+        // ドラッグ開始
+        item.addEventListener('dragstart', (e) => {
+            draggedTaskId = item.dataset.taskId;
+            item.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', item.innerHTML);
+        });
+
+        // ドラッグ終了
+        item.addEventListener('dragend', (e) => {
+            item.classList.remove('dragging');
+            draggedTaskId = null;
+        });
+
+        // ドラッグオーバー
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            const draggingItem = document.querySelector('.dragging');
+            if (draggingItem && draggingItem !== item) {
+                // ドラッグ中の要素の位置を視覚的に示す
+                const rect = item.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+
+                if (e.clientY < midpoint) {
+                    item.style.borderTop = '3px solid #3b82f6';
+                    item.style.borderBottom = '';
+                } else {
+                    item.style.borderBottom = '3px solid #3b82f6';
+                    item.style.borderTop = '';
+                }
+            }
+        });
+
+        // ドラッグリーブ
+        item.addEventListener('dragleave', (e) => {
+            item.style.borderTop = '';
+            item.style.borderBottom = '';
+        });
+
+        // ドロップ
+        item.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            item.style.borderTop = '';
+            item.style.borderBottom = '';
+
+            if (!draggedTaskId || draggedTaskId === item.dataset.taskId) return;
+
+            const targetTaskId = item.dataset.taskId;
+
+            // ドロップ位置を判定（上半分か下半分か）
+            const rect = item.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            const dropAbove = e.clientY < midpoint;
+
+            await reorderTasks(draggedTaskId, targetTaskId, dropAbove);
+        });
+    });
+}
+
+// タスクの並び替えとデータベース更新
+async function reorderTasks(draggedId, targetId, insertBefore) {
+    try {
+        console.log('タスク並び替え:', draggedId, '->', targetId, insertBefore ? '前' : '後');
+
+        // 現在のソート済みタスクリストを取得
+        const sortedTasks = [...appState.tasks].sort((a, b) => {
+            if (a.display_order !== null && a.display_order !== undefined &&
+                b.display_order !== null && b.display_order !== undefined) {
+                return a.display_order - b.display_order;
+            }
+            if (a.display_order !== null && a.display_order !== undefined) return -1;
+            if (b.display_order !== null && b.display_order !== undefined) return 1;
+            if (a.deadline && b.deadline) {
+                return new Date(a.deadline) - new Date(b.deadline);
+            }
+            if (a.deadline) return -1;
+            if (b.deadline) return 1;
+            return new Date(a.created_at) - new Date(b.created_at);
+        });
+
+        // ドラッグされたタスクとターゲットタスクのインデックスを取得
+        const draggedIndex = sortedTasks.findIndex(t => t.id === draggedId);
+        const targetIndex = sortedTasks.findIndex(t => t.id === targetId);
+
+        if (draggedIndex === -1 || targetIndex === -1) return;
+
+        // 新しい順序を計算
+        const draggedTask = sortedTasks[draggedIndex];
+        sortedTasks.splice(draggedIndex, 1);
+
+        const newIndex = insertBefore ? targetIndex : targetIndex + 1;
+        const adjustedIndex = draggedIndex < targetIndex ? newIndex - 1 : newIndex;
+        sortedTasks.splice(adjustedIndex, 0, draggedTask);
+
+        // すべてのタスクに新しい display_order を割り当て
+        const updates = sortedTasks.map((task, index) => ({
+            id: task.id,
+            display_order: index
+        }));
+
+        // Supabaseで一括更新
+        for (const update of updates) {
+            const { error } = await supabase
+                .from('tasks')
+                .update({ display_order: update.display_order })
+                .eq('id', update.id);
+
+            if (error) {
+                console.error('display_order更新エラー:', error);
+            }
+        }
+
+        // ローカル状態を更新
+        appState.tasks = appState.tasks.map(task => {
+            const update = updates.find(u => u.id === task.id);
+            return update ? { ...task, display_order: update.display_order } : task;
+        });
+
+        // 表示を更新
+        renderTasks();
+
+        // 日付変更ダイアログを表示
+        showDateChangeDialog(draggedId);
+
+    } catch (error) {
+        console.error('タスク並び替えエラー:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('並び替えに失敗しました', 'error');
+        }
+    }
+}
+
+// 日付変更ダイアログ
+function showDateChangeDialog(taskId) {
+    const task = appState.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const currentDeadline = task.deadline ? new Date(task.deadline).toISOString().split('T')[0] : '';
+
+    const message = `「${task.title}」の期限を変更しますか？\n\n現在の期限: ${currentDeadline || '未設定'}`;
+
+    if (confirm(message + '\n\n「OK」を押すと期限を変更できます。\n空欄にすると期限を削除できます。')) {
+        const newDeadline = prompt('新しい期限を入力してください (YYYY-MM-DD形式、空欄で削除):', currentDeadline);
+
+        if (newDeadline !== null) {
+            // キャンセルしていない場合は更新（空文字列も含む）
+            updateTaskDeadline(taskId, newDeadline);
+        }
+    }
+}
+
+// タスクの期限を更新
+async function updateTaskDeadline(taskId, newDeadline) {
+    try {
+        // 空文字列の場合はnullに変換
+        const deadline = newDeadline && newDeadline.trim() !== '' ? newDeadline : null;
+
+        const { error } = await supabase
+            .from('tasks')
+            .update({ deadline: deadline })
+            .eq('id', taskId);
+
+        if (error) throw error;
+
+        // ローカル状態を更新
+        const taskIndex = appState.tasks.findIndex(t => t.id === taskId);
+        if (taskIndex !== -1) {
+            appState.tasks[taskIndex].deadline = deadline;
+        }
+
+        renderTasks();
+
+        if (typeof showNotification === 'function') {
+            showNotification('期限を更新しました', 'success');
+        }
+    } catch (error) {
+        console.error('期限更新エラー:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('期限の更新に失敗しました', 'error');
+        }
+    }
+}
 
 // リアルタイム更新のサブスクリプション
 function subscribeToTasks() {

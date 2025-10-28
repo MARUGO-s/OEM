@@ -68,7 +68,7 @@ async function updateTask(taskId) {
         description: descInput.value,
         status: statusInput.value,
         priority: priorityInput.value,
-        deadline: deadlineInput.value || null
+        deadline: deadlineInput.value && deadlineInput.value.trim() !== '' ? deadlineInput.value : null
     };
     
     try {
@@ -859,23 +859,27 @@ function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.textContent = message;
-    
-    // 通知スタイル
+
+    // 通知スタイル（右上に小さく表示）
     notification.style.cssText = `
         position: fixed;
-        top: 20px;
+        top: 80px;
         right: 20px;
+        max-width: 350px;
         background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
         color: white;
-        padding: 1rem 1.5rem;
+        padding: 0.875rem 1.25rem;
         border-radius: 0.5rem;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        z-index: 1001;
+        z-index: 9999;
         animation: slideInRight 0.3s ease;
+        font-size: 0.9rem;
+        line-height: 1.4;
+        word-wrap: break-word;
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     // 3秒後に自動削除
     setTimeout(() => {
         notification.style.animation = 'slideOutRight 0.3s ease';

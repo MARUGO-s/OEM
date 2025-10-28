@@ -142,7 +142,7 @@ async function requestNotificationPermission() {
         if ('Notification' in window && Notification.permission === 'granted') {
             console.log('通知は既に許可されています');
             try {
-                sessionStorage.setItem('notificationPermission', 'granted');
+                localStorage.setItem('notification_permission', 'granted');
             } catch (storageError) {
                 console.warn('通知許可状態を保存できませんでした:', storageError);
             }
@@ -152,12 +152,12 @@ async function requestNotificationPermission() {
             } catch (subscriptionError) {
                 console.error('プッシュサブスクリプション再作成エラー:', subscriptionError);
             }
-            
+
             // テスト通知を表示（削除）
             // showBrowserNotification('通知が有効です', {
             //     body: 'プッシュ通知が正常に動作しています'
             // });
-            
+
             return true;
         }
 
@@ -192,10 +192,10 @@ async function requestNotificationPermission() {
 
         if (permission === 'granted') {
             console.log('通知が許可されました！');
-            
+
             // 許可状態を保存
             try {
-                sessionStorage.setItem('notificationPermission', 'granted');
+                localStorage.setItem('notification_permission', 'granted');
             } catch (storageError) {
                 console.warn('通知許可状態を保存できませんでした:', storageError);
             }
@@ -220,7 +220,7 @@ async function requestNotificationPermission() {
         } else if (permission === 'denied') {
             console.log('通知が拒否されました');
             try {
-                sessionStorage.setItem('notificationPermission', 'denied');
+                localStorage.setItem('notification_permission', 'denied');
             } catch (storageError) {
                 console.warn('通知拒否状態を保存できませんでした:', storageError);
             }
@@ -1035,18 +1035,82 @@ async function deleteNotification(notificationId) {
     }
 }
 
+// すべての通知を削除
+async function deleteAllNotifications() {
+    try {
+        // ユーザー情報の確認
+        if (!appState.currentUser || !appState.currentUser.id) {
+            throw new Error('ユーザー情報が取得できません');
+        }
+
+        const notificationCount = appState.notifications.length;
+
+        if (notificationCount === 0) {
+            if (typeof showNotification === 'function') {
+                showNotification('削除する通知がありません', 'info');
+            } else {
+                alert('削除する通知がありません');
+            }
+            return;
+        }
+
+        // 確認ダイアログ
+        if (!confirm(`すべての通知（${notificationCount}件）を削除しますか？\nこの操作は取り消せません。`)) {
+            return;
+        }
+
+        console.log('すべての通知を削除中...', notificationCount, '件');
+
+        // Supabaseからすべての通知を削除
+        const { error } = await supabase
+            .from('notifications')
+            .delete()
+            .in('id', appState.notifications.map(n => n.id));
+
+        if (error) {
+            console.error('通知削除エラー:', error);
+            throw error;
+        }
+
+        console.log('すべての通知を削除しました');
+
+        // ローカル状態をクリア
+        appState.notifications = [];
+
+        // UIを更新
+        renderNotifications();
+        updateNotificationBadge();
+
+        // 成功通知
+        if (typeof showNotification === 'function') {
+            showNotification('すべての通知を削除しました', 'success');
+        } else {
+            alert('すべての通知を削除しました');
+        }
+
+    } catch (error) {
+        console.error('すべての通知削除エラー:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('通知の削除に失敗しました', 'error');
+        } else {
+            alert('通知の削除に失敗しました');
+        }
+    }
+}
+
 // イベントリスナー（DOMContentLoaded後に登録、重複防止）
 document.addEventListener('DOMContentLoaded', () => {
     const notificationBell = document.getElementById('notification-bell');
     const closeNotifications = document.getElementById('close-notifications');
     const enablePushBtn = document.getElementById('enable-push-notifications-btn');
     const markAllReadBtn = document.getElementById('mark-all-read-btn');
-    
+    const deleteAllBtn = document.getElementById('delete-all-notifications-btn');
+
     if (notificationBell && !notificationBell.dataset.listenerAttached) {
         notificationBell.addEventListener('click', toggleNotificationPanel);
         notificationBell.dataset.listenerAttached = 'true';
     }
-    
+
     if (closeNotifications && !closeNotifications.dataset.listenerAttached) {
         closeNotifications.addEventListener('click', () => {
             const panel = document.getElementById('notification-panel');
@@ -1056,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         closeNotifications.dataset.listenerAttached = 'true';
     }
-    
+
     if (enablePushBtn && !enablePushBtn.dataset.listenerAttached) {
         enablePushBtn.addEventListener('click', async () => {
             const granted = await requestNotificationPermission();
@@ -1066,10 +1130,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         enablePushBtn.dataset.listenerAttached = 'true';
     }
-    
+
     if (markAllReadBtn && !markAllReadBtn.dataset.listenerAttached) {
         markAllReadBtn.addEventListener('click', markAllNotificationsAsRead);
         markAllReadBtn.dataset.listenerAttached = 'true';
+    }
+
+    if (deleteAllBtn && !deleteAllBtn.dataset.listenerAttached) {
+        deleteAllBtn.addEventListener('click', deleteAllNotifications);
+        deleteAllBtn.dataset.listenerAttached = 'true';
     }
     
     // 枠外クリックで通知パネルを閉じる
@@ -1089,6 +1158,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // ページ読み込み時に通知許可状態をチェック
     checkAndShowNotificationButtons();
 });
+
+// スクリプト読み込み直後に即座に通知ボタンの状態をチェック（ちらつき防止）
+(function() {
+    if ('Notification' in window) {
+        const permission = Notification.permission;
+        const savedPermission = localStorage.getItem('notification_permission');
+
+        // 許可済みの場合は即座にボタンを非表示
+        if (permission === 'granted' || savedPermission === 'granted') {
+            const enableBtn = document.getElementById('enable-push-notifications-btn');
+            if (enableBtn) {
+                enableBtn.style.display = 'none';
+            }
+        }
+    }
+})();
 
 // リアルタイム更新のサブスクリプション
 function subscribeToNotifications() {
@@ -1186,32 +1271,41 @@ function checkAndShowNotificationButtons() {
         isSecureContext: window.isSecureContext,
         protocol: window.location.protocol
     });
-    
+
     if ('Notification' in window) {
         const permission = Notification.permission;
         console.log('現在の通知許可状態:', permission);
-        
-        if (permission === 'default') {
-            console.log('📝 通知許可ボタンを表示します');
-            showNotificationPermissionButton();
-        } else if (permission === 'granted') {
-            console.log('✅ 通知は許可済みのためボタンを整理します');
+
+        // localStorageに通知許可状態を保存（バックアップ）
+        const savedPermission = localStorage.getItem('notification_permission');
+        console.log('保存されている通知許可状態:', savedPermission);
+
+        // 実際の許可状態を優先し、保存された状態も確認
+        if (permission === 'granted' || savedPermission === 'granted') {
+            console.log('✅ 通知は許可済みのためボタンを非表示にします');
             hideNotificationPermissionButton();
+            // 状態を保存
+            localStorage.setItem('notification_permission', 'granted');
         } else if (permission === 'denied') {
             console.log('❌ 通知が拒否されているため、ボタンを非表示にします');
             hideNotificationPermissionButton();
+            localStorage.setItem('notification_permission', 'denied');
+        } else if (permission === 'default') {
+            console.log('📝 通知許可ボタンを表示します');
+            showNotificationPermissionButton();
+            localStorage.setItem('notification_permission', 'default');
         }
     } else {
         console.warn('⚠️ 通知がサポートされていません');
         // 通知がサポートされていない場合の対応
         hideNotificationPermissionButton();
-        
+
         // ユーザーに詳細情報を表示
         const enableBtn = document.getElementById('enable-push-notifications-btn');
         if (enableBtn) {
             enableBtn.style.display = 'none';
         }
-        
+
         console.log('🔧 通知非対応ブラウザのため、通知ボタンを非表示にしました');
     }
 }
