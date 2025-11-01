@@ -139,7 +139,12 @@ function updateTaskDisplay(taskId) {
 // ロードマップ項目詳細モーダルの表示
 window.showRoadmapItemModal = function(taskId) {
     const task = appState.tasks.find(t => t.id === taskId);
-    if (!task) return;
+    if (!task) {
+        console.error('タスクが見つかりません。taskId:', taskId);
+        console.error('appState.tasks:', appState.tasks);
+        alert('タスクが見つかりません。ページをリロードしてください。');
+        return;
+    }
 
     const modal = document.getElementById('roadmap-item-modal');
     
@@ -315,11 +320,20 @@ let roadmapCommentCache = [];
 // Supabaseコメントの読み込み（復活版）
 async function loadRoadmapComments(taskId) {
     try {
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            console.error('プロジェクトIDが設定されていません');
+            roadmapCommentCache = [];
+            renderRoadmapComments([]);
+            return;
+        }
+
         // Supabaseからコメントを取得
         const { data: comments, error } = await supabase
             .from('task_comments')
             .select('*')
             .eq('task_id', taskId)
+            .eq('project_id', projectId)
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -516,10 +530,18 @@ async function submitRoadmapComment() {
             console.warn('プロファイル確認例外（無視）:', profileError);
         }
 
+        // プロジェクトIDを取得
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            alert('プロジェクトが選択されていません');
+            return;
+        }
+
         // 新しいコメントを作成
         const newComment = {
             id: generateRoadmapCommentId(),
             task_id: taskId,
+            project_id: projectId,
             author_id: currentUser.id,
             author_username: currentUser.username,
             content: content,
