@@ -443,8 +443,8 @@ function renderRoadmapComments(comments) {
         `;
     };
 
-    // 親コメントと返信を階層的に表示
-    container.innerHTML = parentComments.map(parent => {
+    // 親コメントと返信を階層的に表示（親コメントごとにグループ化）
+    const commentGroups = parentComments.map(parent => {
         const replies = childComments.filter(child => child.parent_id === parent.id);
 
         // 返信をcreated_atで昇順ソート（古い順＝会話の流れ）
@@ -453,24 +453,37 @@ function renderRoadmapComments(comments) {
             const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
             return dateA - dateB;
         });
-        
-        if (replies.length > 0) {
+
+        return {
+            parent: parent,
+            replies: replies,
+            // グループ全体のソートは親コメントの日時で行う
+            sortDate: parent.created_at ? new Date(parent.created_at) : new Date(0)
+        };
+    });
+
+    // グループ全体を親コメントの日時で降順ソート（最新の親コメントグループが上）
+    commentGroups.sort((a, b) => b.sortDate - a.sortDate);
+
+    // HTML生成
+    container.innerHTML = commentGroups.map(group => {
+        if (group.replies.length > 0) {
             // 返信をL字型レイアウトで表示
             return `
-                <div style="position: relative;">
-                    ${createCommentHTML(parent, false)}
+                <div style="position: relative; margin-bottom: 1.5rem;">
+                    ${createCommentHTML(group.parent, false)}
                     <div style="position: relative; margin-left: 2rem; padding-left: 1.5rem;">
                         <!-- L字の接続線 -->
                         <div style="position: absolute; left: 0; top: 0; width: 1.5rem; height: 1rem; border-left: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; border-bottom-left-radius: 0.5rem;"></div>
                         <!-- 返信リスト -->
                         <div style="position: relative; margin-top: 0.5rem; padding-left: 0.5rem; border-left: 2px solid #cbd5e1;">
-                            ${replies.map(reply => createCommentHTML(reply, true)).join('')}
+                            ${group.replies.map(reply => createCommentHTML(reply, true)).join('')}
                         </div>
                     </div>
                 </div>
             `;
         } else {
-            return createCommentHTML(parent, false);
+            return `<div style="margin-bottom: 1.5rem;">${createCommentHTML(group.parent, false)}</div>`;
         }
     }).join('');
     
