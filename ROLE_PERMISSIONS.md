@@ -7,6 +7,65 @@
 
 ---
 
+## ⏰ ロールが決まるタイミング
+
+### 1. **プロジェクト作成時**
+プロジェクト作成者は自動的に「**オーナー**」になる。
+
+```javascript
+// プロジェクト作成時に実行されるコード
+async function createProject(name, description) {
+    const { data: project } = await supabase.from('projects').insert([{
+        name: name,
+        description: description,
+        created_by: appState.currentUser.id
+    }]).select().single();
+
+    // 自分をオーナーとして追加
+    await supabase.from('project_members').insert([{
+        project_id: project.id,
+        user_id: appState.currentUser.id,
+        role: 'owner'  // ← ここで自動的にオーナーになる
+    }]);
+}
+```
+
+### 2. **メンバー追加時**
+オーナー・管理者がユーザーをプロジェクトに追加する際にロールを指定する（**現時点では未実装、今後実装予定**）。
+
+**今後の実装イメージ:**
+- プロジェクト設定画面から「メンバーを招待」
+- ユーザー名を入力して「ロールを選択」（owner/admin/member/viewer）
+- 決定ボタンで `project_members` テーブルに挿入
+
+### 3. **マイグレーション（サンプルデータ）**
+データベースマイグレーションでサンプルデータを作成する際に明示的に指定する。
+
+```sql
+-- サンプルデータ作成時の例
+INSERT INTO project_members (project_id, user_id, role) VALUES
+(project_id, user1_id, 'owner'),   -- オーナー
+(project_id, user2_id, 'member'),  -- メンバー
+(project_id, user3_id, 'viewer');  -- 閲覧者
+```
+
+### 4. **現時点での実装状況**
+
+| 機能 | 実装状況 | 備考 |
+|------|---------|------|
+| プロジェクト作成時にオーナーになる | ✅ 実装済み | `js/projects.js` の `createProject` |
+| メンバー追加UI | ❌ 未実装 | 今後の開発予定 |
+| ロール変更UI | ❌ 未実装 | 今後の開発予定 |
+| サンプルデータ作成 | ✅ 実装済み | マイグレーションファイル |
+| RLSポリシー | ✅ 実装済み | データベースレベルで権限制御 |
+
+**現在の制約:**
+- メンバーを追加・削除するUIが存在しない
+- ロールを変更するUIが存在しない
+- 手動でSupabaseの `project_members` テーブルを編集する必要がある
+
+---
+
 ## 📋 ロール一覧
 
 ### 1. **オーナー (owner)** 👑
