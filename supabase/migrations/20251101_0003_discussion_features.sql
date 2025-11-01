@@ -14,13 +14,15 @@ CREATE TABLE IF NOT EXISTS comment_reactions (
 );
 
 -- 2. task_commentsにスレッドとメンション機能を追加
+-- 注: idがTEXT型のため、parent_idもTEXT型にする
 ALTER TABLE task_comments
-ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES task_comments(id) ON DELETE CASCADE,
+ADD COLUMN IF NOT EXISTS parent_id TEXT REFERENCES task_comments(id) ON DELETE CASCADE,
 ADD COLUMN IF NOT EXISTS mentions TEXT[] DEFAULT '{}';
 
 -- 3. discussion_commentsにスレッドとメンション機能を追加
+-- 注: idがTEXT型のため、parent_idもTEXT型にする
 ALTER TABLE discussion_comments
-ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES discussion_comments(id) ON DELETE CASCADE,
+ADD COLUMN IF NOT EXISTS parent_id TEXT REFERENCES discussion_comments(id) ON DELETE CASCADE,
 ADD COLUMN IF NOT EXISTS mentions TEXT[] DEFAULT '{}';
 
 -- 4. 未読管理テーブル
