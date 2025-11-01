@@ -1,0 +1,586 @@
+// コメント・意見交換管理
+
+// タスクコメントをプログラムで投稿する関数
+async function postTaskComment(content) {
+    console.log('🔔 タスクコメントをプログラムで投稿します:', content);
+    return await postComment(content);
+}
+
+// テスト用のタスクコメント投稿（デバッグ用）
+window.testTaskComment = async function() {
+    const testContent = 'テストタスクコメント: ' + new Date().toLocaleTimeString();
+    console.log('🧪 テストタスクコメントを投稿します:', testContent);
+    try {
+        await postTaskComment(testContent);
+        console.log('✅ テストタスクコメント投稿完了');
+    } catch (error) {
+        console.error('❌ テストタスクコメント投稿エラー:', error);
+    }
+};
+
+// コメント一覧の読み込み
+async function loadComments() {
+    try {
+        console.log('Supabaseからコメントを読み込み中...');
+
+        // 現在のプロジェクトIDを取得
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            console.error('プロジェクトIDが設定されていません');
+            appState.comments = [];
+            renderComments();
+            if (typeof renderTasks === 'function') {
+                renderTasks();
+            }
+            return;
+        }
+
+        // Supabaseからコメントを読み込み（プロジェクトIDでフィルタ）
+        const { data: comments, error } = await supabase
+            .from('task_comments')
+            .select('*')
+            .eq('project_id', projectId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('コメント読み込みエラー:', error);
+            throw error;
+        }
+
+        console.log('Supabaseから取得したコメント:', comments);
+        appState.comments = comments || [];
+        
+        renderComments();
+        // タイムライン側も最新コメントで再描画
+        if (typeof renderTasks === 'function') {
+            renderTasks();
+        }
+        
+        console.log('コメント読み込み完了:', appState.comments.length, '個のコメント');
+        
+    } catch (error) {
+        console.error('コメント読み込みエラー:', error);
+        appState.comments = [];
+        renderComments();
+        if (typeof renderTasks === 'function') {
+            renderTasks();
+        }
+    }
+}
+
+// コメントの表示
+function renderComments() {
+    const container = document.getElementById('comments-container');
+    
+    // コンテナが存在しない場合は処理を中断
+    if (!container) {
+        console.error('comments-container要素が見つかりません');
+        return;
+    }
+    
+    if (!appState.comments || appState.comments.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">まだコメントがありません。最初のコメントを投稿してください。</p>';
+        return;
+    }
+
+    container.innerHTML = appState.comments.map(comment => {
+        // created_atが存在しない場合のフォールバック
+        const createdAt = comment.created_at ? new Date(comment.created_at) : new Date();
+        const timeAgo = getTimeAgo(createdAt);
+        
+        // 削除ボタンの表示判定（ログインユーザーなら誰でも削除可能）
+        const canDelete = appState.currentUser && appState.currentUser.username;
+        
+        return `
+            <div class="comment-item">
+                <div class="comment-header">
+                    <span class="comment-author">${escapeHtml(comment.author_username || 'anonymous')}</span>
+                    <span class="comment-time">${timeAgo}</span>
+                    ${canDelete ? `<button class="delete-comment-btn" data-comment-id="${escapeHtml(comment.id)}" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; margin-left: 0.5rem;">削除</button>` : ''}
+                </div>
+                <div class="comment-text">${escapeHtml(comment.content || '')}</div>
+            </div>
+        `;
+    }).join('');
+
+    // 削除ボタンのイベントリスナーを追加
+    container.querySelectorAll('.delete-comment-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const commentId = button.dataset.commentId;
+            if (commentId) {
+                deleteComment(commentId);
+            }
+        });
+    });
+}
+
+function generateCommentId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    // より堅牢なID生成（タイムスタンプ + ランダム文字列 + カウンター）
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substr(2, 9);
+    const counter = (window.commentIdCounter = (window.commentIdCounter || 0) + 1);
+    return `comment_${timestamp}_${random}_${counter}`;
+}
+
+// HTMLエスケープ（XSS対策）
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// コメント削除機能
+async function deleteComment(commentId) {
+    try {
+        // ユーザー情報のバリデーション
+        if (!appState.currentUser || !appState.currentUser.username) {
+            alert('コメントを削除するにはログインが必要です。');
+            return;
+        }
+
+        // 確認ダイアログ
+        if (!confirm('このコメントを削除しますか？\nこの操作は取り消せません。')) {
+            return;
+        }
+
+        console.log('コメント削除開始:', commentId);
+
+        // Supabaseからコメントを削除
+        const { error } = await supabase
+            .from('task_comments')
+            .delete()
+            .eq('id', commentId);
+
+        if (error) {
+            console.error('コメント削除エラー:', error);
+            alert('コメントの削除に失敗しました。しばらく待ってから再度お試しください。');
+            return;
+        }
+
+        console.log('コメント削除成功:', commentId);
+
+        // ローカル状態を即座に更新（Android対応）
+        appState.comments = appState.comments.filter(comment => comment.id !== commentId);
+        console.log('ローカルコメント配列を更新:', appState.comments.length);
+        
+        // 画面を即座に更新（Android対応）
+        renderComments();
+        
+        // タイムライン側も更新
+        if (typeof renderTasks === 'function') {
+            renderTasks();
+        }
+        
+        // Androidでの表示更新を確実にする
+        setTimeout(() => {
+            renderComments();
+            if (typeof renderTasks === 'function') {
+                renderTasks();
+            }
+        }, 100);
+        
+        // バックグラウンドでデータを再読み込み（整合性確保）
+        loadComments().catch(err => console.error('コメント再読み込みエラー:', err));
+
+        try {
+            await createNotification({
+                type: 'task_comment_deleted',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがタスクコメントを削除しました。`,
+                related_id: commentId
+            });
+
+            await loadNotifications();
+            if (typeof updateNotificationBadge === 'function') {
+                updateNotificationBadge();
+            }
+            if (typeof renderNotifications === 'function') {
+                renderNotifications();
+            }
+        } catch (notificationError) {
+            console.error('コメント削除通知エラー:', notificationError);
+        }
+
+        // 通知を表示
+        showNotification('コメントを削除しました', 'success');
+
+    } catch (error) {
+        console.error('コメント削除エラー:', error);
+        alert('コメントの削除に失敗しました');
+    }
+}
+
+// コメント投稿
+async function postComment(content) {
+    try {
+        // 入力値のサニタイゼーション
+        if (!content || typeof content !== 'string') {
+            alert('コメント内容を入力してください。');
+            return;
+        }
+        
+        content = content.trim();
+        if (content.length === 0) {
+            alert('コメント内容を入力してください。');
+            return;
+        }
+        
+        if (content.length > 1000) {
+            alert('コメントは1000文字以内で入力してください。');
+            return;
+        }
+        
+        // ユーザー情報のバリデーション
+        if (!appState.currentUser || !appState.currentUser.username) {
+            alert('コメントを投稿するにはログインが必要です。');
+            return;
+        }
+
+        // Supabaseコメント投稿（409エラー完全回避版）
+        console.log('Supabaseコメント投稿（エラー回避）:', appState.currentUser.username);
+        
+        // ユーザープロファイルの存在確認（409エラー回避）
+        try {
+            const { data: existingProfile, error: profileCheckError } = await supabase
+                .from('user_profiles')
+                .select('id, username')
+                .eq('id', appState.currentUser.id)
+                .maybeSingle();
+                
+            if (profileCheckError && profileCheckError.code !== 'PGRST116') {
+                console.warn('プロファイル確認エラー（無視）:', profileCheckError);
+            }
+            
+            if (!existingProfile) {
+                console.log('プロファイルが存在しないため作成を試行');
+                try {
+                    const { error: createError } = await supabase
+                        .from('user_profiles')
+                        .insert({
+                            id: appState.currentUser.id,
+                            username: appState.currentUser.username,
+                            display_name: appState.currentUser.username,
+                            email: appState.currentUser.email || `${appState.currentUser.username}@hotmail.com`
+                        });
+                        
+                    if (createError && createError.code !== '23505') { // 重複エラー以外は無視
+                        console.warn('プロファイル作成エラー（無視）:', createError);
+                    } else {
+                        console.log('プロファイル作成成功または既存');
+                    }
+                } catch (profileCreateError) {
+                    console.warn('プロファイル作成例外（無視）:', profileCreateError);
+                }
+            }
+        } catch (profileError) {
+            console.warn('プロファイル確認例外（無視）:', profileError);
+        }
+
+        // 現在のプロジェクトIDを取得
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            alert('プロジェクトが選択されていません。');
+            return;
+        }
+
+        // 新しいコメントを作成
+        const newComment = {
+            id: generateCommentId(),
+            content: content,
+            author_id: appState.currentUser.id,
+            author_username: appState.currentUser.username,
+            task_id: null,
+            project_id: projectId,
+            created_at: new Date().toISOString()
+        };
+
+        // Supabaseに保存
+        let insertedData = null;
+        try {
+        const { data, error } = await supabase
+            .from('task_comments')
+                .insert([newComment])
+                .select();
+
+            if (error) {
+                console.error('コメント投稿エラー:', error);
+                alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
+                return;
+            }
+            
+            insertedData = data && data.length > 0 ? data[0] : newComment;
+            console.log('コメント投稿成功:', insertedData);
+        } catch (insertError) {
+            console.error('コメント投稿例外:', insertError);
+            alert('コメントの投稿に失敗しました。しばらく待ってから再度お試しください。');
+            return;
+        }
+
+        // ローカル状態を即座に更新（UIの即時反映）
+        appState.comments.unshift(insertedData);
+        console.log('ローカルコメント配列を更新:', appState.comments.length);
+        
+        // 画面を即座に更新（スマートフォン対応）
+        renderComments();
+        
+        // タイムライン側も更新
+        if (typeof renderTasks === 'function') {
+            renderTasks();
+        }
+        
+        // スマートフォンでの表示更新を確実にする（複数回実行）
+        setTimeout(() => {
+            renderComments();
+            if (typeof renderTasks === 'function') {
+                renderTasks();
+            }
+        }, 100);
+        
+        // 追加の表示更新（確実性を高める）
+        setTimeout(() => {
+            renderComments();
+            if (typeof renderTasks === 'function') {
+                renderTasks();
+            }
+        }, 500);
+        
+        // 最終的な確実性のためのリロード（オプション）
+        // コメントが表示されない場合の最終手段として1.5秒後にリロード
+        setTimeout(() => {
+            console.log('🔄 最終確認: コメント表示の確実性をチェックします');
+            const commentContainer = document.getElementById('comments-container');
+            if (commentContainer && commentContainer.innerHTML.includes('まだコメントがありません')) {
+                console.log('⚠️ コメントが表示されていないため、最終リロードを実行します');
+                window.location.reload();
+            }
+        }, 1500);
+        
+        // バックグラウンドでデータを再読み込み（整合性確保）
+        loadComments().catch(err => {
+            console.error('コメント再読み込みエラー:', err);
+            // エラー時はフォールバックとしてリロード
+            console.log('🔄 コメント表示エラーのため、フォールバックリロードを実行します');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        });
+
+        // 通知を送信（エラーが発生してもコメント投稿は成功とする）
+        try {
+            console.log('🔔 タスクコメントの通知を作成します:', {
+                type: 'new_comment',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがコメントしました: ${content.substring(0, 50)}...`,
+                related_id: newComment.id,
+                currentUser: appState.currentUser
+            });
+            
+            console.log('🔔 createNotification関数を呼び出します...');
+            const notificationResult = await createNotification({
+                type: 'new_comment',
+                message: `${appState.currentUser?.username || 'ユーザー'}さんがコメントしました: ${content.substring(0, 50)}...`,
+                related_id: newComment.id
+            });
+            
+            console.log('🔔 createNotification関数の結果:', notificationResult);
+            console.log('✅ タスクコメントの通知作成が完了しました');
+            
+            // 通知を手動で読み込み（リアルタイム更新の代替）
+            console.log('🔄 通知を手動で読み込みます...');
+            try {
+                await loadNotifications();
+                console.log('✅ 通知の手動読み込みが完了しました');
+                
+                // 通知バッジも更新
+                if (typeof updateNotificationBadge === 'function') {
+                    updateNotificationBadge();
+                    console.log('✅ 通知バッジを更新しました');
+                }
+                
+                // 通知画面を強制表示更新
+                if (typeof renderNotifications === 'function') {
+                    renderNotifications();
+                    console.log('✅ 通知画面を強制更新しました');
+                }
+            } catch (loadError) {
+                console.error('❌ 通知の手動読み込みエラー:', loadError);
+            }
+        } catch (notificationError) {
+            console.error('❌ タスクコメント通知送信エラー:', notificationError);
+            console.error('エラー詳細:', {
+                message: notificationError.message,
+                stack: notificationError.stack
+            });
+            // 通知エラーはコメント投稿を阻害しない
+        }
+
+        // 入力欄をクリア（要素が存在する場合のみ）
+        const commentInput = document.getElementById('comment-input');
+        if (commentInput) {
+            commentInput.value = '';
+        }
+        
+        console.log('コメント投稿完了:', insertedData);
+        
+    } catch (error) {
+        console.error('コメント投稿エラー:', error);
+        alert('コメントの投稿に失敗しました');
+    }
+}
+
+// 相対時間の取得
+function getTimeAgo(date) {
+    // dateが無効な場合のフォールバック
+    if (!date || isNaN(date.getTime())) {
+        return '不明';
+    }
+    
+    const now = new Date();
+    const diff = now - date;
+    
+    // 未来の日付の場合
+    if (diff < 0) {
+        return '今';
+    }
+    
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) {
+        return `${days}日前`;
+    } else if (hours > 0) {
+        return `${hours}時間前`;
+    } else if (minutes > 0) {
+        return `${minutes}分前`;
+    } else {
+        return '今';
+    }
+}
+
+// イベントリスナー（DOMContentLoaded後に登録、重複防止）
+document.addEventListener('DOMContentLoaded', () => {
+    const postCommentBtn = document.getElementById('post-comment-btn');
+    const commentInput = document.getElementById('comment-input');
+    
+    // 投稿ボタンのイベントリスナー
+    if (postCommentBtn && !postCommentBtn.dataset.listenerAttached) {
+        postCommentBtn.addEventListener('click', async () => {
+            const content = commentInput ? commentInput.value.trim() : '';
+            
+            if (!content) {
+                alert('コメントを入力してください');
+                return;
+            }
+
+            await postComment(content);
+        });
+        postCommentBtn.dataset.listenerAttached = 'true';
+    }
+    
+    // Enterキーで投稿（Shift+Enterで改行）
+    if (commentInput && !commentInput.dataset.listenerAttached) {
+        commentInput.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                const content = e.target.value.trim();
+                
+                if (content) {
+                    await postComment(content);
+                }
+            }
+        });
+        commentInput.dataset.listenerAttached = 'true';
+    }
+});
+
+// リアルタイム更新のサブスクリプション
+function subscribeToComments() {
+    console.log('💬 コメントのリアルタイムサブスクリプションを開始します');
+    console.log('📡 Supabase接続情報:', {
+        url: SUPABASE_URL,
+        hasSupabase: typeof supabase !== 'undefined',
+        hasChannel: typeof supabase?.channel === 'function'
+    });
+    
+    try {
+        const channel = supabase
+            .channel('comments-changes')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'task_comments' },
+                (payload) => {
+                    console.log('💬 コメント変更検知:', payload);
+                    console.log('イベントタイプ:', payload.eventType);
+                    console.log('変更データ:', payload.new || payload.old);
+                    
+                    // Androidでの削除処理を特別に処理
+                    if (payload.eventType === 'DELETE') {
+                        console.log('🗑️ コメント削除を検知（Android対応）');
+                        // ローカル状態を即座に更新
+                        appState.comments = appState.comments.filter(comment => comment.id !== payload.old.id);
+                        // 画面を即座に更新
+                        renderComments();
+                        if (typeof renderTasks === 'function') {
+                            renderTasks();
+                        }
+                        // Androidでの表示更新を確実にする
+                        setTimeout(() => {
+                            renderComments();
+                            if (typeof renderTasks === 'function') {
+                                renderTasks();
+                            }
+                        }, 100);
+                    } else {
+                        // スマートフォンでのリアルタイム更新を確実にする
+                        loadComments().then(() => {
+                            // 追加の表示更新（スマートフォン対応）
+                            setTimeout(() => {
+                                renderComments();
+                                if (typeof renderTasks === 'function') {
+                                    renderTasks();
+                                }
+                            }, 50);
+                        });
+                    }
+                }
+            )
+            .subscribe((status) => {
+                console.log('📊 コメントサブスクリプション状態:', status);
+                if (status === 'SUBSCRIBED') {
+                    console.log('✅ コメントのリアルタイム更新が有効になりました');
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error('❌ コメントサブスクリプションエラー');
+                    // エラー時の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 コメントサブスクリプションの再接続を試行します');
+                        subscribeToComments();
+                    }, 5000);
+                } else if (status === 'TIMED_OUT') {
+                    console.error('⏰ コメントサブスクリプションタイムアウト');
+                    // タイムアウト時の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 コメントサブスクリプションの再接続を試行します');
+                        subscribeToComments();
+                    }, 3000);
+                } else if (status === 'CLOSED') {
+                    console.warn('🔒 コメントサブスクリプションが閉じられました');
+                    // 閉じられた場合の再接続を試行
+                    setTimeout(() => {
+                        console.log('🔄 コメントサブスクリプションの再接続を試行します');
+                        subscribeToComments();
+                    }, 2000);
+                }
+            });
+
+        appState.subscriptions.push(channel);
+        console.log('📝 コメントサブスクリプションを登録しました');
+        
+    } catch (error) {
+        console.error('❌ コメントサブスクリプション作成エラー:', error);
+        console.error('エラー詳細:', error.stack);
+    }
+}

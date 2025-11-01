@@ -1,0 +1,90 @@
+# 依存関係
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 本番ビルド
+dist/
+build/
+
+# 環境変数
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ログ
+logs/
+*.log
+
+# ランタイムデータ
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# カバレッジディレクトリ
+coverage/
+.nyc_output/
+
+# 依存関係ディレクトリ
+jspm_packages/
+
+# オプションのnpmキャッシュディレクトリ
+.npm
+
+# オプションのeslintキャッシュ
+.eslintcache
+
+# マイクロソフトのVSCode設定
+.vscode/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# 一時ファイル
+*.tmp
+*.temp
+
+# バックアップファイル
+*.bak
+*.backup
+
+# 圧縮ファイル
+*.zip
+*.tar.gz
+*.rar
+
+# データベースファイル
+*.db
+*.sqlite
+*.sqlite3
+
+# 設定ファイル（機密情報含む）
+config.local.js
+secrets.json
+
+# テストファイル
+test-results/
+coverage/
+
+# IDE設定
+.idea/
+*.swp
+*.swo
+
+# 本番用設定
+production/
+deploy/

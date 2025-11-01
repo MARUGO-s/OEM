@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MARUGO OEM Special Menu - 商品企画管理システム</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
+    <link rel="apple-touch-icon" href="./icon-192.svg">
+    
+    <!-- 
+    ストレージポリシー:
+    - このアプリはlocalStorageを一切使用しません
+    - セッション管理: sessionStorage（タブを閉じると削除）
+    - データ保存: Supabase PostgreSQL
+    詳細: STORAGE_POLICY.md を参照
+    -->
+    
+    <link rel="stylesheet" href="./styles/main.css">
+    
+    <!-- Supabase SDK -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
+    <!-- PWA対応 -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#8B4513">
+    <meta name="theme-color" content="#8B4513" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#654321" media="(prefers-color-scheme: dark)">
+    
+    <!-- Mobile Web App -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="MARUGO OEM">
+    
+    <!-- Apple iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MARUGO OEM">
+    
+    <!-- Microsoft -->
+    <meta name="msapplication-TileColor" content="#8B4513">
+    <meta name="msapplication-tap-highlight" content="no">
+    
+    <!-- Additional PWA Meta -->
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-touch-fullscreen" content="yes">
+</head>
+<body>
+    <!-- ローディング画面 -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">タスクモーダルを準備中...</div>
+        </div>
+    </div>
+    
+    <div id="app">
+        <!-- ログイン画面 -->
+        <div id="login-screen" class="screen active">
+            <div class="login-container">
+                <h1>🍽️ MARUGO OEM<br>商品企画管理<br>パテ•ド•カンパーニュ</h1>
+                <p class="subtitle">MARUGOオリジナルフード商品企画管理システム</p>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="username">ユーザー名 / メールアドレス</label>
+                        <input type="text" id="username" required placeholder="chef_name または email@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">パスワード</label>
+                        <input type="password" id="password" required placeholder="パスワード">
+                    </div>
+                    <button type="submit" class="btn btn-primary">ログイン</button>
+                </form>
+                
+                <div class="auth-switch">
+                    <p>アカウントをお持ちでない方は <a href="#" id="show-register">新規登録</a></p>
+                </div>
+                
+                <!-- 新規登録フォーム -->
+                <form id="register-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="reg-username">ユーザー名</label>
+                        <input type="text" id="reg-username" required placeholder="chef_name">
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-email">メールアドレス（任意）</label>
+                        <input type="email" id="reg-email" placeholder="example@domain.com">
+                        <small style="color: var(--text-secondary);">未入力の場合は自動生成されたメールで登録されます</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-password">パスワード</label>
+                        <input type="password" id="reg-password" required placeholder="パスワード（6文字以上）">
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-password-confirm">パスワード確認</label>
+                        <input type="password" id="reg-password-confirm" required placeholder="パスワード再入力">
+                    </div>
+                    <button type="submit" class="btn btn-primary">新規登録</button>
+                </form>
+                
+                <div class="auth-switch" id="register-switch" style="display: none;">
+                    <p>既にアカウントをお持ちの方は <a href="#" id="show-login">ログイン</a></p>
+                </div>
+                <div id="auth-error" class="error-message"></div>
+            </div>
+        </div>
+
+        <!-- プロジェクト選択画面 -->
+        <div id="project-select-screen" class="screen">
+            <div class="project-select-container">
+                <div class="project-select-header">
+                    <h1>📁 プロジェクト選択</h1>
+                    <p class="subtitle">管理するプロジェクトを選択してください</p>
+                    <div class="user-info-compact">
+                        <span id="project-user-name">ユーザー</span>
+                        <button id="project-logout-btn" class="btn btn-outline btn-sm">ログアウト</button>
+                    </div>
+                </div>
+
+                <div class="project-actions">
+                    <button id="create-project-btn" class="btn btn-primary">+ 新規プロジェクト作成</button>
+                </div>
+
+                <div id="projects-list" class="projects-list">
+                    <!-- プロジェクト一覧がここに表示されます -->
+                </div>
+
+                <!-- 新規プロジェクト作成フォーム -->
+                <div id="create-project-form" class="project-form-overlay" style="display: none;">
+                    <div class="project-form-container">
+                        <div class="project-form-header">
+                            <h3>新規プロジェクト作成</h3>
+                            <button class="btn-icon" id="close-create-project">✕</button>
+                        </div>
+                        <form id="new-project-form">
+                            <div class="form-group">
+                                <label for="new-project-name">プロジェクト名</label>
+                                <input type="text" id="new-project-name" required placeholder="例: パテ・ド・カンパーニュ OEM開発">
+                            </div>
+                            <div class="form-group">
+                                <label for="new-project-description">説明</label>
+                                <textarea id="new-project-description" rows="3" placeholder="プロジェクトの説明を入力..."></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" id="cancel-create-project">キャンセル</button>
+                                <button type="submit" class="btn btn-primary">作成</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- メイン画面 -->
+        <div id="main-screen" class="screen">
+            <!-- ヘッダー -->
+            <header class="app-header">
+                <div class="header-content">
+                    <h1>🍽️ MARUGO OEM<br>商品企画管理</h1>
+                    <div class="header-actions">
+                        <div class="notification-bell" id="notification-bell">
+                            🔔
+                            <span class="notification-badge" id="notification-badge">0</span>
+                        </div>
+                        <button id="notification-permission-btn" class="btn btn-outline" style="display: none; margin-right: 0.5rem;">
+                            🔔 通知を許可
+                        </button>
+                        <div class="user-info">
+                            <span id="user-name">シェフ</span>
+                            <button id="logout-btn" class="btn btn-secondary">ログアウト</button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 通知パネル -->
+            <div id="notification-panel" class="notification-panel">
+                <div class="notification-header">
+                    <h3>通知</h3>
+                    <div class="notification-actions">
+                        <button id="enable-push-notifications-btn" class="btn btn-sm btn-primary" style="display: none; margin-right: 0.5rem;">
+                            🔔 プッシュ通知を有効化
+                        </button>
+                        <button id="mark-all-read-btn" class="btn btn-sm btn-secondary" style="margin-right: 0.5rem;">すべて既読</button>
+                        <button id="delete-all-notifications-btn" class="btn btn-sm btn-danger">すべて削除</button>
+                        <button id="close-notifications" class="btn-icon">✕</button>
+                    </div>
+                </div>
+                <div id="notification-list" class="notification-list">
+                    <!-- 通知がここに表示されます -->
+                </div>
+            </div>
+
+            <!-- メインコンテンツ -->
+            <main class="main-content">
+                <!-- サマリーセクション -->
+                <section class="summary-section">
+                    <div class="card">
+                        <h2>📊 OEM パテ•ド•カンパーニュ<br>進行状況</h2>
+                        <div id="project-summary">
+                            <div class="summary-grid">
+                                <div class="summary-item">
+                                    <span class="summary-label">総タスク数</span>
+                                    <span class="summary-value" id="total-tasks">0</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">完了</span>
+                                    <span class="summary-value completed" id="completed-tasks">0</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">進行中</span>
+                                    <span class="summary-value in-progress" id="inprogress-tasks">0</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">未着手</span>
+                                    <span class="summary-value pending" id="pending-tasks">0</span>
+                                </div>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                                </div>
+                                <span class="progress-text" id="progress-text">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ロードマップセクション -->
+                <section class="roadmap-section">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>🗺️ ロードマップ</h2>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <button id="export-roadmap-pdf-btn" class="btn btn-secondary">📄 PDFダウンロード</button>
+                                <button id="add-task-btn" class="btn btn-primary">+ 新規タスク追加</button>
+                            </div>
+                        </div>
+                        <div id="roadmap-container" class="roadmap-container">
+                            <!-- ロードマップがここに表示されます -->
+                        </div>
+                        
+                        <!-- ロードマップ項目詳細モーダル -->
+                        <div id="roadmap-item-modal" class="roadmap-item-modal">
+                            <div class="roadmap-item-modal-content">
+                                <div class="roadmap-item-modal-header">
+                                    <h3 id="roadmap-item-title">タスクタイトル</h3>
+                                    <div class="roadmap-item-modal-actions">
+                                        <button id="roadmap-item-edit-btn" class="btn btn-secondary" style="margin-right: 0.5rem; display: none;">✏️ 編集</button>
+                                        <button id="roadmap-item-delete-btn" class="btn btn-danger" style="margin-right: 0.5rem; display: none;">🗑️ 削除</button>
+                                        <button class="roadmap-item-modal-close" onclick="closeRoadmapItemModal()">×</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="roadmap-item-modal-body">
+                                    <!-- 表示モード -->
+                                    <div id="roadmap-item-display-mode" class="roadmap-item-info">
+                                        <div class="roadmap-item-description" id="roadmap-item-description">
+                                            タスクの詳細説明がここに表示されます。
+                                        </div>
+                                        <div class="roadmap-item-meta">
+                                            <div class="roadmap-item-meta-item">
+                                                <span class="meta-label">ステータス:</span>
+                                                <span class="meta-value" id="roadmap-item-status">未着手</span>
+                                            </div>
+                                            <div class="roadmap-item-meta-item">
+                                                <span class="meta-label">優先度:</span>
+                                                <span class="meta-value" id="roadmap-item-priority">中</span>
+                                            </div>
+                                            <div class="roadmap-item-meta-item">
+                                                <span class="meta-label">期限:</span>
+                                                <span class="meta-value" id="roadmap-item-deadline">未設定</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 編集モード -->
+                                    <div id="roadmap-item-edit-mode" class="roadmap-item-edit-form" style="display: none;">
+                                        <form id="roadmap-item-edit-form">
+                                            <div class="form-group">
+                                                <label for="roadmap-edit-title">タイトル</label>
+                                                <input type="text" id="roadmap-edit-title" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="roadmap-edit-description">詳細説明</label>
+                                                <textarea id="roadmap-edit-description" rows="4"></textarea>
+                                            </div>
+                                            <div class="form-row">
+                                                <div class="form-group">
+                                                    <label for="roadmap-edit-status">ステータス</label>
+                                                    <select id="roadmap-edit-status">
+                                                        <option value="pending">未着手</option>
+                                                        <option value="in_progress">進行中</option>
+                                                        <option value="completed">完了</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="roadmap-edit-priority">優先度</label>
+                                                    <select id="roadmap-edit-priority">
+                                                        <option value="low">低</option>
+                                                        <option value="medium">中</option>
+                                                        <option value="high">高</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="roadmap-edit-deadline">期限</label>
+                                                <input type="date" id="roadmap-edit-deadline">
+                                            </div>
+                                            <div class="form-actions">
+                                                <button type="submit" class="btn btn-primary">保存</button>
+                                                <button type="button" id="roadmap-edit-cancel" class="btn btn-secondary">キャンセル</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    
+                                    <div class="roadmap-item-comments">
+                                        <h4>💬 意見・コメント</h4>
+                                        <div class="roadmap-comment-input">
+                                            <textarea id="roadmap-comment-input" placeholder="このタスクについて意見やコメントを入力..."></textarea>
+                                            <button id="roadmap-comment-submit" class="btn btn-primary">投稿</button>
+                                        </div>
+                                        <div id="roadmap-comments-list" class="roadmap-comments-list">
+                                            <!-- コメントがここに表示されます -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+
+                <!-- オンライン会議セクション -->
+                <section class="meetings-section">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>🎥 オンライン会議（Google Meet連携）</h2>
+                            <button id="create-meeting-btn" class="btn btn-primary">+ 会議をスケジュール</button>
+                        </div>
+                        <div class="meetings-body">
+                            <div class="meetings-form" id="meetings-form" style="display: none;">
+                                <form id="meeting-form">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="meeting-title-input">会議タイトル</label>
+                                            <input type="text" id="meeting-title-input" placeholder="例: 週次進捗会議" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="meeting-date-input">日時</label>
+                                            <input type="datetime-local" id="meeting-date-input" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="meeting-duration-input">時間（分）</label>
+                                            <input type="number" id="meeting-duration-input" value="60" min="15" max="480" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="meeting-participants-input">参加者</label>
+                                            <input type="text" id="meeting-participants-input" placeholder="chef1@restaurant.com, chef2@restaurant.com">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="meeting-code-input">ミーティングコード（任意）</label>
+                                        <input type="text" id="meeting-code-input" placeholder="例: abc-defg-hij または URL">
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn btn-primary">会議をスケジュール</button>
+                                        <button type="button" onclick="hideMeetingForm()" class="btn btn-secondary">キャンセル</button>
+                                    </div>
+                                </form>
+                            </div>
+                            <div id="meetings-container" class="meetings-container">
+                                <!-- 会議一覧がここに表示されます -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- タスクコメントセクション（非表示） -->
+                <section class="comments-section" style="display: none;">
+                    <div class="card">
+                        <h2>💬 タスクコメント</h2>
+                        <div class="comment-input-area">
+                            <textarea id="comment-input" placeholder="コメントを入力..."></textarea>
+                            <button id="post-comment-btn" class="btn btn-primary">投稿</button>
+                        </div>
+                        <div id="comments-container" class="comments-container">
+                            <!-- タスクコメントがここに表示されます -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 意見交換セクション -->
+                <section class="discussion-section">
+                    <div class="card">
+                        <h2>💬 意見交換</h2>
+                        <div class="comment-input-area">
+                            <textarea id="discussion-comment-input" placeholder="意見やアイデアを入力..."></textarea>
+                            <button id="post-discussion-comment-btn" class="btn btn-primary">投稿</button>
+                        </div>
+                        <div id="discussion-comments-container" class="comments-container">
+                            <!-- 意見交換コメントがここに表示されます -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 隠しタスクコメントセクション（通知機能用） -->
+                <section class="comments-section" style="display: none;">
+                    <div class="card">
+                        <h2>💬 タスクコメント</h2>
+                        <div class="comment-input-area">
+                            <textarea id="comment-input" placeholder="コメントを入力..."></textarea>
+                            <button id="post-comment-btn" class="btn btn-primary">投稿</button>
+                        </div>
+                        <div id="comments-container" class="comments-container">
+                            <!-- タスクコメントがここに表示されます -->
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- タスク追加/編集モーダル -->
+    <div id="task-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">新規タスク追加</h3>
+                <button class="btn-icon" id="close-modal">✕</button>
+            </div>
+            <form id="task-form">
+                <div class="form-group">
+                    <label for="task-title">タスク名</label>
+                    <input type="text" id="task-title" required placeholder="例: 味のキーワードを選定">
+                </div>
+                <div class="form-group">
+                    <label for="task-description">詳細説明</label>
+                    <textarea id="task-description" rows="4" placeholder="タスクの詳細を入力..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="task-status">ステータス</label>
+                        <select id="task-status">
+                            <option value="pending">未着手</option>
+                            <option value="in_progress">進行中</option>
+                            <option value="completed">完了</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-priority">優先度</label>
+                        <select id="task-priority">
+                            <option value="low">低</option>
+                            <option value="medium" selected>中</option>
+                            <option value="high">高</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="task-deadline">期限</label>
+                    <input type="date" id="task-deadline">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cancel-task" class="btn btn-secondary">キャンセル</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- タスク詳細ポップアップモーダル -->
+    <div id="task-detail-modal" class="task-detail-modal">
+        <div class="task-detail-content">
+            <div class="task-detail-header">
+                <div class="task-detail-title">
+                    <span class="status-icon" id="modal-status-icon">⏳</span>
+                    <span id="modal-task-title">タスクタイトル</span>
+                </div>
+                <button class="task-detail-close" id="modal-close-btn">×</button>
+            </div>
+            
+            <div class="task-detail-description" id="modal-task-description">
+                タスクの詳細説明がここに表示されます。
+            </div>
+            
+            <div class="task-detail-meta">
+                <div class="task-detail-meta-item">
+                    <div class="task-detail-meta-label">ステータス</div>
+                    <div class="task-detail-meta-value">
+                        <span class="status-badge" id="modal-status-badge">未着手</span>
+                    </div>
+                </div>
+                
+                <div class="task-detail-meta-item">
+                    <div class="task-detail-meta-label">優先度</div>
+                    <div class="task-detail-meta-value">
+                        <span class="priority-badge" id="modal-priority-badge">中</span>
+                    </div>
+                </div>
+                
+                <div class="task-detail-meta-item">
+                    <div class="task-detail-meta-label">期限</div>
+                    <div class="task-detail-meta-value">
+                        <span class="roadmap-task-date" id="modal-deadline">2025/12/15</span>
+                    </div>
+                </div>
+                
+                <div class="task-detail-meta-item">
+                    <div class="task-detail-meta-label">担当者</div>
+                    <div class="task-detail-meta-value">
+                        <span id="modal-assigned-user">chef1</span>
+                    </div>
+                </div>
+                
+                <div class="task-detail-meta-item">
+                    <div class="task-detail-meta-label">作成日</div>
+                    <div class="task-detail-meta-value">
+                        <span id="modal-created-date">2025/10/19</span>
+                    </div>
+                </div>
+                
+                <div class="task-detail-meta-item">
+                    <div class="task-detail-meta-label">更新日</div>
+                    <div class="task-detail-meta-value">
+                        <span id="modal-updated-date">2025/10/19</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="task-detail-actions">
+                <button class="task-detail-btn danger" id="modal-delete-action">削除</button>
+                <button class="task-detail-btn secondary" id="modal-close-action">閉じる</button>
+                <button class="task-detail-btn primary" id="modal-edit-action">編集</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./js/config.js"></script>
+    <!-- 依存関係: loadAllDataが呼ぶ関数を先に読み込む -->
+    <script src="./js/modal-utils.js"></script>
+    <script src="./js/tasks.js"></script>
+    <script src="./js/comments.js"></script>
+    <script src="./js/discussion-comments.js"></script>
+    <!-- ロードマップPDF出力用ライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="./js/roadmap-export.js"></script>
+    <!-- loadAllData 定義 -->
+    <script src="./js/app.js"></script>
+    <!-- プロジェクト管理機能 -->
+    <script src="./js/projects.js"></script>
+    <!-- 最後にセッション起動などを行うauth -->
+    <script src="./js/auth.js"></script>
+    <script src="./js/notifications.js"></script>
+    <script src="./js/mobile.js"></script>
+    <script src="./js/meetings.js"></script>
+    <script src="./js/roadmap-comments.js"></script>
+</body>
+</html>
