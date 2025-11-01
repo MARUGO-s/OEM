@@ -486,6 +486,7 @@ function renderRoadmapComments(comments) {
         if (replyBtn && !replyBtn.dataset.listenerAttached) {
             replyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                console.log('返信ボタンをクリックしました:', commentId);
                 showReplyForm(commentId, 'task_comment');
             });
             replyBtn.dataset.listenerAttached = 'true';
@@ -1232,7 +1233,9 @@ async function deleteRoadmapComment(commentId) {
 
 // 返信フォームを表示
 function showReplyForm(parentCommentId, commentType) {
+    console.log('showReplyForm called:', parentCommentId, commentType);
     const modal = document.getElementById('roadmap-item-modal');
+    console.log('modal found:', modal);
     const existingReplyForm = document.querySelector('.reply-form-container');
 
     // 既存の返信フォームがあれば削除
