@@ -401,11 +401,10 @@ function renderRoadmapComments(comments) {
         const canDelete = appState.currentUser && appState.currentUser.username;
 
         // 返信の場合はインデントとスタイルを変更
-        const marginLeft = isReply ? '2rem' : '0';
         const bgColor = isReply ? '#f1f5f9' : '#f8fafc';
 
         return `
-            <div class="roadmap-comment-item ${isReply ? 'reply' : ''}" data-comment-id="${escapeHtml(comment.id || '')}" style="padding: 0.75rem; border-radius: 0.5rem; background: ${bgColor}; margin-bottom: 0.5rem; margin-left: ${marginLeft}; transition: background-color 0.2s ease; ${isReply ? 'border-left: 3px solid #3b82f6;' : ''}">
+            <div class="roadmap-comment-item ${isReply ? 'reply' : ''}" data-comment-id="${escapeHtml(comment.id || '')}" style="padding: 0.75rem; border-radius: 0.5rem; background: ${bgColor}; margin-bottom: 0.5rem; transition: background-color 0.2s ease;">
                 <div style="display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
                     <div class="roadmap-comment-content" style="cursor: pointer; flex: 1;">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
@@ -431,11 +430,19 @@ function renderRoadmapComments(comments) {
     // 親コメントと返信を階層的に表示
     container.innerHTML = parentComments.map(parent => {
         const replies = childComments.filter(child => child.parent_id === parent.id);
-        let html = createCommentHTML(parent, false);
         if (replies.length > 0) {
-            html += replies.map(reply => createCommentHTML(reply, true)).join('');
+            // 返信をL字型レイアウトで表示
+            return `
+                <div style="position: relative;">
+                    ${createCommentHTML(parent, false)}
+                    <div style="position: relative; margin-left: 2rem; padding-left: 1.5rem; border-left: 2px solid #cbd5e1;">
+                        ${replies.map(reply => createCommentHTML(reply, true)).join('')}
+                    </div>
+                </div>
+            `;
+        } else {
+            return createCommentHTML(parent, false);
         }
-        return html;
     }).join('');
     
     // イベントリスナーを安全に追加（XSS対策、重複防止）
