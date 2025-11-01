@@ -383,6 +383,15 @@ function renderRoadmapComments(comments) {
     const parentComments = comments.filter(c => !c.parent_id);
     const childComments = comments.filter(c => c.parent_id);
 
+    // デバッグ: データ構造を確認
+    console.log('=== コメントデバッグ ===');
+    console.log('全コメント数:', comments.length);
+    console.log('親コメント数:', parentComments.length);
+    console.log('返信コメント数:', childComments.length);
+    comments.forEach(c => {
+        console.log(`- ID: ${c.id}, parent_id: ${c.parent_id}, 内容: ${c.content?.substring(0, 20)}...`);
+    });
+
     // 親コメントをcreated_atで降順ソート（最新が上）
     parentComments.sort((a, b) => {
         const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
