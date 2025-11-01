@@ -69,7 +69,7 @@ async function displayProjects() {
                     開く
                 </button>
                 ${project.role === 'owner' ? `
-                    <button class="btn btn-danger btn-sm delete-project-btn" data-project-id="${project.id}">
+                    <button class="btn btn-danger btn-sm delete-project-btn" data-project-id="${project.id}" data-project-name="${escapeHtml(project.name)}">
                         削除
                     </button>
                 ` : ''}
@@ -88,10 +88,11 @@ async function displayProjects() {
 
     // プロジェクト削除イベント
     document.querySelectorAll('.delete-project-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const projectId = e.target.dataset.projectId;
-            await deleteProject(projectId);
+            const projectName = e.target.dataset.projectName;
+            showDeleteProjectModal(projectId, projectName);
         });
     });
 }
@@ -166,12 +167,23 @@ async function createProject(name, description) {
     }
 }
 
+// プロジェクト削除確認モーダルを表示
+function showDeleteProjectModal(projectId, projectName) {
+    const modal = document.getElementById('delete-project-modal');
+    const projectNameEl = document.getElementById('delete-project-name');
+    const confirmInput = document.getElementById('delete-confirmation-input');
+    const confirmBtn = document.getElementById('confirm-delete-project');
+
+    projectNameEl.textContent = projectName;
+    confirmInput.value = '';
+    confirmBtn.disabled = true;
+    confirmBtn.dataset.projectId = projectId;
+
+    modal.style.display = 'flex';
+}
+
 // プロジェクトを削除
 async function deleteProject(projectId) {
-    if (!confirm('このプロジェクトを削除してもよろしいですか？\n※プロジェクト内のすべてのデータが削除されます')) {
-        return;
-    }
-
     try {
         const { error } = await supabase
             .from('projects')
@@ -181,6 +193,12 @@ async function deleteProject(projectId) {
         if (error) throw error;
 
         alert('プロジェクトを削除しました');
+
+        // モーダルを閉じる
+        const modal = document.getElementById('delete-project-modal');
+        modal.style.display = 'none';
+
+        // プロジェクト一覧を再表示
         await displayProjects();
     } catch (error) {
         console.error('プロジェクト削除エラー:', error);
@@ -281,6 +299,36 @@ function initProjectSelectScreen() {
         appState.currentUser = null;
         window.currentProject = null;
         showScreen('login-screen');
+    });
+
+    // 削除モーダルのイベントリスナー
+    const deleteModal = document.getElementById('delete-project-modal');
+    const closeDeleteProject = document.getElementById('close-delete-project');
+    const cancelDeleteProject = document.getElementById('cancel-delete-project');
+    const confirmDeleteProject = document.getElementById('confirm-delete-project');
+    const deleteConfirmationInput = document.getElementById('delete-confirmation-input');
+
+    // モーダルを閉じる
+    closeDeleteProject?.addEventListener('click', () => {
+        deleteModal.style.display = 'none';
+    });
+
+    cancelDeleteProject?.addEventListener('click', () => {
+        deleteModal.style.display = 'none';
+    });
+
+    // 入力欄の監視
+    deleteConfirmationInput?.addEventListener('input', (e) => {
+        const value = e.target.value.trim();
+        confirmDeleteProject.disabled = value !== 'delete';
+    });
+
+    // 削除実行
+    confirmDeleteProject?.addEventListener('click', async () => {
+        const projectId = confirmDeleteProject.dataset.projectId;
+        if (projectId) {
+            await deleteProject(projectId);
+        }
     });
 }
 

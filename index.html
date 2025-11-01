@@ -149,6 +149,34 @@
                         </form>
                     </div>
                 </div>
+
+                <!-- プロジェクト削除確認モーダル -->
+                <div id="delete-project-modal" class="project-form-overlay" style="display: none;">
+                    <div class="project-form-container">
+                        <div class="project-form-header">
+                            <h3>⚠️ プロジェクトの削除</h3>
+                            <button class="btn-icon" id="close-delete-project">✕</button>
+                        </div>
+                        <div style="padding: 1rem 0;">
+                            <p style="margin-bottom: 1rem; color: var(--danger-color); font-weight: 600;">
+                                このプロジェクトを削除すると、すべてのデータ（タスク、コメント、会議など）が完全に削除されます。
+                            </p>
+                            <p style="margin-bottom: 1rem;">
+                                プロジェクト名: <strong id="delete-project-name"></strong>
+                            </p>
+                            <p style="margin-bottom: 1rem;">
+                                削除を実行するには、下記に <strong style="color: var(--danger-color);">delete</strong> と入力してください。
+                            </p>
+                            <div class="form-group">
+                                <input type="text" id="delete-confirmation-input" placeholder="delete と入力" autocomplete="off">
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" id="cancel-delete-project">キャンセル</button>
+                                <button type="button" class="btn btn-danger" id="confirm-delete-project" disabled>削除する</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
