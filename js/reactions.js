@@ -292,8 +292,55 @@ async function refreshReactionUI(commentId, commentType) {
     if (container) {
         const newUI = createReactionUI(commentId, commentType, reactions);
         container.outerHTML = newUI;
-        attachReactionListeners();
+        
+        // 新しく作成したUIにイベントリスナーを付与
+        const newContainer = document.querySelector(`.reaction-container[data-comment-id="${commentId}"][data-comment-type="${commentType}"]`);
+        if (newContainer) {
+            attachReactionListenersToContainer(newContainer);
+        }
     }
+}
+
+// 特定のコンテナにのみイベントリスナーを付与（再レンダリング時の再登録用）
+function attachReactionListenersToContainer(container) {
+    // リアクションボタンのクリック（トグル）
+    container.querySelectorAll('.reaction-btn').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const commentId = btn.dataset.commentId;
+                const commentType = btn.dataset.commentType;
+                const reactionType = btn.dataset.reaction;
+
+                const isActive = btn.classList.contains('active');
+                let success;
+
+                if (isActive) {
+                    success = await removeReaction(commentId, commentType, reactionType);
+                } else {
+                    success = await addReaction(commentId, commentType, reactionType);
+                }
+
+                if (success) {
+                    await refreshReactionUI(commentId, commentType);
+                }
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
+    });
+
+    // リアクション追加ボタンのクリック
+    container.querySelectorAll('.add-reaction-btn').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const commentId = btn.dataset.commentId;
+                const commentType = btn.dataset.commentType;
+                showReactionPicker(commentId, commentType, btn);
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
+    });
 }
 
 // ユーザー名を取得（userIdsの配列からユーザー名の配列を返す）
