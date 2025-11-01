@@ -86,6 +86,8 @@ CREATE POLICY "プロジェクトメンバー以上は会議を作成・更新�
 DROP POLICY IF EXISTS "ユーザーはリアクションを追加可能" ON comment_reactions;
 DROP POLICY IF EXISTS "プロジェクト閲覧者はリアクションを閲覧可能" ON comment_reactions;
 DROP POLICY IF EXISTS "プロジェクトメンバー以上はリアクションを追加可能" ON comment_reactions;
+DROP POLICY IF EXISTS "ユーザーは所属プロジェクトのリアクションを閲覧可能" ON comment_reactions;
+DROP POLICY IF EXISTS "ユーザーは自分のリアクションを削除可能" ON comment_reactions;
 
 CREATE POLICY "プロジェクト閲覧者はリアクションを閲覧可能" ON comment_reactions
     FOR SELECT USING (
@@ -104,6 +106,9 @@ CREATE POLICY "プロジェクトメンバー以上はリアクションを追�
             WHERE user_id = auth.uid() AND role IN ('owner', 'admin', 'member')
         )
     );
+
+CREATE POLICY "ユーザーは自分のリアクションを削除可能" ON comment_reactions
+    FOR DELETE USING (user_id = auth.uid());
 
 -- 6. comment_read_status は全員が利用可能（既読状態は個人のデータ）
 -- 既存のポリシーのまま
