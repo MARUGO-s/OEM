@@ -123,6 +123,12 @@ async function selectProject(projectId) {
             headerTitle.innerHTML = `🍽️ MARUGO OEM<br>${escapeHtml(data.name)}`;
         }
 
+        // 進行状況セクションのタイトルを更新
+        const summaryTitle = document.getElementById('project-summary-title');
+        if (summaryTitle) {
+            summaryTitle.innerHTML = `📊 ${escapeHtml(data.name)}<br>進行状況`;
+        }
+
         // データを読み込み
         if (typeof loadAllData === 'function') {
             await loadAllData();
