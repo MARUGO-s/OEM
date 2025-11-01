@@ -383,6 +383,13 @@ function renderRoadmapComments(comments) {
     const parentComments = comments.filter(c => !c.parent_id);
     const childComments = comments.filter(c => c.parent_id);
 
+    // 親コメントをcreated_atで降順ソート（最新が上）
+    parentComments.sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+        const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+        return dateB - dateA;
+    });
+
     // コメントHTMLを生成する関数
     const createCommentHTML = (comment, isReply = false) => {
         // created_atが存在しない場合のフォールバック
@@ -430,6 +437,14 @@ function renderRoadmapComments(comments) {
     // 親コメントと返信を階層的に表示
     container.innerHTML = parentComments.map(parent => {
         const replies = childComments.filter(child => child.parent_id === parent.id);
+        
+        // 返信をcreated_atで降順ソート（最新が上）
+        replies.sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+            const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+            return dateB - dateA;
+        });
+        
         if (replies.length > 0) {
             // 返信をL字型レイアウトで表示
             return `
