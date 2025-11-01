@@ -2,9 +2,10 @@
 -- リアクション、スレッド、メンション、未読管理機能を追加
 
 -- 1. リアクション機能のテーブル
+-- 注: comment_idはTEXT型（既存コメントIDと一致させる）
 CREATE TABLE IF NOT EXISTS comment_reactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    comment_id UUID NOT NULL,
+    comment_id TEXT NOT NULL,
     comment_type TEXT NOT NULL CHECK (comment_type IN ('task_comment', 'discussion_comment')),
     user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
     reaction TEXT NOT NULL CHECK (reaction IN ('thumbs_up', 'heart', 'celebration', 'eyes', 'rocket', 'fire')),
@@ -26,9 +27,10 @@ ADD COLUMN IF NOT EXISTS parent_id TEXT REFERENCES discussion_comments(id) ON DE
 ADD COLUMN IF NOT EXISTS mentions TEXT[] DEFAULT '{}';
 
 -- 4. 未読管理テーブル
+-- 注: comment_idはTEXT型（既存コメントIDと一致させる）
 CREATE TABLE IF NOT EXISTS comment_read_status (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    comment_id UUID NOT NULL,
+    comment_id TEXT NOT NULL,
     comment_type TEXT NOT NULL CHECK (comment_type IN ('task_comment', 'discussion_comment')),
     user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
