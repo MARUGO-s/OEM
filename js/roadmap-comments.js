@@ -849,7 +849,23 @@ window.showCommentPopup = async function(commentId) {
         
         // 返信を取得
         const replies = roadmapCommentCache.filter(c => c.parent_id === commentId);
-        
+
+        // デバッグ: ポップアップの返信検索
+        console.log('=== ポップアップ返信デバッグ ===');
+        console.log('親コメントID:', commentId);
+        console.log('キャッシュ内の全コメント数:', roadmapCommentCache.length);
+        console.log('キャッシュ内のコメント一覧:');
+        roadmapCommentCache.forEach(c => {
+            console.log(`  - ID: ${c.id}, parent_id: ${c.parent_id}, 内容: ${c.content?.substring(0, 20)}...`);
+        });
+        console.log('見つかった返信数:', replies.length);
+        if (replies.length > 0) {
+            console.log('返信一覧:');
+            replies.forEach(r => {
+                console.log(`  - ID: ${r.id}, 内容: ${r.content?.substring(0, 20)}...`);
+            });
+        }
+
         // リアクションを取得
         let reactions = [];
         if (typeof window.loadReactions === 'function') {
