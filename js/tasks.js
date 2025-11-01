@@ -345,9 +345,32 @@ function renderTasks(retryCount = 0) {
         const statusIcon = task.status === 'completed' ? '✅' : 
                           task.status === 'in_progress' ? '🔄' : '⭕';
 
-        const comments = appState.comments
-            .filter(comment => comment.task_id === task.id)
-            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        const allComments = appState.comments
+            .filter(comment => comment.task_id === task.id);
+
+        // 親コメントと返信に分離
+        const parentComments = allComments.filter(c => !c.parent_id);
+        const childComments = allComments.filter(c => c.parent_id);
+
+        // 親コメントを降順ソート（最新が上）
+        parentComments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        // 親コメントごとに返信をグループ化
+        const commentGroups = [];
+        parentComments.forEach(parent => {
+            const replies = childComments
+                .filter(child => child.parent_id === parent.id)
+                .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // 返信は昇順
+
+            commentGroups.push({ parent, replies });
+        });
+
+        // 全コメントをフラット化（親→返信の順）
+        const comments = [];
+        commentGroups.forEach(group => {
+            comments.push(group.parent);
+            comments.push(...group.replies);
+        });
 
         const descriptionLines = (task.description || '')
             .split(/\r?\n|・|\u30fb/)
@@ -362,7 +385,8 @@ function renderTasks(retryCount = 0) {
         const detailEntries = comments.map(comment => ({
             type: 'comment',
             text: comment.content,
-            comment: comment
+            comment: comment,
+            isReply: !!comment.parent_id
         }));
 
         const commentsList = detailEntries.length > 0
@@ -382,10 +406,14 @@ function renderTasks(retryCount = 0) {
                     // 削除ボタンの表示判定（ログインユーザーなら誰でも削除可能）
                     const canDelete = appState.currentUser && appState.currentUser.username;
                     
+                    // 返信の場合はインデントを追加
+                    const indentStyle = entry.isReply ? 'margin-left: 1.5rem; padding-left: 0.75rem; border-left: 2px solid #cbd5e1;' : '';
+                    const bulletChar = entry.isReply ? '└' : '・';
+
                     return `
-                        <div class="roadmap-comment-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
+                        <div class="roadmap-comment-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease; ${indentStyle}">
                             <div class="roadmap-comment-bullet comment" data-comment-id="${escapeHtml(comment.id)}" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
-                                <span class="comment-bullet">・</span>
+                                <span class="comment-bullet">${bulletChar}</span>
                                 <div class="comment-content">
                                     <div class="comment-text">${escapeHtml(entry.text)}</div>
                                     <div class="comment-meta">
