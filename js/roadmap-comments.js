@@ -355,23 +355,36 @@ async function loadRoadmapComments(taskId) {
     }
 }
 
+// 新しいコメントかどうかを判定（24時間以内）
+function isNewComment(comment) {
+    if (!comment.created_at) return false;
+    const commentDate = new Date(comment.created_at);
+    const now = new Date();
+    const hoursDiff = (now - commentDate) / (1000 * 60 * 60);
+    return hoursDiff < 24;
+}
+
 // ロードマップコメントの表示
 function renderRoadmapComments(comments) {
     const container = document.getElementById('roadmap-comments-list');
-    
+
     // コンテナが存在しない場合は処理を中断
     if (!container) {
         console.error('roadmap-comments-list要素が見つかりません');
         return;
     }
-    
+
     if (!comments || comments.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: #64748b; padding: 1rem;">まだコメントがありません。</p>';
         return;
     }
 
-    // 画像のような箇条書き形式で表示（日時付き、クリック可能、削除ボタン付き）
-    container.innerHTML = comments.map(comment => {
+    // コメントを親子関係で整理
+    const parentComments = comments.filter(c => !c.parent_id);
+    const childComments = comments.filter(c => c.parent_id);
+
+    // コメントHTMLを生成する関数
+    const createCommentHTML = (comment, isReply = false) => {
         // created_atが存在しない場合のフォールバック
         const date = comment.created_at ? new Date(comment.created_at) : new Date();
         const formattedDate = date.toLocaleDateString('ja-JP', {
@@ -379,26 +392,50 @@ function renderRoadmapComments(comments) {
             month: '2-digit',
             day: '2-digit'
         });
-        
+
         // 投稿者名を取得（メールアドレスから抽出）
-        const authorName = comment.author_username || 
+        const authorName = comment.author_username ||
             (comment.author_email ? comment.author_email.split('@')[0] : '匿名');
-        
+
         // 削除ボタンの表示判定（ログインユーザーなら誰でも削除可能）
         const canDelete = appState.currentUser && appState.currentUser.username;
-        
+
+        // 返信の場合はインデントとスタイルを変更
+        const marginLeft = isReply ? '2rem' : '0';
+        const bgColor = isReply ? '#f1f5f9' : '#f8fafc';
+
         return `
-            <div class="roadmap-comment-item" data-comment-id="${escapeHtml(comment.id || '')}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease;">
-                <div class="roadmap-comment-bullet" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
-                    <span class="comment-bullet">・</span>
-                    <span class="comment-text">${escapeHtml(comment.content || '')}</span>
-                    <span class="comment-date">${escapeHtml(authorName)} ${escapeHtml(formattedDate)}</span>
+            <div class="roadmap-comment-item ${isReply ? 'reply' : ''}" data-comment-id="${escapeHtml(comment.id || '')}" style="padding: 0.75rem; border-radius: 0.5rem; background: ${bgColor}; margin-bottom: 0.5rem; margin-left: ${marginLeft}; transition: background-color 0.2s ease; ${isReply ? 'border-left: 3px solid #3b82f6;' : ''}">
+                <div style="display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <div class="roadmap-comment-content" style="cursor: pointer; flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+                            ${isReply ? '<span style="color: #3b82f6; margin-right: 0.25rem;">↳</span>' : ''}
+                            <span style="font-weight: 600; color: #1e293b;">${escapeHtml(authorName)}</span>
+                            <span class="comment-date" style="font-size: 0.75rem; color: #64748b;">${escapeHtml(formattedDate)}</span>
+                            ${isNewComment(comment) ? '<span style="background: #ef4444; color: white; font-size: 0.625rem; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-weight: 600;">NEW</span>' : ''}
+                        </div>
+                        <div class="comment-text" style="color: #334155; line-height: 1.6;">${escapeHtml(comment.content || '')}</div>
+                    </div>
+                    ${canDelete ? `<button class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease; flex-shrink: 0;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
+                        削除
+                    </button>` : ''}
                 </div>
-                ${canDelete ? `<button class="delete-comment-btn" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
-                    削除
+                <div class="reaction-placeholder" data-comment-id="${escapeHtml(comment.id || '')}" data-comment-type="task_comment"></div>
+                ${!isReply ? `<button class="reply-comment-btn" data-comment-id="${escapeHtml(comment.id || '')}" style="background: transparent; border: none; color: #3b82f6; font-size: 0.75rem; cursor: pointer; padding: 0.25rem 0; margin-top: 0.25rem;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                    💬 返信
                 </button>` : ''}
             </div>
         `;
+    };
+
+    // 親コメントと返信を階層的に表示
+    container.innerHTML = parentComments.map(parent => {
+        const replies = childComments.filter(child => child.parent_id === parent.id);
+        let html = createCommentHTML(parent, false);
+        if (replies.length > 0) {
+            html += replies.map(reply => createCommentHTML(reply, true)).join('');
+        }
+        return html;
     }).join('');
     
     // イベントリスナーを安全に追加（XSS対策、重複防止）
@@ -431,6 +468,40 @@ function renderRoadmapComments(comments) {
                 }
             });
             deleteBtn.dataset.listenerAttached = 'true';
+        }
+
+        // コメント内容クリックイベント（詳細表示）
+        const contentEl = item.querySelector('.roadmap-comment-content');
+        if (contentEl && !contentEl.dataset.listenerAttached) {
+            contentEl.addEventListener('click', () => {
+                if (typeof window.showCommentPopup === 'function') {
+                    window.showCommentPopup(commentId);
+                }
+            });
+            contentEl.dataset.listenerAttached = 'true';
+        }
+
+        // 返信ボタンのイベント
+        const replyBtn = item.querySelector('.reply-comment-btn');
+        if (replyBtn && !replyBtn.dataset.listenerAttached) {
+            replyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showReplyForm(commentId, 'task_comment');
+            });
+            replyBtn.dataset.listenerAttached = 'true';
+        }
+
+        // リアクションUIをロード
+        if (typeof window.loadReactions === 'function' && typeof window.createReactionUI === 'function') {
+            const reactionPlaceholder = item.querySelector('.reaction-placeholder');
+            if (reactionPlaceholder) {
+                window.loadReactions(commentId, 'task_comment').then(reactions => {
+                    reactionPlaceholder.innerHTML = window.createReactionUI(commentId, 'task_comment', reactions);
+                    if (typeof window.attachReactionListeners === 'function') {
+                        window.attachReactionListeners();
+                    }
+                });
+            }
         }
     });
 }
@@ -537,6 +608,11 @@ async function submitRoadmapComment() {
             return;
         }
 
+        // メンションを抽出
+        const mentions = typeof window.extractMentions === 'function'
+            ? window.extractMentions(content)
+            : [];
+
         // 新しいコメントを作成
         const newComment = {
             id: generateRoadmapCommentId(),
@@ -545,6 +621,7 @@ async function submitRoadmapComment() {
             author_id: currentUser.id,
             author_username: currentUser.username,
             content: content,
+            mentions: mentions,
             created_at: new Date().toISOString()
         };
 
@@ -942,13 +1019,18 @@ function getPriorityLabel(priority) {
 
 // 初期化
 document.addEventListener('DOMContentLoaded', function() {
+    // プロジェクトメンバーを読み込み（メンション機能用）
+    if (typeof window.loadProjectMembers === 'function') {
+        window.loadProjectMembers().catch(err => console.error('プロジェクトメンバー読み込みエラー:', err));
+    }
+
     // コメント投稿ボタンのイベントリスナー
     const commentSubmitBtn = document.getElementById('roadmap-comment-submit');
     if (commentSubmitBtn) {
         commentSubmitBtn.addEventListener('click', submitRoadmapComment);
     }
-    
-    // コメント入力欄のEnterキー対応
+
+    // コメント入力欄のEnterキー対応とメンション機能
     const commentInput = document.getElementById('roadmap-comment-input');
     if (commentInput) {
         commentInput.addEventListener('keydown', (e) => {
@@ -957,6 +1039,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitRoadmapComment();
             }
         });
+
+        // メンション機能を追加
+        if (typeof window.attachMentionListener === 'function') {
+            window.attachMentionListener(commentInput);
+        }
     }
     
     // モーダル外クリックで閉じる
@@ -1140,6 +1227,139 @@ async function deleteRoadmapComment(commentId) {
     } catch (error) {
         console.error('コメント削除エラー:', error);
         showNotification('コメントの削除に失敗しました', 'error');
+    }
+}
+
+// 返信フォームを表示
+function showReplyForm(parentCommentId, commentType) {
+    const modal = document.getElementById('roadmap-item-modal');
+    const existingReplyForm = document.querySelector('.reply-form-container');
+
+    // 既存の返信フォームがあれば削除
+    if (existingReplyForm) {
+        existingReplyForm.remove();
+    }
+
+    // 返信フォームを作成
+    const replyFormContainer = document.createElement('div');
+    replyFormContainer.className = 'reply-form-container';
+    replyFormContainer.style.cssText = `
+        background: #f8fafc;
+        border-left: 3px solid #3b82f6;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 0.5rem;
+    `;
+
+    replyFormContainer.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.875rem; color: #64748b;">返信を入力</span>
+            <button class="close-reply-form-btn" style="background: none; border: none; color: #64748b; cursor: pointer; font-size: 1.25rem;">&times;</button>
+        </div>
+        <textarea class="reply-input" placeholder="返信を入力..." style="width: 100%; min-height: 60px; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; resize: vertical; font-family: inherit;"></textarea>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button class="submit-reply-btn" style="background: #3b82f6; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">返信する</button>
+            <button class="cancel-reply-btn" style="background: #e2e8f0; color: #475569; border: none; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">キャンセル</button>
+        </div>
+    `;
+
+    // コメント入力欄の直後に挿入
+    const commentInputSection = modal.querySelector('.roadmap-comments-section');
+    if (commentInputSection) {
+        commentInputSection.insertAdjacentElement('beforebegin', replyFormContainer);
+    }
+
+    // イベントリスナー
+    const replyInput = replyFormContainer.querySelector('.reply-input');
+    const submitBtn = replyFormContainer.querySelector('.submit-reply-btn');
+    const cancelBtn = replyFormContainer.querySelector('.cancel-reply-btn');
+    const closeBtn = replyFormContainer.querySelector('.close-reply-form-btn');
+
+    // メンション機能を追加
+    if (typeof window.attachMentionListener === 'function') {
+        window.attachMentionListener(replyInput);
+    }
+
+    submitBtn.addEventListener('click', async () => {
+        const content = replyInput.value.trim();
+        if (!content) {
+            alert('返信内容を入力してください');
+            return;
+        }
+
+        const success = await submitReply(parentCommentId, content, commentType);
+        if (success) {
+            replyFormContainer.remove();
+            // コメントを再読み込み
+            const taskId = modal.dataset.taskId;
+            if (taskId) {
+                await loadRoadmapComments(taskId);
+            }
+        }
+    });
+
+    cancelBtn.addEventListener('click', () => {
+        replyFormContainer.remove();
+    });
+
+    closeBtn.addEventListener('click', () => {
+        replyFormContainer.remove();
+    });
+
+    replyInput.focus();
+}
+
+// 返信を投稿
+async function submitReply(parentCommentId, content, commentType) {
+    try {
+        if (!appState.currentUser || !appState.currentUser.id) {
+            alert('返信するにはログインが必要です');
+            return false;
+        }
+
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            alert('プロジェクトが選択されていません');
+            return false;
+        }
+
+        const modal = document.getElementById('roadmap-item-modal');
+        const taskId = modal.dataset.taskId;
+
+        // メンションを抽出
+        const mentions = typeof window.extractMentions === 'function'
+            ? window.extractMentions(content)
+            : [];
+
+        const newReply = {
+            id: generateRoadmapCommentId(),
+            task_id: taskId,
+            project_id: projectId,
+            author_id: appState.currentUser.id,
+            author_username: appState.currentUser.username,
+            content: content,
+            mentions: mentions,
+            parent_id: parentCommentId,
+            created_at: new Date().toISOString()
+        };
+
+        const { data, error } = await supabase
+            .from('task_comments')
+            .insert([newReply])
+            .select();
+
+        if (error) {
+            console.error('返信投稿エラー:', error);
+            alert('返信の投稿に失敗しました');
+            return false;
+        }
+
+        showNotification('返信を投稿しました', 'success');
+        return true;
+    } catch (error) {
+        console.error('返信投稿例外:', error);
+        alert('返信の投稿に失敗しました');
+        return false;
     }
 }
 
