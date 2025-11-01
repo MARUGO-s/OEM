@@ -821,20 +821,18 @@ window.showCommentPopup = async function(commentId) {
             existingPopup.remove();
         }
 
-        // 現在のタスクIDを取得
-        const modal = document.getElementById('roadmap-item-modal');
-        const taskId = modal?.dataset.taskId;
-
-        // タスクIDがあれば、コメントを再読み込みしてキャッシュを更新
-        if (taskId) {
-            await loadRoadmapComments(taskId);
-        }
-
         // コメントを段階的に探索（モーダルキャッシュ → 全体キャッシュ → Supabase）
         let comment = roadmapCommentCache.find(c => c.id === commentId);
 
         if (!comment && Array.isArray(appState.comments)) {
             comment = appState.comments.find(c => c.id === commentId);
+        }
+
+        // コメントからtask_idを取得して、コメントを再読み込み
+        if (comment && comment.task_id) {
+            await loadRoadmapComments(comment.task_id);
+            // 再読み込み後、もう一度コメントを取得
+            comment = roadmapCommentCache.find(c => c.id === commentId) || comment;
         }
 
         if (!comment) {
@@ -921,7 +919,8 @@ window.showCommentPopup = async function(commentId) {
                         <span style="font-weight: 600; color: #3b82f6;">↳ ${escapeHtml(replyAuthorName)}</span>
                         <span style="font-size: 0.75rem; color: #64748b;">${escapeHtml(replyFormattedDate)}</span>
                     </div>
-                    <div style="color: #334155;">${escapeHtml(reply.content || '')}</div>
+                    <div style="color: #334155; margin-bottom: 0.5rem;">${escapeHtml(reply.content || '')}</div>
+                    <div class="reaction-placeholder" data-comment-id="${escapeHtml(reply.id || '')}" data-comment-type="task_comment"></div>
                 </div>
             `;
         }).join('') : '<div style="text-align: center; color: #94a3b8; padding: 1rem;">返信はまだありません</div>';
@@ -1049,7 +1048,19 @@ window.showCommentPopup = async function(commentId) {
         }
         
         document.body.appendChild(popup);
-        
+
+        // 返信のリアクションUIをロード
+        if (typeof window.loadReactionUI === 'function') {
+            const replyPlaceholders = popup.querySelectorAll('.comment-replies .reaction-placeholder');
+            replyPlaceholders.forEach(placeholder => {
+                const replyCommentId = placeholder.dataset.commentId;
+                const commentType = placeholder.dataset.commentType;
+                if (replyCommentId && commentType) {
+                    window.loadReactionUI(placeholder, replyCommentId, commentType);
+                }
+            });
+        }
+
         // 背景クリックで閉じる
         popup.addEventListener('click', (e) => {
             if (e.target === popup) {
@@ -1499,6 +1510,43 @@ async function submitReply(parentCommentId, content, commentType) {
             console.error('返信投稿エラー:', error);
             alert('返信の投稿に失敗しました');
             return false;
+        }
+
+        const insertedReply = Array.isArray(data) && data.length > 0 ? data[0] : newReply;
+
+        // 親コメントの投稿者に通知を送る
+        try {
+            const parentComment = roadmapCommentCache.find(c => c.id === parentCommentId)
+                || appState.comments.find(c => c.id === parentCommentId);
+
+            if (parentComment && parentComment.author_id !== appState.currentUser.id) {
+                const previewText = content.length > 50 ? content.substring(0, 50) + '…' : content;
+                console.log('🔔 返信通知を作成します:', {
+                    type: 'comment_reply',
+                    message: `${appState.currentUser.username}さんがあなたのコメントに返信しました: ${previewText}`,
+                    related_id: insertedReply.id
+                });
+
+                await createNotification({
+                    type: 'comment_reply',
+                    message: `${appState.currentUser.username}さんがあなたのコメントに返信しました: ${previewText}`,
+                    related_id: insertedReply.id,
+                    recipient_id: parentComment.author_id
+                });
+
+                if (typeof loadNotifications === 'function') {
+                    await loadNotifications();
+                }
+                if (typeof updateNotificationBadge === 'function') {
+                    updateNotificationBadge();
+                }
+                if (typeof renderNotifications === 'function') {
+                    renderNotifications();
+                }
+            }
+        } catch (notificationError) {
+            console.error('❌ 返信通知送信エラー:', notificationError);
+            // 通知エラーは返信投稿を阻害しない
         }
 
         showNotification('返信を投稿しました', 'success');

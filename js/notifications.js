@@ -728,6 +728,7 @@ function getNotificationIcon(type) {
         discussion_comment_deleted: '🗑️',
         brainstorm_idea_created: '🧠',
         new_comment: '💬',
+        comment_reply: '💬',
         new_discussion_comment: '💭',
         meeting_scheduled: '📅',
         meeting_deleted: '🗑️',
