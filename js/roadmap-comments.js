@@ -1267,9 +1267,13 @@ function showReplyForm(parentCommentId, commentType) {
     `;
 
     // コメント入力欄の直後に挿入
-    const commentInputSection = modal.querySelector('.roadmap-comments-section');
+    const commentInputSection = modal.querySelector('.roadmap-item-comments');
+    console.log('commentInputSection found:', commentInputSection);
     if (commentInputSection) {
         commentInputSection.insertAdjacentElement('beforebegin', replyFormContainer);
+        console.log('返信フォームを挿入しました');
+    } else {
+        console.error('コメント入力欄が見つかりませんでした');
     }
 
     // イベントリスナー
