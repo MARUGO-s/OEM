@@ -150,7 +150,7 @@ function createReactionUI(commentId, commentType, reactions) {
     const { summary, userMap } = summarizeReactions(reactions);
     const currentUserId = appState.currentUser?.id;
 
-    let html = '<div class="reaction-container" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; align-items: center;">';
+    let html = `<div class="reaction-container" data-comment-id="${commentId}" data-comment-type="${commentType}" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; align-items: center;">`;
 
     // 既存のリアクションを表示
     Object.entries(REACTION_TYPES).forEach(([type, emoji]) => {

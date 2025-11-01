@@ -1371,5 +1371,6 @@ window.showCommentPopup = showCommentPopup;
 window.closeCommentPopup = closeCommentPopup;
 window.deleteRoadmapComment = deleteRoadmapComment;
 window.deleteTask = deleteTask;
+window.showReplyForm = showReplyForm;
 
 document.head.appendChild(style);
