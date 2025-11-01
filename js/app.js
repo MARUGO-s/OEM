@@ -86,12 +86,19 @@ function reconnectRealtimeSubscriptions() {
 
 // すべてのデータを読み込む
 async function loadAllData() {
-    if (appInitialized) {
-        console.log('アプリケーションは既に初期化済みです');
-        return;
-    }
-    
     try {
+        // 既に初期化済みの場合は、既存のサブスクリプションをクリア
+        if (appInitialized) {
+            console.log('プロジェクト切り替えを検知、既存サブスクリプションをクリアします');
+            // 既存のサブスクリプションをクリア
+            appState.subscriptions.forEach(subscription => {
+                if (subscription && subscription.unsubscribe) {
+                    subscription.unsubscribe();
+                }
+            });
+            appState.subscriptions = [];
+        }
+        
         // Supabaseからデータを読み込み（エラーハンドリング付き）
         await Promise.allSettled([
             loadTasks().catch(err => console.error('タスク読み込みエラー:', err)),
@@ -178,8 +185,8 @@ async function loadAllData() {
                 }
             }, 1000); // 1秒後にUI更新
             
-            // モバイル環境での再接続機能
-            if (isMobile) {
+            // モバイル環境での再接続機能（初回のみ設定）
+            if (isMobile && !appInitialized) {
                 console.log('📱 モバイル環境での再接続機能を有効化します');
                 setupMobileReconnection();
             }
@@ -189,7 +196,7 @@ async function loadAllData() {
             console.error('エラー詳細:', error.stack);
             
             // モバイル環境でのエラー時は再接続を試行
-            if (isMobile) {
+            if (isMobile && !appInitialized) {
                 console.log('📱 モバイル環境でのエラー検知、再接続を試行します');
                 setTimeout(() => {
                     console.log('🔄 モバイル環境での再接続を開始します');
