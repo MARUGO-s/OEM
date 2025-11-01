@@ -169,31 +169,34 @@ function createReactionUI(commentId, commentType, reactions) {
 
         if (count > 0) {
             html += `
-                <button
-                    class="reaction-btn ${isActive ? 'active' : ''}"
-                    data-comment-id="${commentId}"
-                    data-comment-type="${commentType}"
-                    data-reaction="${type}"
-                    style="
-                        background: ${isActive ? '#dbeafe' : '#f1f5f9'};
-                        border: 1px solid ${isActive ? '#3b82f6' : '#cbd5e1'};
-                        color: ${isActive ? '#1e40af' : '#475569'};
-                        padding: 0.25rem 0.5rem;
-                        border-radius: 1rem;
-                        font-size: 0.875rem;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        gap: 0.25rem;
-                        transition: all 0.2s;
-                    "
-                    onmouseover="this.style.transform='scale(1.1)'"
-                    onmouseout="this.style.transform='scale(1)'"
-                    title="${userNames.join(', ')}"
-                >
-                    <span>${emoji}</span>
-                    <span style="font-weight: 500;">${count}</span>
-                </button>
+                <div style="position: relative; display: inline-block;">
+                    <button
+                        class="reaction-btn ${isActive ? 'active' : ''}"
+                        data-comment-id="${commentId}"
+                        data-comment-type="${commentType}"
+                        data-reaction="${type}"
+                        style="
+                            background: ${isActive ? '#dbeafe' : '#f1f5f9'};
+                            border: 1px solid ${isActive ? '#3b82f6' : '#cbd5e1'};
+                            color: ${isActive ? '#1e40af' : '#475569'};
+                            padding: 0.25rem 0.5rem;
+                            border-radius: 1rem;
+                            font-size: 0.875rem;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            gap: 0.25rem;
+                            transition: transform 0.1s, opacity 0.1s;
+                        "
+                    >
+                        <span>${emoji}</span>
+                        <span style="font-weight: 500;">${count}</span>
+                    </button>
+                    <div class="reaction-tooltip" style="position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 0.25rem; padding: 0.5rem 0.75rem; background: #1f2937; color: white; border-radius: 0.375rem; font-size: 0.75rem; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 1000;">
+                        ${escapeHtml(userNames.join(', '))}
+                        <div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid #1f2937;"></div>
+                    </div>
+                </div>
             `;
         }
     });
@@ -351,6 +354,22 @@ function attachReactionListenersToContainer(container) {
             btn.dataset.listenerAttached = 'true';
         }
     });
+    
+    // ツールチップ表示イベントとホバーエフェクト
+    container.querySelectorAll('.reaction-btn').forEach(btn => {
+        const tooltip = btn.parentElement?.querySelector('.reaction-tooltip');
+        if (!btn.dataset.tooltipListenerAttached) {
+            btn.addEventListener('mouseenter', () => {
+                btn.style.transform = 'scale(1.1)';
+                if (tooltip) tooltip.style.opacity = '1';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.transform = 'scale(1)';
+                if (tooltip) tooltip.style.opacity = '0';
+            });
+            btn.dataset.tooltipListenerAttached = 'true';
+        }
+    });
 }
 
 // ユーザー名を取得（userIdsの配列からユーザー名の配列を返す）
@@ -404,6 +423,22 @@ function attachReactionListeners() {
                 showReactionPicker(commentId, commentType, btn);
             });
             btn.dataset.listenerAttached = 'true';
+        }
+    });
+    
+    // ツールチップ表示イベントとホバーエフェクト
+    document.querySelectorAll('.reaction-btn').forEach(btn => {
+        const tooltip = btn.parentElement?.querySelector('.reaction-tooltip');
+        if (!btn.dataset.tooltipListenerAttached) {
+            btn.addEventListener('mouseenter', () => {
+                btn.style.transform = 'scale(1.1)';
+                if (tooltip) tooltip.style.opacity = '1';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.transform = 'scale(1)';
+                if (tooltip) tooltip.style.opacity = '0';
+            });
+            btn.dataset.tooltipListenerAttached = 'true';
         }
     });
 }
