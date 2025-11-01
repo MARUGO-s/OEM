@@ -465,6 +465,18 @@ function renderRoadmapComments(comments) {
     // グループ全体を親コメントの日時で降順ソート（最新の親コメントグループが上）
     commentGroups.sort((a, b) => b.sortDate - a.sortDate);
 
+    // デバッグ: グループ化結果を確認
+    console.log('=== グループ化デバッグ ===');
+    console.log('グループ数:', commentGroups.length);
+    commentGroups.forEach((group, index) => {
+        console.log(`グループ${index + 1}:`);
+        console.log(`  親: ${group.parent.id} - ${group.parent.content?.substring(0, 30)}...`);
+        console.log(`  返信数: ${group.replies.length}`);
+        group.replies.forEach((reply, i) => {
+            console.log(`    返信${i + 1}: ${reply.id} - ${reply.content?.substring(0, 30)}...`);
+        });
+    });
+
     // HTML生成
     container.innerHTML = commentGroups.map(group => {
         if (group.replies.length > 0) {
