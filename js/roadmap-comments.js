@@ -798,6 +798,15 @@ window.showCommentPopup = async function(commentId) {
             return;
         }
         
+        // 返信を取得
+        const replies = roadmapCommentCache.filter(c => c.parent_id === commentId);
+        
+        // リアクションを取得
+        let reactions = [];
+        if (typeof window.loadReactions === 'function') {
+            reactions = await window.loadReactions(commentId, 'task_comment');
+        }
+        
         // created_atが存在しない場合のフォールバック
         const date = comment.created_at ? new Date(comment.created_at) : new Date();
         const formattedDate = date.toLocaleDateString('ja-JP', {
@@ -808,6 +817,34 @@ window.showCommentPopup = async function(commentId) {
             minute: '2-digit',
             second: '2-digit'
         });
+        
+        // 返信のHTML生成
+        const repliesHTML = replies.length > 0 ? replies.map(reply => {
+            const replyDate = reply.created_at ? new Date(reply.created_at) : new Date();
+            const replyFormattedDate = replyDate.toLocaleDateString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            const replyAuthorName = reply.author_username || reply.author_email || '匿名';
+            return `
+                <div style="background: #f1f5f9; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.5rem; border-left: 3px solid #3b82f6;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <span style="font-weight: 600; color: #3b82f6;">↳ ${escapeHtml(replyAuthorName)}</span>
+                        <span style="font-size: 0.75rem; color: #64748b;">${escapeHtml(replyFormattedDate)}</span>
+                    </div>
+                    <div style="color: #334155;">${escapeHtml(reply.content || '')}</div>
+                </div>
+            `;
+        }).join('') : '<div style="text-align: center; color: #94a3b8; padding: 1rem;">返信はまだありません</div>';
+        
+        // リアクションUI生成
+        let reactionHTML = '';
+        if (typeof window.createReactionUI === 'function') {
+            reactionHTML = window.createReactionUI(commentId, 'task_comment', reactions);
+        }
         
         // ポップアップを作成
         const popup = document.createElement('div');
@@ -823,6 +860,13 @@ window.showCommentPopup = async function(commentId) {
                     <div class="comment-meta">
                         <div class="comment-author">投稿者: ${escapeHtml(comment.author_username || comment.author_email || '匿名')}</div>
                         <div class="comment-date">投稿日時: ${escapeHtml(formattedDate)}</div>
+                    </div>
+                    <div class="comment-reactions" style="margin: 1rem 0;">
+                        ${reactionHTML}
+                    </div>
+                    <div class="comment-replies" style="margin-top: 1rem; border-top: 1px solid #e2e8f0; padding-top: 1rem;">
+                        <h4 style="font-size: 0.875rem; color: #64748b; margin-bottom: 0.75rem;">💬 返信 (${replies.length})</h4>
+                        ${repliesHTML}
                     </div>
                 </div>
             </div>
@@ -848,7 +892,7 @@ window.showCommentPopup = async function(commentId) {
             background: white;
             border-radius: 0.75rem;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-            max-width: 500px;
+            max-width: 700px;
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
@@ -912,6 +956,11 @@ window.showCommentPopup = async function(commentId) {
         closeBtn.addEventListener('mouseleave', () => {
             closeBtn.style.backgroundColor = 'transparent';
         });
+        
+        // リアクションボタンにイベントリスナーを付与
+        if (typeof window.attachReactionListeners === 'function') {
+            window.attachReactionListeners();
+        }
         
         document.body.appendChild(popup);
         
@@ -1233,15 +1282,19 @@ async function deleteRoadmapComment(commentId) {
 
 // 返信フォームを表示
 function showReplyForm(parentCommentId, commentType) {
-    console.log('showReplyForm called:', parentCommentId, commentType);
     const modal = document.getElementById('roadmap-item-modal');
-    console.log('modal found:', modal);
     const existingReplyForm = document.querySelector('.reply-form-container');
 
     // 既存の返信フォームがあれば削除
     if (existingReplyForm) {
         existingReplyForm.remove();
     }
+
+    // 親コメントを取得
+    const parentComment = roadmapCommentCache.find(c => c.id === parentCommentId);
+    const parentAuthorName = parentComment 
+        ? (parentComment.author_username || parentComment.author_email || '匿名')
+        : '不明';
 
     // 返信フォームを作成
     const replyFormContainer = document.createElement('div');
@@ -1256,9 +1309,14 @@ function showReplyForm(parentCommentId, commentType) {
 
     replyFormContainer.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-            <span style="font-size: 0.875rem; color: #64748b;">返信を入力</span>
+            <span style="font-size: 0.875rem; color: #64748b;">💬 ${escapeHtml(parentAuthorName)}さんのコメントに返信</span>
             <button class="close-reply-form-btn" style="background: none; border: none; color: #64748b; cursor: pointer; font-size: 1.25rem;">&times;</button>
         </div>
+        ${parentComment ? `
+        <div style="background: #e2e8f0; padding: 0.5rem; border-radius: 0.375rem; margin-bottom: 0.5rem; font-size: 0.875rem; color: #475569; border-left: 3px solid #3b82f6;">
+            ${escapeHtml(parentComment.content || '')}
+        </div>
+        ` : ''}
         <textarea class="reply-input" placeholder="返信を入力..." style="width: 100%; min-height: 60px; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; resize: vertical; font-family: inherit;"></textarea>
         <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
             <button class="submit-reply-btn" style="background: #3b82f6; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">返信する</button>
@@ -1268,12 +1326,8 @@ function showReplyForm(parentCommentId, commentType) {
 
     // コメント入力欄の直後に挿入
     const commentInputSection = modal.querySelector('.roadmap-item-comments');
-    console.log('commentInputSection found:', commentInputSection);
     if (commentInputSection) {
         commentInputSection.insertAdjacentElement('beforebegin', replyFormContainer);
-        console.log('返信フォームを挿入しました');
-    } else {
-        console.error('コメント入力欄が見つかりませんでした');
     }
 
     // イベントリスナー

@@ -27,7 +27,10 @@ async function loadReactions(commentId, commentType) {
 
         const { data: reactions, error } = await supabase
             .from('comment_reactions')
-            .select('*')
+            .select(`
+                *,
+                user:user_profiles!user_id(username, display_name)
+            `)
             .eq('comment_id', commentId)
             .eq('comment_type', commentType)
             .eq('project_id', projectId);
@@ -132,22 +135,28 @@ async function removeReaction(commentId, commentType, reactionType) {
 function summarizeReactions(reactions) {
     const summary = {};
     const userMap = {};
+    const userNameMap = {};
 
     reactions.forEach(reaction => {
         if (!summary[reaction.reaction]) {
             summary[reaction.reaction] = 0;
             userMap[reaction.reaction] = [];
+            userNameMap[reaction.reaction] = [];
         }
         summary[reaction.reaction]++;
         userMap[reaction.reaction].push(reaction.user_id);
+        
+        // ユーザー名を取得
+        const userName = reaction.user?.username || reaction.user?.display_name || '不明';
+        userNameMap[reaction.reaction].push(userName);
     });
 
-    return { summary, userMap };
+    return { summary, userMap, userNameMap };
 }
 
 // リアクションUIを生成
 function createReactionUI(commentId, commentType, reactions) {
-    const { summary, userMap } = summarizeReactions(reactions);
+    const { summary, userMap, userNameMap } = summarizeReactions(reactions);
     const currentUserId = appState.currentUser?.id;
 
     let html = `<div class="reaction-container" data-comment-id="${commentId}" data-comment-type="${commentType}" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; align-items: center;">`;
@@ -156,6 +165,7 @@ function createReactionUI(commentId, commentType, reactions) {
     Object.entries(REACTION_TYPES).forEach(([type, emoji]) => {
         const count = summary[type] || 0;
         const isActive = userMap[type]?.includes(currentUserId);
+        const userNames = userNameMap[type] || [];
 
         if (count > 0) {
             html += `
@@ -179,7 +189,7 @@ function createReactionUI(commentId, commentType, reactions) {
                     "
                     onmouseover="this.style.transform='scale(1.1)'"
                     onmouseout="this.style.transform='scale(1)'"
-                    title="${getUsernames(userMap[type]).join(', ')}"
+                    title="${userNames.join(', ')}"
                 >
                     <span>${emoji}</span>
                     <span style="font-weight: 500;">${count}</span>
