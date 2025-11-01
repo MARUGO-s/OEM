@@ -437,12 +437,12 @@ function renderRoadmapComments(comments) {
     // 親コメントと返信を階層的に表示
     container.innerHTML = parentComments.map(parent => {
         const replies = childComments.filter(child => child.parent_id === parent.id);
-        
-        // 返信をcreated_atで降順ソート（最新が上）
+
+        // 返信をcreated_atで昇順ソート（古い順＝会話の流れ）
         replies.sort((a, b) => {
             const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
             const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
-            return dateB - dateA;
+            return dateA - dateB;
         });
         
         if (replies.length > 0) {
