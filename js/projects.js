@@ -18,7 +18,8 @@ async function loadProjects() {
                     description,
                     created_by,
                     created_at,
-                    updated_at
+                    updated_at,
+                    owner:user_profiles!projects_created_by_fkey(username, display_name)
                 )
             `)
             .eq('user_id', appState.currentUser.id);
@@ -27,7 +28,8 @@ async function loadProjects() {
 
         const projects = memberData.map(item => ({
             ...item.projects,
-            role: item.role
+            role: item.role,
+            ownerName: item.projects.owner?.username || item.projects.owner?.display_name || '不明'
         }));
 
         return projects;
@@ -62,7 +64,8 @@ async function displayProjects() {
             </div>
             <p class="project-card-description">${escapeHtml(project.description || '説明なし')}</p>
             <div class="project-card-meta">
-                <div>作成日: ${formatDate(project.created_at)}</div>
+                <div>📅 作成日: ${formatDate(project.created_at)}</div>
+                <div>👤 オーナー: <strong>${escapeHtml(project.ownerName)}</strong></div>
             </div>
             <div class="project-card-actions">
                 <button class="btn btn-primary btn-sm select-project-btn" data-project-id="${project.id}">
