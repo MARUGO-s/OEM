@@ -393,8 +393,13 @@ async function checkSession() {
         if (session) {
             console.log('Supabaseセッション存在:', session);
             await refreshCurrentUser();
-            showMainScreen();
-            await callLoadAllDataSafely();
+            
+            // プロジェクト選択画面へ遷移（プロジェクト選択は必須）
+            console.log('プロジェクト選択画面に遷移します');
+            showProjectSelectScreen();
+            if (typeof initProjectSelectScreen === 'function') {
+                initProjectSelectScreen();
+            }
         } else {
             console.log('Supabaseセッションなし');
             showLoginScreen();
@@ -464,13 +469,8 @@ function showMainScreen() {
         }
     }
     
-    // DOM要素の表示完了を待ってからデータ読み込みを開始
-    requestAnimationFrame(() => {
-        setTimeout(() => {
-            console.log('DOM表示完了、データ読み込みを開始');
-            callLoadAllDataSafely();
-        }, 100);
-    });
+    // 注意: showMainScreenは画面表示のみを行う。
+    // データ読み込みは呼び出し元で実行すること。
 }
 
 // エラー表示
