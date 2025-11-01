@@ -802,13 +802,22 @@ window.showCommentPopup = async function(commentId) {
             console.error('commentIdが指定されていません');
             return;
         }
-        
+
         // 既存のポップアップがあれば削除
         const existingPopup = document.querySelector('.comment-popup');
         if (existingPopup) {
             existingPopup.remove();
         }
-        
+
+        // 現在のタスクIDを取得
+        const modal = document.getElementById('roadmap-item-modal');
+        const taskId = modal?.dataset.taskId;
+
+        // タスクIDがあれば、コメントを再読み込みしてキャッシュを更新
+        if (taskId) {
+            await loadRoadmapComments(taskId);
+        }
+
         // コメントを段階的に探索（モーダルキャッシュ → 全体キャッシュ → Supabase）
         let comment = roadmapCommentCache.find(c => c.id === commentId);
 
