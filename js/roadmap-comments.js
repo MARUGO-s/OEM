@@ -435,8 +435,13 @@ function renderRoadmapComments(comments) {
             return `
                 <div style="position: relative;">
                     ${createCommentHTML(parent, false)}
-                    <div style="position: relative; margin-left: 2rem; padding-left: 1.5rem; border-left: 2px solid #cbd5e1;">
-                        ${replies.map(reply => createCommentHTML(reply, true)).join('')}
+                    <div style="position: relative; margin-left: 2rem; padding-left: 1.5rem;">
+                        <!-- L字の接続線 -->
+                        <div style="position: absolute; left: 0; top: 0; width: 1.5rem; height: 1rem; border-left: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; border-bottom-left-radius: 0.5rem;"></div>
+                        <!-- 返信リスト -->
+                        <div style="position: relative; margin-top: 0.5rem; padding-left: 0.5rem; border-left: 2px solid #cbd5e1;">
+                            ${replies.map(reply => createCommentHTML(reply, true)).join('')}
+                        </div>
                     </div>
                 </div>
             `;
