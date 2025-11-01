@@ -62,6 +62,9 @@
                 return new Date(a.created_at) - new Date(b.created_at);
             });
 
+            // 現在のプロジェクト名を取得
+            const projectName = sessionStorage.getItem('currentProjectName') || 'MARUGO OEM';
+
             // PDF用のHTMLを生成
             let html = `
 <!DOCTYPE html>
@@ -69,7 +72,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MARUGO OEM ロードマップ</title>
+    <title>${escapeHtml(projectName)} ロードマップ</title>
     <style>
         @page {
             size: A4;
@@ -208,7 +211,7 @@
     </style>
 </head>
 <body>
-    <h1>🍽️ MARUGO OEM ロードマップ</h1>
+    <h1>🍽️ ${escapeHtml(projectName)} ロードマップ</h1>
     <div class="meta">
         出力日: ${new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
         総タスク数: ${tasks.length}件
