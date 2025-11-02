@@ -136,6 +136,11 @@ async function selectProject(projectId) {
         if (typeof loadAllData === 'function') {
             await loadAllData();
         }
+
+        // 管理画面のアクセス権限をチェック
+        if (typeof checkAdminAccess === 'function') {
+            await checkAdminAccess();
+        }
     } catch (error) {
         console.error('プロジェクト選択エラー:', error);
         alert('プロジェクトを開けませんでした');
