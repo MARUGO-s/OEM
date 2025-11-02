@@ -1269,9 +1269,9 @@ body {
     .roadmap-task-comments .comment-text {
         font-size: 0.6rem;
         line-height: 1.3;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: break-word;
         text-align: left !important;
         direction: ltr !important;
     }
@@ -1434,9 +1434,9 @@ body {
         font-size: 0.7rem;
         font-weight: 600;
         line-height: 1.05;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: break-word;
     }
 
     .roadmap-task-comments .comment-meta {
@@ -2586,9 +2586,9 @@ body {
         font-size: 0.65rem;
         font-weight: 500;
         line-height: 1.3;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: break-word;
         text-align: left !important;
         direction: ltr !important;
     }
