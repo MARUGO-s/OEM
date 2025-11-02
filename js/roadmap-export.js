@@ -5,47 +5,119 @@
             // 最新のデータを取得
             console.log('PDF出力: 最新データを取得中...');
 
-            // 会議データを取得
+            // 現在のプロジェクトIDを取得
+            const currentProjectId = appState.currentProject?.id || sessionStorage.getItem('currentProjectId');
+            if (!currentProjectId) {
+                console.error('PDF出力エラー: プロジェクトIDが設定されていません');
+                alert('プロジェクトが選択されていません。');
+                return;
+            }
+            console.log('PDF出力: プロジェクトIDでフィルタリング:', currentProjectId);
+
+            // 会議データを取得（現在のプロジェクトのみ）
             let meetings = [];
             try {
                 const { data: meetingsData, error: meetingsError } = await supabase
                     .from('meetings')
                     .select('*')
+                    .eq('project_id', currentProjectId)
                     .order('start_time', { ascending: true });
 
                 if (!meetingsError && meetingsData) {
                     meetings = meetingsData;
-                    console.log('会議データ取得成功:', meetings.length, '件');
+                    console.log('会議データ取得成功:', meetings.length, '件（プロジェクトID: ' + currentProjectId + '）');
+                } else if (meetingsError) {
+                    console.error('会議データ取得エラー:', meetingsError);
                 }
             } catch (err) {
                 console.error('会議データ取得エラー:', err);
             }
 
-            // 意見交換データを取得
+            // 意見交換データを取得（現在のプロジェクトのみ）
             let discussions = [];
             try {
                 const { data: discussionsData, error: discussionsError } = await supabase
                     .from('discussion_comments')
                     .select('*')
+                    .eq('project_id', currentProjectId)
                     .order('created_at', { ascending: false });
 
                 if (!discussionsError && discussionsData) {
                     discussions = discussionsData;
-                    console.log('意見交換データ取得成功:', discussions.length, '件');
+                    console.log('意見交換データ取得成功:', discussions.length, '件（プロジェクトID: ' + currentProjectId + '）');
+                } else if (discussionsError) {
+                    console.error('意見交換データ取得エラー:', discussionsError);
                 }
             } catch (err) {
                 console.error('意見交換データ取得エラー:', err);
             }
 
+            // タスク情報を取得（現在のプロジェクトのみ）
+            // appState.tasksは既にプロジェクトIDでフィルタリングされているが、念のため再確認
+            let tasks = (appState.tasks || []).filter(task => task.project_id === currentProjectId);
+            
+            // もしappState.tasksが空またはプロジェクトIDが一致しない場合は、直接データベースから取得
+            if (tasks.length === 0 || tasks.some(task => !task.project_id || task.project_id !== currentProjectId)) {
+                console.log('PDF出力: タスクをデータベースから直接取得します');
+                try {
+                    const { data: tasksData, error: tasksError } = await supabase
+                        .from('tasks')
+                        .select('*')
+                        .eq('project_id', currentProjectId)
+                        .order('created_at', { ascending: false });
+                    
+                    if (!tasksError && tasksData) {
+                        tasks = tasksData;
+                        console.log('タスクデータ取得成功:', tasks.length, '件（プロジェクトID: ' + currentProjectId + '）');
+                    } else if (tasksError) {
+                        console.error('タスクデータ取得エラー:', tasksError);
+                        tasks = [];
+                    }
+                } catch (err) {
+                    console.error('タスクデータ取得エラー:', err);
+                    tasks = [];
+                }
+            } else {
+                console.log('PDF出力: appState.tasksを使用:', tasks.length, '件（プロジェクトID: ' + currentProjectId + '）');
+            }
+
+            // コメント情報を取得（現在のプロジェクトのみ）
+            // appState.commentsは既にプロジェクトIDでフィルタリングされているが、念のため再確認
+            let comments = (appState.comments || []).filter(comment => comment.project_id === currentProjectId);
+            
+            // もしappState.commentsが空またはプロジェクトIDが一致しない場合は、直接データベースから取得
+            if (comments.length === 0 || comments.some(comment => !comment.project_id || comment.project_id !== currentProjectId)) {
+                console.log('PDF出力: コメントをデータベースから直接取得します');
+                try {
+                    const { data: commentsData, error: commentsError } = await supabase
+                        .from('task_comments')
+                        .select('*')
+                        .eq('project_id', currentProjectId)
+                        .order('created_at', { ascending: false });
+                    
+                    if (!commentsError && commentsData) {
+                        comments = commentsData;
+                        console.log('コメントデータ取得成功:', comments.length, '件（プロジェクトID: ' + currentProjectId + '）');
+                    } else if (commentsError) {
+                        console.error('コメントデータ取得エラー:', commentsError);
+                        comments = [];
+                    }
+                } catch (err) {
+                    console.error('コメントデータ取得エラー:', err);
+                    comments = [];
+                }
+            } else {
+                console.log('PDF出力: appState.commentsを使用:', comments.length, '件（プロジェクトID: ' + currentProjectId + '）');
+            }
+
             // データを確認
             console.log('PDF出力開始 - データ確認:', {
-                tasks: appState.tasks?.length || 0,
+                projectId: currentProjectId,
+                tasks: tasks.length,
                 meetings: meetings.length,
-                discussions: discussions.length
+                discussions: discussions.length,
+                comments: comments.length
             });
-
-            // タスク情報を取得
-            const tasks = appState.tasks || [];
 
             if (tasks.length === 0) {
                 alert('タスクがありません。');
@@ -177,8 +249,16 @@
             margin-bottom: 10px;
             padding: 10px;
             background: white;
-            border-left: 3px solid #3b82f6;
             border-radius: 3px;
+        }
+
+        .comment-parent {
+            border-left: 3px solid #3b82f6;
+        }
+
+        .comment-reply {
+            border-left: 2px solid #94a3b8;
+            background: #f8fafc;
         }
 
         .comment-header {
@@ -197,6 +277,10 @@
             color: #333;
             white-space: pre-wrap;
             word-wrap: break-word;
+        }
+
+        .comment-replies {
+            margin-top: 0.5rem;
         }
 
         @media print {
@@ -238,10 +322,24 @@
                     createdBy = task.created_by;
                 }
 
-                // コメント取得
-                const comments = (appState.comments || [])
-                    .filter(comment => comment.task_id === task.id)
-                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                // コメント取得（現在のプロジェクトのタスクのコメントのみ）
+                const allTaskComments = (comments || [])
+                    .filter(comment => comment.task_id === task.id && comment.project_id === currentProjectId);
+                
+                // 親コメントと子コメントを分離
+                const parentComments = allTaskComments
+                    .filter(comment => !comment.parent_id)
+                    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // 古い順
+                
+                const childComments = allTaskComments
+                    .filter(comment => comment.parent_id)
+                    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // 古い順
+                
+                // 親コメントごとにグループ化（返信を含む）
+                const commentGroups = parentComments.map(parent => {
+                    const replies = childComments.filter(child => child.parent_id === parent.id);
+                    return { parent, replies };
+                });
 
                 html += `
     <div class="task">
@@ -260,24 +358,51 @@
 `;
                 }
 
-                if (comments.length > 0) {
+                if (allTaskComments.length > 0) {
                     html += `
         <div class="comments">
-            <div class="comments-header">💬 コメント (${comments.length}件)</div>
+            <div class="comments-header">💬 コメント (${allTaskComments.length}件)</div>
 `;
 
-                    comments.forEach(comment => {
-                        const commentDate = new Date(comment.created_at).toLocaleDateString('ja-JP');
-                        const author = comment.author_username || '匿名';
-
+                    // 親コメントとその返信を階層的に表示
+                    commentGroups.forEach(group => {
+                        const parentDate = new Date(group.parent.created_at).toLocaleDateString('ja-JP');
+                        const parentAuthor = group.parent.author_username || '匿名';
+                        
+                        // 親コメント
                         html += `
-            <div class="comment">
+            <div class="comment comment-parent" style="margin-bottom: ${group.replies.length > 0 ? '0.5rem' : '1rem'};">
                 <div class="comment-header">
-                    <span class="comment-author">${escapeHtml(author)}</span> - ${commentDate}
+                    <span class="comment-author">${escapeHtml(parentAuthor)}</span> - ${parentDate}
                 </div>
-                <div class="comment-content">${escapeHtml(comment.content)}</div>
+                <div class="comment-content">${escapeHtml(group.parent.content)}</div>
             </div>
 `;
+                        
+                        // 返信（子コメント）を親の下にインデントして表示
+                        if (group.replies.length > 0) {
+                            html += `
+            <div class="comment-replies" style="margin-left: 2rem; padding-left: 1rem; border-left: 2px solid #3b82f6; margin-bottom: 1rem;">
+`;
+                            
+                            group.replies.forEach(reply => {
+                                const replyDate = new Date(reply.created_at).toLocaleDateString('ja-JP');
+                                const replyAuthor = reply.author_username || '匿名';
+                                
+                                html += `
+                <div class="comment comment-reply" style="margin-bottom: 0.75rem;">
+                    <div class="comment-header" style="font-size: 9pt; color: #666;">
+                        <span class="comment-author" style="color: #3b82f6;">↳ ${escapeHtml(replyAuthor)}</span> - ${replyDate}
+                    </div>
+                    <div class="comment-content" style="color: #555;">${escapeHtml(reply.content)}</div>
+                </div>
+`;
+                            });
+                            
+                            html += `
+            </div>
+`;
+                        }
                     });
 
                     html += `

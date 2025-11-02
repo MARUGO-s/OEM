@@ -3,7 +3,6 @@
 // Supabaseでは有効なドメイン形式のメールアドレスが必要なため、
 // 実際のメール入力が無い場合はこのドメインを付けて擬似アドレスを生成する。
 const AUTH_EMAIL_DOMAIN = 'hotmail.com';
-const USERNAME_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 // loadAllData 安全呼び出しラッパー（読み込み順の差異に強い）
 function callLoadAllDataSafely(maxRetries = 20, intervalMs = 100) {
@@ -50,7 +49,13 @@ if (typeof window !== 'undefined' && typeof window.loadAllData !== 'function') {
 
 function buildEmailFromUsername(rawUsername) {
     const normalized = rawUsername.trim().toLowerCase();
-    return `${normalized}@${AUTH_EMAIL_DOMAIN}`;
+    // 英数字と._-のみの場合はそのまま使用
+    if (/^[a-z0-9._-]+$/.test(normalized)) {
+        return `${normalized}@${AUTH_EMAIL_DOMAIN}`;
+    }
+    // 日本語などが含まれる場合はランダムな文字列を生成
+    const randomStr = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+    return `${randomStr}@${AUTH_EMAIL_DOMAIN}`;
 }
 
 function isValidEmail(email) {
@@ -61,17 +66,21 @@ function isValidEmail(email) {
 // Supabaseからユーザー情報を取得
 async function refreshCurrentUser() {
     try {
+        console.log('🔄 refreshCurrentUser開始');
         const { data: { user }, error } = await supabase.auth.getUser();
         if (error) {
-            console.error('ユーザー情報取得エラー:', error);
+            console.error('❌ ユーザー情報取得エラー:', error);
             appState.currentUser = null;
             return null;
         }
 
         if (!user) {
+            console.log('❌ ユーザー情報が存在しません');
             appState.currentUser = null;
             return null;
         }
+
+        console.log('✅ Supabase Authユーザー取得:', { id: user.id, email: user.email, metadata: user.user_metadata });
 
         // プロファイルを取得
         const { data: profileData, error: profileError } = await supabase
@@ -79,6 +88,8 @@ async function refreshCurrentUser() {
             .select('id, username, display_name, email')
             .eq('id', user.id)
             .maybeSingle();
+        
+        console.log('📋 プロファイル取得結果:', { profileData, profileError });
 
         if (profileError && profileError.code !== 'PGRST116') {
             console.error('プロファイル取得エラー:', profileError);
@@ -128,6 +139,13 @@ async function refreshCurrentUser() {
             rawUser: user
         };
 
+        console.log('✅ appState.currentUser設定:', {
+            id: appState.currentUser.id,
+            username: appState.currentUser.username,
+            display_name: appState.currentUser.display_name,
+            email: appState.currentUser.email
+        });
+
         return appState.currentUser;
     } catch (error) {
         console.error('ユーザー情報更新エラー:', error);
@@ -155,14 +173,25 @@ async function login(username, password) {
                 return;
             }
             email = trimmedIdentifier.toLowerCase();
+            console.log('📧 メールアドレスでログイン:', email);
         } else {
-            if (!USERNAME_PATTERN.test(trimmedIdentifier)) {
-                showError('ユーザー名は英数字と._-のみ使用できます');
+            // ユーザー名からuser_profilesテーブルを検索してメールアドレスを取得
+            const { data: profile, error: profileError } = await supabase
+                .from('user_profiles')
+                .select('email')
+                .eq('username', trimmedIdentifier.toLowerCase())
+                .maybeSingle();
+
+            if (profileError || !profile) {
+                showError('ユーザーが見つかりません');
                 return;
             }
-            email = buildEmailFromUsername(trimmedIdentifier);
+
+            email = profile.email;
+            console.log('👤 ユーザー名からメールアドレスを取得:', { username: trimmedIdentifier, email });
         }
 
+        console.log('🔐 ログイン試行:', { email, passwordLength: password.length });
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password
@@ -182,8 +211,13 @@ async function login(username, password) {
             return;
         }
 
-        console.log('Supabaseログイン成功:', data);
-        await refreshCurrentUser();
+        console.log('✅ Supabaseログイン成功:', { 
+            userId: data?.user?.id, 
+            email: data?.user?.email,
+            metadata: data?.user?.user_metadata 
+        });
+        const refreshedUser = await refreshCurrentUser();
+        console.log('✅ refreshCurrentUser完了:', refreshedUser);
         console.log('プロジェクト選択画面に切り替え中...');
         showProjectSelectScreen();
         console.log('プロジェクト一覧を読み込み中...');
@@ -218,11 +252,12 @@ async function register(username, password) {
             showError('パスワードは6文字以上で入力してください');
             return;
         }
-        
+
         const trimmedUsername = username.trim();
 
-        if (!USERNAME_PATTERN.test(trimmedUsername)) {
-            showError('ユーザー名は英数字と._-のみ使用できます');
+        // スペースのみのチェック（その他の文字は許可）
+        if (trimmedUsername.length === 0) {
+            showError('ユーザー名を入力してください');
             return;
         }
 
@@ -288,7 +323,8 @@ async function register(username, password) {
                         id: authUser.id,
                         username: normalizedUsername,
                         display_name: trimmedUsername,
-                        email: email
+                        email: email,
+                        test_password: password // テスト用パスワードを保存
                     }, {
                         onConflict: 'id'
                     });
@@ -307,8 +343,9 @@ async function register(username, password) {
 
                 if (data?.session) {
                     await refreshCurrentUser();
-                    showMainScreen();
-                    await callLoadAllDataSafely();
+                    // プロジェクト選択画面に遷移（新規ユーザーはプロジェクトにメンバーとして追加されていない）
+                    showProjectSelectScreen();
+                    initProjectSelectScreen();
                     showError('登録とログインが完了しました！', 'success');
                 } else {
                     // メール確認が不要な場合でも、自動的にログインを試行
@@ -333,8 +370,9 @@ async function register(username, password) {
                             showLoginForm();
                         } else {
                             await refreshCurrentUser();
-                            showMainScreen();
-                            await callLoadAllDataSafely();
+                            // プロジェクト選択画面に遷移（新規ユーザーはプロジェクトにメンバーとして追加されていない）
+                            showProjectSelectScreen();
+                            initProjectSelectScreen();
                             showError('登録とログインが完了しました！', 'success');
                         }
                     } catch (autoLoginError) {
@@ -438,6 +476,15 @@ function showProjectSelectScreen() {
 
 function showMainScreen() {
     console.log('メイン画面を表示');
+    
+    // プロジェクトが選択されていない場合は、プロジェクト選択画面に遷移
+    if (!appState.currentProject) {
+        console.log('プロジェクトが選択されていないため、プロジェクト選択画面に遷移');
+        showProjectSelectScreen();
+        initProjectSelectScreen();
+        return;
+    }
+    
     const loginScreen = document.getElementById('login-screen');
     const projectScreen = document.getElementById('project-select-screen');
     const mainScreen = document.getElementById('main-screen');
@@ -459,8 +506,14 @@ function showMainScreen() {
             const username = appState.currentUser.display_name ||
                            appState.currentUser.username ||
                            appState.currentUser.email.split('@')[0];
+            console.log('🏠 メイン画面に表示するユーザー名:', {
+                display_name: appState.currentUser.display_name,
+                username: appState.currentUser.username,
+                email: appState.currentUser.email,
+                finalUsername: username,
+                userId: appState.currentUser.id
+            });
             userNameElement.textContent = username;
-            console.log('ユーザー名を設定:', username);
         } else {
             console.error('ユーザー名要素が見つかりません');
         }

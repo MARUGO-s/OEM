@@ -49,6 +49,9 @@ function renderDiscussionComments() {
         return;
     }
 
+    // 編集権限をチェック
+    const canEditContent = typeof window.canEdit === 'function' ? window.canEdit() : (appState.currentUser && appState.currentUserRole !== 'viewer');
+
     const commentsHtml = discussionComments.map(comment => {
         const createdAt = new Date(comment.created_at).toLocaleString('ja-JP');
         return `
@@ -58,14 +61,30 @@ function renderDiscussionComments() {
                     <span class="comment-date">${createdAt}</span>
                 </div>
                 <div class="comment-content">${escapeHtml(comment.content)}</div>
+                <div class="reaction-placeholder" data-comment-id="${comment.id}" data-comment-type="discussion_comment"></div>
                 <div class="comment-actions">
-                    <button onclick="deleteDiscussionComment('${comment.id}')" class="btn btn-sm btn-danger">削除</button>
+                    ${canEditContent ? `<button onclick="deleteDiscussionComment('${comment.id}')" class="btn btn-sm btn-danger">削除</button>` : ''}
                 </div>
             </div>
         `;
     }).join('');
 
     container.innerHTML = commentsHtml;
+
+    // リアクションUIをロード
+    if (typeof window.loadReactionUI === 'function') {
+        discussionComments.forEach(comment => {
+            const placeholder = container.querySelector(`.reaction-placeholder[data-comment-id="${comment.id}"]`);
+            if (placeholder) {
+                window.loadReactionUI(placeholder, comment.id, 'discussion_comment');
+            }
+        });
+    }
+    
+    // 権限に基づいてUI要素を制御
+    if (typeof updateUIByPermissions === 'function') {
+        updateUIByPermissions();
+    }
 }
 
 // 意見交換コメントを投稿
@@ -105,13 +124,22 @@ async function postDiscussionComment() {
     try {
         console.log('💬 意見交換コメントを投稿中...');
         const commentId = 'discussion_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        
+
+        // プロジェクトIDを取得
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            console.error('プロジェクトIDが設定されていません');
+            alert('プロジェクトが選択されていません');
+            return;
+        }
+
         const { data, error } = await supabase
             .from('discussion_comments')
             .insert({
                 id: commentId,
+                project_id: projectId,
                 author_id: appState.currentUser.id,
-                author_username: appState.currentUser.username,
+                author_username: appState.currentUser.display_name || appState.currentUser.username,
                 content: content
             })
             .select()

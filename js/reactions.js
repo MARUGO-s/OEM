@@ -231,18 +231,22 @@ function createReactionUI(commentId, commentType, reactions) {
 
 // リアクションピッカーを表示
 function showReactionPicker(commentId, commentType, buttonElement) {
+    console.log('🎨 showReactionPicker開始:', { commentId, commentType, buttonElement });
+    
     // 既存のピッカーを削除
     const existingPicker = document.querySelector('.reaction-picker');
     if (existingPicker) {
+        console.log('既存のピッカーを削除します');
         existingPicker.remove();
-        return;
+        // 既存のピッカーが閉じられただけの場合は終了しない（新しいピッカーを表示する）
+        // return; // この行をコメントアウト
     }
 
     // ピッカーを作成
     const picker = document.createElement('div');
     picker.className = 'reaction-picker';
     picker.style.cssText = `
-        position: absolute;
+        position: fixed;
         background: white;
         border: 1px solid #cbd5e1;
         border-radius: 0.5rem;
@@ -250,8 +254,9 @@ function showReactionPicker(commentId, commentType, buttonElement) {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         display: flex;
         gap: 0.5rem;
-        z-index: 1000;
+        z-index: 3000;
         animation: fadeIn 0.2s ease;
+        pointer-events: auto;
     `;
 
     Object.entries(REACTION_TYPES).forEach(([type, emoji]) => {
@@ -265,52 +270,146 @@ function showReactionPicker(commentId, commentType, buttonElement) {
             padding: 0.25rem;
             border-radius: 0.25rem;
             transition: transform 0.2s;
+            pointer-events: auto;
         `;
         btn.onmouseover = () => btn.style.transform = 'scale(1.3)';
         btn.onmouseout = () => btn.style.transform = 'scale(1)';
-        btn.onclick = async () => {
+        btn.onclick = async (e) => {
+            e.stopPropagation();
+            console.log('リアクション選択:', { type, emoji, commentId, commentType });
             const success = await addReaction(commentId, commentType, type);
             if (success) {
-                // リアクションUIを更新
+                console.log('✅ リアクション追加成功。UIを更新します');
+                // リアクションUIを更新（少し遅延させて確実に更新）
+                await new Promise(resolve => setTimeout(resolve, 100));
                 await refreshReactionUI(commentId, commentType);
+                console.log('✅ リアクションUI更新完了');
+            } else {
+                console.error('❌ リアクション追加失敗');
             }
             picker.remove();
         };
         picker.appendChild(btn);
     });
 
-    // ボタンの位置にピッカーを配置
-    const rect = buttonElement.getBoundingClientRect();
-    picker.style.top = `${rect.top - picker.offsetHeight - 5}px`;
-    picker.style.left = `${rect.left}px`;
-
+    // まずDOMに追加してから位置を計算（offsetHeightを正しく取得するため）
+    picker.style.visibility = 'hidden'; // 一時的に非表示にしてレイアウトを計算
     document.body.appendChild(picker);
+
+    // ボタンの位置を取得
+    const rect = buttonElement.getBoundingClientRect();
+    const pickerHeight = picker.offsetHeight;
+    const pickerWidth = picker.offsetWidth;
+    
+    // ボタンの真上に表示（ボタンの上端からピッカーの高さ分上）
+    let top = rect.top - pickerHeight - 5;
+    let left = rect.left;
+    
+    // 画面からはみ出さないように調整
+    if (top < 0) {
+        // 上にはみ出す場合は、ボタンの下に表示
+        top = rect.bottom + 5;
+    }
+    if (left + pickerWidth > window.innerWidth) {
+        // 右にはみ出す場合は左にシフト
+        left = window.innerWidth - pickerWidth - 10;
+    }
+    if (left < 0) {
+        left = 10;
+    }
+    
+    console.log('🎨 ピッカー位置計算:', {
+        buttonRect: { top: rect.top, left: rect.left, bottom: rect.bottom, right: rect.right },
+        pickerSize: { width: pickerWidth, height: pickerHeight },
+        calculatedPosition: { top, left }
+    });
+    
+    picker.style.top = `${top}px`;
+    picker.style.left = `${left}px`;
+    picker.style.visibility = 'visible'; // 表示
+
+    console.log('✅ リアクションピッカーを表示しました:', {
+        top: picker.style.top,
+        left: picker.style.left,
+        zIndex: picker.style.zIndex,
+        picker: picker
+    });
 
     // 外部クリックで閉じる
     setTimeout(() => {
-        document.addEventListener('click', function closePickerOnOutsideClick(e) {
-            if (!picker.contains(e.target) && e.target !== buttonElement) {
+        const closePickerOnOutsideClick = (e) => {
+            if (!picker.contains(e.target) && e.target !== buttonElement && !buttonElement.contains(e.target)) {
+                console.log('外部クリックでピッカーを閉じます');
                 picker.remove();
                 document.removeEventListener('click', closePickerOnOutsideClick);
             }
-        });
+        };
+        document.addEventListener('click', closePickerOnOutsideClick);
     }, 100);
 }
 
 // リアクションUIを更新
 async function refreshReactionUI(commentId, commentType) {
+    console.log('🔄 refreshReactionUI開始:', { commentId, commentType });
+    
     const reactions = await loadReactions(commentId, commentType);
-    const container = document.querySelector(`.reaction-container[data-comment-id="${commentId}"][data-comment-type="${commentType}"]`);
+    console.log('📊 取得したリアクション:', { count: reactions.length, reactions });
+    
+    // 全てのリアクションコンテナを検索（ポップアップ内、通常のビュー、返信内など）
+    const containers = document.querySelectorAll(`.reaction-container[data-comment-id="${commentId}"][data-comment-type="${commentType}"]`);
+    console.log('🔍 リアクションコンテナ検索結果:', { 
+        count: containers.length,
+        containers: Array.from(containers).map(c => ({
+            className: c.className,
+            parentElement: c.parentElement?.className,
+            isInPopup: !!c.closest('.comment-popup')
+        }))
+    });
 
-    if (container) {
-        const newUI = createReactionUI(commentId, commentType, reactions);
-        container.outerHTML = newUI;
-        
-        // 新しく作成したUIにイベントリスナーを付与
-        const newContainer = document.querySelector(`.reaction-container[data-comment-id="${commentId}"][data-comment-type="${commentType}"]`);
-        if (newContainer) {
-            attachReactionListenersToContainer(newContainer);
+    if (containers.length === 0) {
+        console.warn('⚠️ リアクションコンテナが見つかりません');
+        return;
+    }
+
+    const newUI = createReactionUI(commentId, commentType, reactions);
+    console.log('✅ 新しいリアクションUIを生成:', { 
+        htmlLength: newUI.length,
+        includesAddButton: newUI.includes('add-reaction-btn')
+    });
+
+    // 全てのコンテナを更新
+    containers.forEach((container, index) => {
+        console.log(`🔄 コンテナ #${index + 1} を更新中...`);
+        const parent = container.parentElement;
+        if (parent) {
+            container.outerHTML = newUI;
+            
+            // 新しく作成したUIにイベントリスナーを付与
+            const newContainer = parent.querySelector(`.reaction-container[data-comment-id="${commentId}"][data-comment-type="${commentType}"]`);
+            if (newContainer) {
+                console.log(`✅ コンテナ #${index + 1} のイベントリスナーを付与`);
+                attachReactionListenersToContainer(newContainer);
+            } else {
+                console.warn(`⚠️ コンテナ #${index + 1} の更新後の要素が見つかりません`);
+            }
         }
+    });
+    
+    console.log('✅ refreshReactionUI完了');
+    
+    // ポップアップが開いている場合、返信のリアクションUIも更新
+    const popup = document.querySelector('.comment-popup');
+    if (popup) {
+        console.log('🔄 ポップアップ内の返信リアクションUIも更新します');
+        const replyPlaceholders = popup.querySelectorAll('.comment-replies .reaction-placeholder');
+        replyPlaceholders.forEach(async (placeholder) => {
+            const replyCommentId = placeholder.dataset.commentId;
+            const replyCommentType = placeholder.dataset.commentType;
+            if (replyCommentId && replyCommentType && typeof window.loadReactionUI === 'function') {
+                console.log('🔄 返信リアクションUIを更新:', { replyCommentId, replyCommentType });
+                await window.loadReactionUI(placeholder, replyCommentId, replyCommentType);
+            }
+        });
     }
 }
 
@@ -467,4 +566,6 @@ window.removeReaction = removeReaction;
 window.createReactionUI = createReactionUI;
 window.refreshReactionUI = refreshReactionUI;
 window.attachReactionListeners = attachReactionListeners;
+window.attachReactionListenersToContainer = attachReactionListenersToContainer;
 window.loadReactionUI = loadReactionUI;
+window.showReactionPicker = showReactionPicker;

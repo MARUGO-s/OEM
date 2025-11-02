@@ -232,6 +232,11 @@ async function loadAllData() {
         appInitialized = true;
         console.log('アプリケーション初期化完了');
         
+        // 権限に基づいてUI要素を制御
+        if (typeof updateUIByPermissions === 'function') {
+            updateUIByPermissions();
+        }
+        
     } catch (error) {
         console.error('データ読み込み全体エラー:', error);
     }
@@ -321,5 +326,117 @@ document.addEventListener('DOMContentLoaded', () => {
 // 初期化
 console.log('OEM商品企画管理システムを起動しました');
 
+// 権限に基づいてUI要素を制御
+function updateUIByPermissions() {
+    const canEditContent = canEdit();
+    const role = appState.currentUserRole;
+    
+    console.log('🔒 権限チェック結果:', { role, canEditContent });
+    
+    // タスク追加ボタン
+    const addTaskBtn = document.getElementById('add-task-btn');
+    if (addTaskBtn) {
+        addTaskBtn.style.display = canEditContent ? '' : 'none';
+    }
+    
+    // 会議作成ボタン
+    const createMeetingBtn = document.getElementById('create-meeting-btn');
+    if (createMeetingBtn) {
+        createMeetingBtn.style.display = canEditContent ? '' : 'none';
+    }
+    
+    // 会議フォーム全体
+    const meetingsForm = document.getElementById('meetings-form');
+    if (meetingsForm) {
+        meetingsForm.style.display = canEditContent ? '' : 'none';
+    }
+    
+    // 意見交換セクションの投稿エリア
+    const discussionCommentInput = document.getElementById('discussion-comment-input');
+    const postDiscussionBtn = document.getElementById('post-discussion-comment-btn');
+    if (discussionCommentInput) {
+        discussionCommentInput.style.display = canEditContent ? '' : 'none';
+    }
+    if (postDiscussionBtn) {
+        postDiscussionBtn.style.display = canEditContent ? '' : 'none';
+    }
+    
+    // 意見交換の投稿フォーム全体を探す
+    const discussionFormContainer = document.querySelector('.discussion-section .discussion-comments-form, .discussion-section form');
+    if (discussionFormContainer) {
+        discussionFormContainer.style.display = canEditContent ? '' : 'none';
+    }
+    
+    // タスク編集・削除ボタン（各タスクカード内）
+    document.querySelectorAll('.task-card .edit-task-btn, .task-card .delete-task-btn, .roadmap-task .edit-task-btn, .roadmap-task .delete-task-btn').forEach(btn => {
+        btn.style.display = canEditContent ? '' : 'none';
+    });
+    
+    // タスク詳細モーダル内の編集・削除ボタン
+    document.querySelectorAll('#task-modal .edit-task-btn, #task-modal .delete-task-btn, .task-detail-modal .edit-task-btn, .task-detail-modal .delete-task-btn').forEach(btn => {
+        btn.style.display = canEditContent ? '' : 'none';
+    });
+    
+    // コメント投稿フォーム（すべての種類）
+    document.querySelectorAll('.comment-form, .comment-input-container, .comment-input, textarea[id*="comment"], input[id*="comment"], #roadmap-comment-input, #comment-input, #discussion-comment-input').forEach(form => {
+        // コメント入力欄の親要素も確認
+        const parent = form.closest('.comment-form-container, .comment-input-wrapper, .comment-section, .comment-input-area, .roadmap-comment-input');
+        if (parent && !parent.querySelector('.comment-display')) {
+            parent.style.display = canEditContent ? '' : 'none';
+        }
+        form.style.display = canEditContent ? '' : 'none';
+    });
+    
+    // 返信フォームコンテナ
+    document.querySelectorAll('.reply-form-container, .reply-form').forEach(form => {
+        form.style.display = canEditContent ? '' : 'none';
+    });
+    
+    // 返信ボタン
+    document.querySelectorAll('.reply-btn, .reply-button, button[onclick*="reply"], button[data-action="reply"]').forEach(btn => {
+        btn.style.display = canEditContent ? '' : 'none';
+    });
+    
+    // コメント投稿ボタン
+    document.querySelectorAll('#roadmap-comment-submit, #post-comment-btn, #post-discussion-comment-btn, button[id*="comment-submit"], button[id*="post-comment"]').forEach(btn => {
+        btn.style.display = canEditContent ? '' : 'none';
+    });
+    
+    // リアクションボタン（追加ボタン）
+    document.querySelectorAll('.reaction-btn, .add-reaction-btn, .reaction-button, button[onclick*="reaction"], button[data-action="reaction"]').forEach(btn => {
+        // 既存のリアクション表示は残すが、追加ボタンは非表示
+        if (!btn.classList.contains('reaction-display') && !btn.closest('.reaction-summary')) {
+            btn.style.display = canEditContent ? '' : 'none';
+        }
+    });
+    
+    // 会議編集・削除ボタン
+    document.querySelectorAll('.edit-meeting-btn, .delete-meeting-btn, button[onclick*="editMeeting"], button[onclick*="deleteMeeting"]').forEach(btn => {
+        btn.style.display = canEditContent ? '' : 'none';
+    });
+    
+    // 会議アイテム内の編集・削除ボタン
+    document.querySelectorAll('.meeting-item .edit-btn, .meeting-item .delete-btn, .meeting-card .edit-btn, .meeting-card .delete-btn').forEach(btn => {
+        btn.style.display = canEditContent ? '' : 'none';
+    });
+    
+    // コメント編集・削除ボタン
+    document.querySelectorAll('.edit-comment-btn, .delete-comment-btn, button[onclick*="editComment"], button[onclick*="deleteComment"]').forEach(btn => {
+        btn.style.display = canEditContent ? '' : 'none';
+    });
+    
+    // ロードマップのタスク編集・削除ボタン
+    document.querySelectorAll('.roadmap-task-actions button, .roadmap-task-header button').forEach(btn => {
+        if (btn.textContent.includes('編集') || btn.textContent.includes('削除') || btn.textContent.includes('Edit') || btn.textContent.includes('Delete')) {
+            btn.style.display = canEditContent ? '' : 'none';
+        }
+    });
+    
+    if (role === 'viewer') {
+        console.log('👀 閲覧者モード: すべての編集機能を非表示にしました');
+    }
+}
+
 // グローバル関数として公開
 window.loadAllData = loadAllData;
+window.updateUIByPermissions = updateUIByPermissions;

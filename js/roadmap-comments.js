@@ -170,15 +170,15 @@ window.showRoadmapItemModal = function(taskId) {
         document.getElementById('roadmap-item-deadline').textContent = '未設定';
     }
     
-    // 編集・削除ボタンの表示制御（誰でも編集・削除可能）
+    // 編集・削除ボタンの表示制御（編集権限がある場合のみ）
     const editBtn = document.getElementById('roadmap-item-edit-btn');
     const deleteBtn = document.getElementById('roadmap-item-delete-btn');
     
-    // ログインユーザーなら誰でも編集・削除可能
-    const canEdit = appState.currentUser && appState.currentUser.username;
+    // 編集権限をチェック
+    const canEditContent = typeof window.canEdit === 'function' ? window.canEdit() : (appState.currentUser && appState.currentUserRole !== 'viewer');
     
     if (editBtn) {
-        if (canEdit) {
+        if (canEditContent) {
             editBtn.style.display = 'inline-block';
             editBtn.onclick = () => enableEditMode(taskId);
         } else {
@@ -187,7 +187,7 @@ window.showRoadmapItemModal = function(taskId) {
     }
     
     if (deleteBtn) {
-        if (canEdit) {
+        if (canEditContent) {
             deleteBtn.style.display = 'inline-block';
             deleteBtn.onclick = () => deleteTask(taskId);
         } else {
@@ -566,6 +566,11 @@ function renderRoadmapComments(comments) {
             }
         }
     });
+    
+    // 権限に基づいてUI要素を制御
+    if (typeof updateUIByPermissions === 'function') {
+        updateUIByPermissions();
+    }
 }
 
 // ロードマップコメントの投稿
@@ -1042,12 +1047,107 @@ window.showCommentPopup = async function(commentId) {
             closeBtn.style.backgroundColor = 'transparent';
         });
         
-        // リアクションボタンにイベントリスナーを付与
-        if (typeof window.attachReactionListeners === 'function') {
-            window.attachReactionListeners();
-        }
-        
         document.body.appendChild(popup);
+
+        // ポップアップ内のリアクションコンテナにイベントリスナーを付与
+        // 少し遅延させてDOMが完全にレンダリングされた後に実行
+        setTimeout(() => {
+            const popupReactionContainer = popup.querySelector('.comment-reactions .reaction-container');
+            console.log('🔍 ポップアップ内のリアクションコンテナを検索:', {
+                found: !!popupReactionContainer,
+                container: popupReactionContainer,
+                selector: '.comment-reactions .reaction-container',
+                innerHTML: popupReactionContainer?.innerHTML?.substring(0, 200)
+            });
+            
+            if (popupReactionContainer) {
+                // 全てのリアクション追加ボタンを検索（複数ある可能性があるため）
+                const addReactionBtns = popupReactionContainer.querySelectorAll('.add-reaction-btn');
+                console.log('🔍 リアクション追加ボタンを検索:', {
+                    count: addReactionBtns.length,
+                    buttons: Array.from(addReactionBtns).map(btn => ({
+                        found: true,
+                        commentId: btn.dataset.commentId,
+                        commentType: btn.dataset.commentType,
+                        hasListener: btn.dataset.listenerAttached === 'true',
+                        style: window.getComputedStyle(btn).pointerEvents,
+                        zIndex: window.getComputedStyle(btn).zIndex
+                    }))
+                });
+                
+                // attachReactionListenersToContainerを試行
+                if (typeof window.attachReactionListenersToContainer === 'function') {
+                    console.log('✅ attachReactionListenersToContainerを呼び出します');
+                    try {
+                        window.attachReactionListenersToContainer(popupReactionContainer);
+                        console.log('✅ attachReactionListenersToContainer実行完了');
+                    } catch (error) {
+                        console.error('❌ attachReactionListenersToContainerエラー:', error);
+                    }
+                } else {
+                    console.warn('⚠️ attachReactionListenersToContainer関数が見つかりません');
+                }
+                
+                // 全ての追加ボタンに直接イベントリスナーを付与（確実に動作するように）
+                addReactionBtns.forEach((addReactionBtn, index) => {
+                    // 既存のリスナーをクリア
+                    const newBtn = addReactionBtn.cloneNode(true);
+                    addReactionBtn.parentNode?.replaceChild(newBtn, addReactionBtn);
+                    
+                    console.log(`✅ リアクション追加ボタン #${index + 1} に直接イベントリスナーを付与します:`, {
+                        commentId: newBtn.dataset.commentId,
+                        commentType: newBtn.dataset.commentType
+                    });
+                    
+                    newBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const commentId = newBtn.dataset.commentId;
+                        const commentType = newBtn.dataset.commentType;
+                        console.log('🎯🎯🎯 リアクション追加ボタンがクリックされました！', { 
+                            commentId, 
+                            commentType,
+                            button: newBtn,
+                            timestamp: new Date().toISOString()
+                        });
+                        if (typeof window.showReactionPicker === 'function') {
+                            console.log('✅ showReactionPickerを呼び出します');
+                            window.showReactionPicker(commentId, commentType, newBtn);
+                        } else {
+                            console.error('❌ showReactionPicker関数が見つかりません');
+                        }
+                    }, { capture: true }); // capture: true で確実にイベントを捕捉
+                    
+                    newBtn.addEventListener('mousedown', (e) => {
+                        console.log('🖱️ リアクション追加ボタンがmousedownされました:', {
+                            commentId: newBtn.dataset.commentId,
+                            commentType: newBtn.dataset.commentType
+                        });
+                    });
+                    
+                    newBtn.style.pointerEvents = 'auto';
+                    newBtn.style.cursor = 'pointer';
+                    newBtn.style.zIndex = '1000';
+                    newBtn.dataset.listenerAttached = 'true';
+                });
+            } else {
+                // リアクションコンテナが見つからない場合のフォールバック
+                console.warn('⚠️ ポップアップ内のリアクションコンテナが見つかりません');
+                const allAddBtns = popup.querySelectorAll('.add-reaction-btn');
+                console.log('🔍 ポップアップ全体から追加ボタンを検索:', {
+                    count: allAddBtns.length,
+                    buttons: Array.from(allAddBtns).map(btn => ({
+                        commentId: btn.dataset.commentId,
+                        commentType: btn.dataset.commentType,
+                        parentElement: btn.parentElement?.className
+                    }))
+                });
+                if (typeof window.attachReactionListeners === 'function') {
+                    console.log('✅ グローバルにリアクションリスナーを付与します');
+                    window.attachReactionListeners();
+                }
+            }
+        }, 100);
 
         // 返信のリアクションUIをロード
         if (typeof window.loadReactionUI === 'function') {
@@ -1379,6 +1479,13 @@ async function deleteRoadmapComment(commentId) {
 
 // 返信フォームを表示
 function showReplyForm(parentCommentId, commentType) {
+    // 編集権限をチェック
+    const canEditContent = typeof window.canEdit === 'function' ? window.canEdit() : (appState.currentUser && appState.currentUserRole !== 'viewer');
+    
+    if (!canEditContent) {
+        alert('閲覧者ロールでは返信できません');
+        return;
+    }
     const modal = document.getElementById('roadmap-item-modal');
     const existingReplyForm = document.querySelector('.reply-form-container');
 
@@ -1494,7 +1601,7 @@ async function submitReply(parentCommentId, content, commentType) {
             task_id: taskId,
             project_id: projectId,
             author_id: appState.currentUser.id,
-            author_username: appState.currentUser.username,
+            author_username: appState.currentUser.display_name || appState.currentUser.username,
             content: content,
             mentions: mentions,
             parent_id: parentCommentId,

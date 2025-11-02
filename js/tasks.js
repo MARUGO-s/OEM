@@ -403,8 +403,8 @@ function renderTasks(retryCount = 0) {
                     // 投稿者名を取得
                     const authorName = comment.author_username || '匿名';
                     
-                    // 削除ボタンの表示判定（ログインユーザーなら誰でも削除可能）
-                    const canDelete = appState.currentUser && appState.currentUser.username;
+                    // 削除ボタンの表示判定（編集権限がある場合のみ）
+                    const canDelete = typeof window.canEdit === 'function' ? window.canEdit() : (appState.currentUser && appState.currentUserRole !== 'viewer');
                     
                     // 返信の場合はインデントを追加
                     const indentStyle = entry.isReply ? 'margin-left: 1.5rem; padding-left: 0.75rem; border-left: 2px solid #cbd5e1;' : '';
@@ -518,6 +518,11 @@ function renderTasks(retryCount = 0) {
                    }
                });
            });
+           
+           // 権限に基づいてUI要素を制御
+           if (typeof updateUIByPermissions === 'function') {
+               updateUIByPermissions();
+           }
            
     } catch (error) {
         console.error('タスク表示エラー:', error);

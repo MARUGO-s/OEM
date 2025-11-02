@@ -13,60 +13,18 @@ function initAdminPanel() {
 
     // 注意: checkAdminAccessは呼び出さない（projects.jsのselectProjectで呼び出される）
 
-    // 管理画面パスワードモーダルの要素を取得
-    const adminPasswordModal = document.getElementById('admin-password-modal');
-    const adminPasswordForm = document.getElementById('admin-password-form');
-    const closeAdminPasswordModal = document.getElementById('close-admin-password-modal');
-    const cancelAdminPassword = document.getElementById('cancel-admin-password');
-    const adminPasswordInput = document.getElementById('admin-password-input');
-
     // 権限変更モーダルの要素を取得
     const changeRoleModal = document.getElementById('change-role-modal');
     const changeRoleForm = document.getElementById('change-role-form');
     const closeChangeRoleModal = document.getElementById('close-change-role-modal');
     const cancelChangeRole = document.getElementById('cancel-change-role');
 
-    // 管理画面を開く（パスワード認証付き）
+    // 管理画面を開く
     adminPanelBtn?.addEventListener('click', () => {
-        if (adminPasswordModal) {
-            adminPasswordModal.classList.add('active');
-            if (adminPasswordInput) {
-                adminPasswordInput.value = '';
-                adminPasswordInput.focus();
-            }
-        } else {
-            // パスワードモーダルがない場合は直接開く（フォールバック）
-            adminPanel.classList.add('open');
-            loadMembersList();
-            loadAllUsersList();
-        }
-    });
-
-    // パスワード認証フォーム
-    adminPasswordForm?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const password = adminPasswordInput?.value;
-        if (password === 'yoshito') {
-            adminPasswordModal?.classList.remove('active');
-            adminPanel.classList.add('open');
-            loadMembersList();
-            loadAllUsersList();
-        } else {
-            alert('パスワードが正しくありません');
-            if (adminPasswordInput) {
-                adminPasswordInput.value = '';
-                adminPasswordInput.focus();
-            }
-        }
-    });
-
-    // パスワードモーダルを閉じる
-    closeAdminPasswordModal?.addEventListener('click', () => {
-        adminPasswordModal?.classList.remove('active');
-    });
-
-    cancelAdminPassword?.addEventListener('click', () => {
-        adminPasswordModal?.classList.remove('active');
+        adminPanel.classList.add('open');
+        loadMembersList();
+        loadAllUsersList();
+        setupAdminPanelOutsideClick();
     });
 
     // 権限変更フォーム
@@ -75,19 +33,24 @@ function initAdminPanel() {
         const userId = changeRoleForm.dataset.userId;
         const newRole = document.getElementById('change-role-select')?.value;
         console.log('権限変更フォーム送信:', { userId, newRole });
-        
+
         if (!userId) {
             alert('ユーザーIDが設定されていません');
             return;
         }
-        
+
         if (!newRole) {
             alert('権限が選択されていません');
             return;
         }
-        
+
         try {
-            await updateMemberRole(userId, newRole);
+            // 「未招待」が選択された場合はプロジェクトメンバーから削除
+            if (newRole === 'uninvited') {
+                await handleRemoveMember(userId);
+            } else {
+                await updateMemberRole(userId, newRole);
+            }
             changeRoleModal?.classList.remove('active');
         } catch (error) {
             console.error('権限変更エラー:', error);
@@ -104,13 +67,7 @@ function initAdminPanel() {
         changeRoleModal?.classList.remove('active');
     });
 
-    // モーダル外クリックで閉じる
-    adminPasswordModal?.addEventListener('click', (e) => {
-        if (e.target === adminPasswordModal) {
-            adminPasswordModal.classList.remove('active');
-        }
-    });
-
+    // 権限変更モーダル外クリックで閉じる
     changeRoleModal?.addEventListener('click', (e) => {
         if (e.target === changeRoleModal) {
             changeRoleModal.classList.remove('active');
@@ -119,7 +76,7 @@ function initAdminPanel() {
 
     // 管理画面を閉じる
     closeAdminPanel?.addEventListener('click', () => {
-        adminPanel.classList.remove('open');
+        closeAdminPanelFunction();
     });
 
     // ユーザー招待モーダルを開く
@@ -161,6 +118,57 @@ function initAdminPanel() {
     });
 }
 
+// 管理画面の外側クリックで閉じる設定
+let adminPanelOutsideClickHandler = null;
+
+function setupAdminPanelOutsideClick() {
+    // 既存のリスナーを削除
+    if (adminPanelOutsideClickHandler) {
+        document.removeEventListener('click', adminPanelOutsideClickHandler);
+        adminPanelOutsideClickHandler = null;
+    }
+
+    // 新しいリスナーを追加
+    adminPanelOutsideClickHandler = (e) => {
+        const adminPanel = document.getElementById('admin-panel');
+        if (!adminPanel || !adminPanel.classList.contains('open')) {
+            return;
+        }
+
+        // モーダルが開いている場合は閉じない
+        const changeRoleModal = document.getElementById('change-role-modal');
+        const inviteUserModal = document.getElementById('invite-user-modal');
+
+        if (changeRoleModal?.classList.contains('active') || inviteUserModal?.classList.contains('active')) {
+            return;
+        }
+
+        // クリックされた要素が管理画面パネル内でない場合
+        if (!adminPanel.contains(e.target) && !e.target.closest('#admin-panel-btn')) {
+            closeAdminPanelFunction();
+        }
+    };
+
+    // イベントリスナーを追加（少し遅延させて、開くボタンのクリックイベントが処理される前に実行されないようにする）
+    setTimeout(() => {
+        document.addEventListener('click', adminPanelOutsideClickHandler);
+    }, 100);
+}
+
+// 管理画面を閉じる関数
+function closeAdminPanelFunction() {
+    const adminPanel = document.getElementById('admin-panel');
+    if (adminPanel) {
+        adminPanel.classList.remove('open');
+    }
+    
+    // 外側クリックのリスナーを削除
+    if (adminPanelOutsideClickHandler) {
+        document.removeEventListener('click', adminPanelOutsideClickHandler);
+        adminPanelOutsideClickHandler = null;
+    }
+}
+
 // 管理者権限のチェック
 async function checkAdminAccess() {
     try {
@@ -168,26 +176,46 @@ async function checkAdminAccess() {
         console.log('currentUser:', appState.currentUser);
         console.log('currentProject:', appState.currentProject);
 
+        const adminPanelBtn = document.getElementById('admin-panel-btn');
+        
         if (!appState.currentUser || !appState.currentProject) {
             console.log('❌ currentUserまたはcurrentProjectが未設定');
+            // プロジェクトが選択されていない場合はボタンを非表示
+            if (adminPanelBtn) {
+                adminPanelBtn.style.display = 'none';
+                console.log('❌ プロジェクト未選択のため管理画面ボタンを非表示');
+            }
             return;
         }
 
         // 現在のユーザーがプロジェクトのオーナーまたは管理者かチェック
-        const { data, error } = await supabase
-            .from('project_members')
-            .select('role')
-            .eq('project_id', appState.currentProject.id)
-            .eq('user_id', appState.currentUser.id)
-            .maybeSingle();
+        // getUserRole関数を使用してロールを取得（RLSポリシーを考慮）
+        let userRole = null;
+        if (typeof getUserRole === 'function') {
+            userRole = await getUserRole(appState.currentProject.id);
+            console.log('getUserRole結果:', userRole);
+            // appState.currentUserRoleも更新
+            appState.currentUserRole = userRole;
+        } else {
+            // getUserRoleが利用できない場合のフォールバック
+            const { data, error } = await supabase
+                .from('project_members')
+                .select('role')
+                .eq('project_id', appState.currentProject.id)
+                .eq('user_id', appState.currentUser.id)
+                .maybeSingle();
 
-        if (error) throw error;
+            if (error) {
+                console.error('ロール取得エラー:', error);
+                throw error;
+            }
 
-        console.log('project_membersデータ:', data);
-        const isAdmin = data && (data.role === 'owner' || data.role === 'admin');
-        console.log('isAdmin:', isAdmin);
+            userRole = data?.role || null;
+            console.log('project_membersデータ:', data);
+        }
 
-        const adminPanelBtn = document.getElementById('admin-panel-btn');
+        const isAdmin = userRole === 'owner' || userRole === 'admin';
+        console.log('isAdmin:', isAdmin, 'userRole:', userRole);
         console.log('adminPanelBtn:', adminPanelBtn);
 
         if (isAdmin && adminPanelBtn) {
@@ -195,7 +223,7 @@ async function checkAdminAccess() {
             console.log('✅ 管理画面ボタンを表示');
         } else if (adminPanelBtn) {
             adminPanelBtn.style.display = 'none';
-            console.log('❌ 管理画面ボタンを非表示');
+            console.log('❌ 管理画面ボタンを非表示 (userRole:', userRole, ')');
         }
     } catch (error) {
         console.error('管理者権限チェックエラー:', error);
@@ -217,7 +245,7 @@ async function loadMembersList() {
             .from('project_members')
             .select(`
                 *,
-                user:user_profiles!user_id(id, username, display_name, email)
+                user:user_profiles!user_id(id, username, display_name, email, test_password)
             `)
             .eq('project_id', appState.currentProject.id)
             .order('role', { ascending: false });
@@ -249,6 +277,7 @@ async function loadMembersList() {
         membersList.innerHTML = members.map(member => {
             const userName = member.user?.display_name || member.user?.username || '不明';
             const userEmail = member.user?.email || '';
+            const testPassword = member.user?.test_password || '未設定';
             const isOwner = member.role === 'owner';
 
             return `
@@ -256,6 +285,9 @@ async function loadMembersList() {
                     <div class="member-info">
                         <div class="member-name">${escapeHtml(userName)}</div>
                         ${userEmail ? `<div class="member-email">${escapeHtml(userEmail)}</div>` : ''}
+                        <div class="member-password" style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">
+                            パスワード: <code class="edit-password-btn" data-user-id="${member.user_id}" style="background: #f1f5f9; padding: 0.125rem 0.25rem; border-radius: 0.25rem; cursor: pointer; user-select: none;" title="クリックして編集">${escapeHtml(testPassword)}</code>
+                        </div>
                     </div>
                     <div class="member-role ${member.role}">${getRoleLabel(member.role)}</div>
                     <div class="member-actions">
@@ -302,16 +334,27 @@ async function loadAllUsersList() {
         if (error) throw error;
 
         // 現在のプロジェクトのメンバー情報を取得（ロール情報も含む）
-        const { data: members } = await supabase
+        console.log('📋 全ユーザー一覧: プロジェクトメンバーを取得中...', { projectId: appState.currentProject.id });
+        const { data: members, error: membersError } = await supabase
             .from('project_members')
             .select('user_id, role')
             .eq('project_id', appState.currentProject.id);
 
+        if (membersError) {
+            console.error('プロジェクトメンバー取得エラー:', membersError);
+        }
+
+        console.log('取得したメンバー数:', members?.length || 0);
+        console.log('取得したメンバー詳細:', members);
+
         const memberMap = new Map();
         members?.forEach(m => {
             memberMap.set(m.user_id, m.role);
+            console.log(`  - user_id: ${m.user_id}, role: ${m.role}`);
         });
         const memberIds = new Set(memberMap.keys());
+        
+        console.log('メンバーIDセット:', Array.from(memberIds));
 
         // 現在のユーザーのロールを取得
         const currentUserMember = members?.find(m => m.user_id === appState.currentUser?.id);
@@ -326,15 +369,30 @@ async function loadAllUsersList() {
         allUsersList.innerHTML = users.map(user => {
             const userName = user.display_name || user.username || '不明';
             const userEmail = user.email || '';
+            const testPassword = user.test_password || '未設定';
             const isMember = memberIds.has(user.id);
             const isCurrentUser = user.id === appState.currentUser.id;
             const memberRole = memberMap.get(user.id);
+            
+            // デバッグログ
+            if (userEmail === 'pingus0428@gmail.com') {
+                console.log('🔍 pingus0428@gmail.com のチェック:', {
+                    userId: user.id,
+                    isMember,
+                    memberRole,
+                    memberIds: Array.from(memberIds),
+                    memberMap: Array.from(memberMap.entries())
+                });
+            }
 
             return `
                 <div class="user-item">
                     <div class="user-info-item">
                         <div class="user-name">${escapeHtml(userName)}</div>
                         ${userEmail ? `<div class="user-email">${escapeHtml(userEmail)}</div>` : ''}
+                        <div class="user-password" style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">
+                            パスワード: <code class="edit-password-btn" data-user-id="${user.id}" style="background: #f1f5f9; padding: 0.125rem 0.25rem; border-radius: 0.25rem; cursor: pointer; user-select: none;" title="クリックして編集">${escapeHtml(testPassword)}</code>
+                        </div>
                     </div>
                     <div class="user-actions">
                         ${isMember ? `<span class="user-role ${memberRole}" style="margin-right: 0.5rem;">${getRoleLabel(memberRole)}</span>` : '<span style="color: #94a3b8; font-size: 0.875rem; margin-right: 0.5rem;">未招待</span>'}
@@ -348,6 +406,11 @@ async function loadAllUsersList() {
                                 <button class="btn btn-sm btn-primary invite-from-list-btn" data-user-id="${user.id}" data-username="${escapeHtml(userName)}">
                                     招待
                                 </button>
+                                ${!isCurrentUser ? `
+                                    <button class="btn btn-sm btn-danger delete-user-btn" data-user-id="${user.id}" data-username="${escapeHtml(userName)}">
+                                        削除
+                                    </button>
+                                ` : ''}
                             `}
                         ` : ''}
                     </div>
@@ -390,6 +453,17 @@ function attachMemberEventListeners() {
             btn.dataset.listenerAttached = 'true';
         }
     });
+
+    // パスワード編集ボタン（既にリスナーが付いている場合はスキップ）
+    document.querySelectorAll('.edit-password-btn').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', async (e) => {
+                const userId = e.target.dataset.userId;
+                await handleEditPassword(userId);
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
+    });
 }
 
 // 全ユーザー一覧のイベントリスナーを追加
@@ -406,6 +480,17 @@ function attachAllUsersEventListeners() {
         }
     });
 
+    // メンバー削除ボタン
+    document.querySelectorAll('.remove-member-btn').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', async (e) => {
+                const userId = e.target.dataset.userId;
+                await handleRemoveMember(userId);
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
+    });
+
     // 招待ボタン（未招待の場合）
     document.querySelectorAll('.invite-from-list-btn').forEach(btn => {
         if (!btn.dataset.listenerAttached) {
@@ -413,6 +498,29 @@ function attachAllUsersEventListeners() {
                 const userId = e.target.dataset.userId;
                 const username = e.target.dataset.username;
                 await showInviteFromListModal(userId, username);
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
+    });
+
+    // パスワード編集ボタン（既にリスナーが付いている場合はスキップ）
+    document.querySelectorAll('.edit-password-btn').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', async (e) => {
+                const userId = e.target.dataset.userId;
+                await handleEditPassword(userId);
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
+    });
+
+    // ユーザー削除ボタン
+    document.querySelectorAll('.delete-user-btn').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', async (e) => {
+                const userId = e.target.dataset.userId;
+                const username = e.target.dataset.username;
+                await handleDeleteUser(userId, username);
             });
             btn.dataset.listenerAttached = 'true';
         }
@@ -432,7 +540,7 @@ async function showInviteFromListModal(userId, username) {
 
     // フォームにデータを設定
     inviteUsernameInput.value = username;
-    inviteRoleSelect.value = 'member'; // デフォルトはメンバー
+    inviteRoleSelect.value = 'member'; // デフォルトはメンバー（オーナー/管理者は必要に応じて選択可能）
 
     // モーダルを表示
     inviteUserModal.classList.add('active');
@@ -634,6 +742,80 @@ function getRoleLabel(role) {
         'viewer': '閲覧者'
     };
     return labels[role] || role;
+}
+
+// パスワード編集処理
+async function handleEditPassword(userId) {
+    try {
+        // 現在のパスワードを取得
+        const { data: user, error: fetchError } = await supabase
+            .from('user_profiles')
+            .select('test_password, username, display_name')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (fetchError) throw fetchError;
+        if (!user) {
+            alert('ユーザーが見つかりません');
+            return;
+        }
+
+        const currentPassword = user.test_password || '';
+        const userName = user.display_name || user.username || '不明';
+
+        // パスワードを入力してもらう
+        const newPassword = prompt(`${userName} のテスト用パスワードを入力してください:`, currentPassword);
+
+        if (newPassword === null) {
+            // キャンセルされた場合
+            return;
+        }
+
+        if (newPassword.trim() === '') {
+            alert('パスワードを入力してください');
+            return;
+        }
+
+        // パスワードを更新
+        const { error: updateError } = await supabase
+            .from('user_profiles')
+            .update({ test_password: newPassword.trim() })
+            .eq('id', userId);
+
+        if (updateError) throw updateError;
+
+        alert('パスワードを更新しました');
+
+        // リストを再読み込み
+        await loadMembersList();
+        await loadAllUsersList();
+    } catch (error) {
+        console.error('パスワード更新エラー:', error);
+        alert('パスワード更新に失敗しました: ' + error.message);
+    }
+}
+
+// ユーザー削除処理
+async function handleDeleteUser(userId, username) {
+    try {
+        if (!confirm(`本当に ${username} をシステムから完全に削除しますか？\nこの操作は取り消せません。`)) {
+            return;
+        }
+
+        const { error } = await supabase
+            .from('user_profiles')
+            .delete()
+            .eq('id', userId);
+
+        if (error) throw error;
+
+        alert('ユーザーを削除しました');
+        await loadMembersList();
+        await loadAllUsersList();
+    } catch (error) {
+        console.error('ユーザー削除エラー:', error);
+        alert('削除に失敗しました: ' + error.message);
+    }
 }
 
 // HTMLエスケープ

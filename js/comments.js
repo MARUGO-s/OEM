@@ -292,7 +292,7 @@ async function postComment(content) {
             id: generateCommentId(),
             content: content,
             author_id: appState.currentUser.id,
-            author_username: appState.currentUser.username,
+            author_username: appState.currentUser.display_name || appState.currentUser.username,
             task_id: null,
             project_id: projectId,
             created_at: new Date().toISOString()

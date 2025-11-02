@@ -313,6 +313,9 @@ function renderMeetings() {
         return;
     }
 
+    // 編集権限をチェック
+    const canEditContent = typeof window.canEdit === 'function' ? window.canEdit() : (appState.currentUser && appState.currentUserRole !== 'viewer');
+    
     container.innerHTML = meetings.map(meeting => {
         const startTime = new Date(meeting.start_time);
         const isUpcoming = startTime > new Date();
@@ -337,13 +340,18 @@ function renderMeetings() {
                 <div class="meeting-actions">
                     ${isUpcoming ? `
                         <button onclick="joinMeeting('${meeting.id}')" class="btn btn-primary">参加する</button>
-                        <button onclick="editMeeting('${meeting.id}')" class="btn btn-secondary">編集</button>
+                        ${canEditContent ? `<button onclick="editMeeting('${meeting.id}')" class="btn btn-secondary">編集</button>` : ''}
                     ` : ''}
-                    <button onclick="deleteMeeting('${meeting.id}')" class="btn btn-danger">削除</button>
+                    ${canEditContent ? `<button onclick="deleteMeeting('${meeting.id}')" class="btn btn-danger">削除</button>` : ''}
                 </div>
             </div>
         `;
     }).join('');
+    
+    // 権限に基づいてUI要素を制御
+    if (typeof updateUIByPermissions === 'function') {
+        updateUIByPermissions();
+    }
 }
 
 // 会議ステータスのラベル取得

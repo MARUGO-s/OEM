@@ -135,6 +135,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, s
 const appState = {
     currentUser: null,
     currentProject: null,
+    currentUserRole: null, // 現在のプロジェクトでのユーザーのロール
     tasks: [],
     comments: [],
     notifications: [],
@@ -145,3 +146,47 @@ const appState = {
     brainstormSubscribed: false,
     subscriptions: []
 };
+
+// 権限チェック関数
+async function getUserRole(projectId = null) {
+    try {
+        const targetProjectId = projectId || appState.currentProject?.id;
+        if (!targetProjectId || !appState.currentUser) {
+            return null;
+        }
+
+        const { data, error } = await supabase
+            .from('project_members')
+            .select('role')
+            .eq('project_id', targetProjectId)
+            .eq('user_id', appState.currentUser.id)
+            .maybeSingle();
+
+        if (error) {
+            console.error('ロール取得エラー:', error);
+            return null;
+        }
+
+        return data?.role || null;
+    } catch (error) {
+        console.error('ロール取得例外:', error);
+        return null;
+    }
+}
+
+// 権限チェック関数（編集可能かどうか）
+function canEdit() {
+    const role = appState.currentUserRole;
+    return role === 'owner' || role === 'admin' || role === 'member';
+}
+
+// 権限チェック関数（管理可能かどうか）
+function canManage() {
+    const role = appState.currentUserRole;
+    return role === 'owner' || role === 'admin';
+}
+
+// グローバル関数として公開
+window.canEdit = canEdit;
+window.canManage = canManage;
+window.getUserRole = getUserRole;
