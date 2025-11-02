@@ -59,7 +59,8 @@ async function createGoogleMeetMeeting(title, date, duration = 60, participants 
             calendar_event_id: `event_${Date.now()}`,
             status: 'scheduled',
             created_at: new Date().toISOString(),
-            created_by: appState.currentUser ? appState.currentUser.id : null
+            created_by: appState.currentUser ? appState.currentUser.id : null,
+            project_id: appState.currentProject ? appState.currentProject.id : null
         };
 
         // Supabaseに会議を保存（エラーハンドリング強化）
@@ -277,9 +278,17 @@ window.dismissNotification = function(notificationId) {
 // 会議一覧の読み込み（Supabase）
 async function loadMeetings() {
     try {
+        // 現在のプロジェクトが選択されていない場合は空配列を返す
+        if (!appState.currentProject) {
+            appState.meetings = [];
+            renderMeetings();
+            return;
+        }
+
         const { data, error } = await supabase
             .from('meetings')
             .select('*')
+            .eq('project_id', appState.currentProject.id)
             .order('start_time', { ascending: true });
 
         if (error) throw error;
