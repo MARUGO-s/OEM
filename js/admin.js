@@ -74,9 +74,24 @@ function initAdminPanel() {
         e.preventDefault();
         const userId = changeRoleForm.dataset.userId;
         const newRole = document.getElementById('change-role-select')?.value;
-        if (userId && newRole) {
+        console.log('権限変更フォーム送信:', { userId, newRole });
+        
+        if (!userId) {
+            alert('ユーザーIDが設定されていません');
+            return;
+        }
+        
+        if (!newRole) {
+            alert('権限が選択されていません');
+            return;
+        }
+        
+        try {
             await updateMemberRole(userId, newRole);
             changeRoleModal?.classList.remove('active');
+        } catch (error) {
+            console.error('権限変更エラー:', error);
+            alert('権限変更に失敗しました: ' + error.message);
         }
     });
 
@@ -437,6 +452,7 @@ async function showChangeRoleModal(userId, currentRole) {
         changeRoleUserName.value = userName;
         changeRoleSelect.value = currentRole;
         changeRoleForm.dataset.userId = userId;
+        console.log('権限変更モーダル設定:', { userId, userName, currentRole });
 
         // モーダルを表示
         changeRoleModal.classList.add('active');
@@ -449,20 +465,30 @@ async function showChangeRoleModal(userId, currentRole) {
 // メンバー権限を更新
 async function updateMemberRole(userId, newRole) {
     try {
-        const { error } = await supabase
+        console.log('権限更新開始:', { userId, newRole, projectId: appState.currentProject?.id });
+        
+        const { data, error } = await supabase
             .from('project_members')
             .update({ role: newRole })
             .eq('project_id', appState.currentProject.id)
-            .eq('user_id', userId);
+            .eq('user_id', userId)
+            .select();
 
-        if (error) throw error;
+        if (error) {
+            console.error('Supabase権限更新エラー:', error);
+            throw error;
+        }
 
+        console.log('権限更新成功:', data);
         alert('権限を変更しました');
+        
+        // メンバーリストを再読み込み
         await loadMembersList();
         await loadAllUsersList();
     } catch (error) {
         console.error('権限更新エラー:', error);
         alert('権限変更に失敗しました: ' + error.message);
+        throw error; // エラーを再スローして呼び出し元で処理できるようにする
     }
 }
 
