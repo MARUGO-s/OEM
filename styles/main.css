@@ -2224,6 +2224,7 @@ body {
 .roadmap-side-comments.left .roadmap-comment-item {
     text-align: left !important;
     justify-content: flex-start !important;
+    align-self: flex-end !important;
 }
 
 .roadmap-side-comments.left .roadmap-comment-bullet {
@@ -2235,11 +2236,14 @@ body {
 .roadmap-side-comments.left .comment-text {
     text-align: left !important;
     direction: ltr !important;
+    align-self: flex-start !important;
 }
 
 .roadmap-side-comments.left .comment-content {
     text-align: left !important;
     direction: ltr !important;
+    align-items: flex-start !important;
+    align-self: flex-start !important;
 }
 
 .roadmap-side-comments.left .comment-bullet {
@@ -2266,6 +2270,8 @@ body {
     flex-direction: column;
     flex: 1;
     min-width: 0;
+    align-items: flex-start;
+    width: 100%;
 }
 
 .roadmap-task-comments .comment-text {
@@ -2280,6 +2286,7 @@ body {
     line-height: 1.4;
     text-align: left;
     box-sizing: border-box;
+    display: block;
 }
 
 .roadmap-task-comments .comment-meta {
@@ -2422,11 +2429,13 @@ body {
     .roadmap-side-comments.left .roadmap-comment-item {
         text-align: left !important;
         justify-content: flex-start !important;
+        align-self: flex-end !important;
     }
 
     .roadmap-side-comments.left .comment-text {
         text-align: left !important;
         direction: ltr !important;
+        align-self: flex-start !important;
     }
 
     .roadmap-side-comments.left .roadmap-comment-bullet {
@@ -2437,6 +2446,8 @@ body {
     .roadmap-side-comments.left .comment-content {
         text-align: left !important;
         direction: ltr !important;
+        align-items: flex-start !important;
+        align-self: flex-start !important;
     }
 
     .roadmap-side-comments.right .roadmap-task-comments {
@@ -2505,11 +2516,13 @@ body {
     .roadmap-side-comments.left .roadmap-comment-item {
         text-align: left !important;
         justify-content: flex-start !important;
+        align-self: flex-end !important;
     }
 
     .roadmap-side-comments.left .comment-text {
         text-align: left !important;
         direction: ltr !important;
+        align-self: flex-start !important;
     }
 
     .roadmap-side-comments.left .roadmap-comment-bullet {
@@ -2520,6 +2533,8 @@ body {
     .roadmap-side-comments.left .comment-content {
         text-align: left !important;
         direction: ltr !important;
+        align-items: flex-start !important;
+        align-self: flex-start !important;
     }
 }
 
@@ -2599,11 +2614,13 @@ body {
     .roadmap-side-comments.left .roadmap-comment-item {
         text-align: left !important;
         justify-content: flex-start !important;
+        align-self: flex-end !important;
     }
 
     .roadmap-side-comments.left .comment-text {
         text-align: left !important;
         direction: ltr !important;
+        align-self: flex-start !important;
     }
 
     .roadmap-side-comments.left .roadmap-comment-bullet {
@@ -2614,6 +2631,8 @@ body {
     .roadmap-side-comments.left .comment-content {
         text-align: left !important;
         direction: ltr !important;
+        align-items: flex-start !important;
+        align-self: flex-start !important;
     }
 }
 

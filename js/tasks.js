@@ -414,9 +414,9 @@ function renderTasks(retryCount = 0) {
                         <div class="roadmap-comment-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 0.375rem; transition: background-color 0.2s ease; ${indentStyle}">
                             <div class="roadmap-comment-bullet comment" data-comment-id="${escapeHtml(comment.id)}" style="cursor: pointer; flex: 1; display: flex; align-items: center; gap: 0.25rem;">
                                 <span class="comment-bullet">${bulletChar}</span>
-                                <div class="comment-content" style="text-align: left; direction: ltr; flex: 1; min-width: 0;">
-                                    <div class="comment-text" style="text-align: left !important; direction: ltr !important; width: 100%; box-sizing: border-box;">${escapeHtml(entry.text)}</div>
-                                    <div class="comment-meta" style="text-align: left;">
+                                <div class="comment-content">
+                                    <div class="comment-text">${escapeHtml(entry.text)}</div>
+                                    <div class="comment-meta">
                                         <span class="comment-author">${escapeHtml(authorName)} ${escapeHtml(formattedDate)}</span>
                                     </div>
                                 </div>
