@@ -250,6 +250,55 @@
                 </div>
             </div>
 
+            <!-- 管理画面パスワードモーダル -->
+            <div id="admin-password-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>🔐 管理画面パスワード</h3>
+                        <button id="close-admin-password-modal" class="btn-icon">✕</button>
+                    </div>
+                    <form id="admin-password-form">
+                        <div class="form-group">
+                            <label for="admin-password-input">パスワード</label>
+                            <input type="password" id="admin-password-input" required placeholder="パスワードを入力">
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-admin-password">キャンセル</button>
+                            <button type="submit" class="btn btn-primary">認証</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 権限変更モーダル -->
+            <div id="change-role-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>👤 権限を変更</h3>
+                        <button id="close-change-role-modal" class="btn-icon">✕</button>
+                    </div>
+                    <form id="change-role-form">
+                        <div class="form-group">
+                            <label for="change-role-user-name">ユーザー</label>
+                            <input type="text" id="change-role-user-name" readonly style="background: #f1f5f9;">
+                        </div>
+                        <div class="form-group">
+                            <label for="change-role-select">新しい権限</label>
+                            <select id="change-role-select" required>
+                                <option value="owner">オーナー</option>
+                                <option value="admin">管理者</option>
+                                <option value="member">メンバー</option>
+                                <option value="viewer">閲覧者</option>
+                            </select>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-change-role">キャンセル</button>
+                            <button type="submit" class="btn btn-primary">変更</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- ユーザー招待モーダル -->
             <div id="invite-user-modal" class="modal">
                 <div class="modal-content">

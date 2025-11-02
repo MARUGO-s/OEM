@@ -13,11 +13,93 @@ function initAdminPanel() {
 
     // 注意: checkAdminAccessは呼び出さない（projects.jsのselectProjectで呼び出される）
 
-    // 管理画面を開く
+    // 管理画面パスワードモーダルの要素を取得
+    const adminPasswordModal = document.getElementById('admin-password-modal');
+    const adminPasswordForm = document.getElementById('admin-password-form');
+    const closeAdminPasswordModal = document.getElementById('close-admin-password-modal');
+    const cancelAdminPassword = document.getElementById('cancel-admin-password');
+    const adminPasswordInput = document.getElementById('admin-password-input');
+
+    // 権限変更モーダルの要素を取得
+    const changeRoleModal = document.getElementById('change-role-modal');
+    const changeRoleForm = document.getElementById('change-role-form');
+    const closeChangeRoleModal = document.getElementById('close-change-role-modal');
+    const cancelChangeRole = document.getElementById('cancel-change-role');
+
+    // 管理画面を開く（パスワード認証付き）
     adminPanelBtn?.addEventListener('click', () => {
-        adminPanel.classList.add('open');
-        loadMembersList();
-        loadAllUsersList();
+        if (adminPasswordModal) {
+            adminPasswordModal.classList.add('active');
+            if (adminPasswordInput) {
+                adminPasswordInput.value = '';
+                adminPasswordInput.focus();
+            }
+        } else {
+            // パスワードモーダルがない場合は直接開く（フォールバック）
+            adminPanel.classList.add('open');
+            loadMembersList();
+            loadAllUsersList();
+        }
+    });
+
+    // パスワード認証フォーム
+    adminPasswordForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const password = adminPasswordInput?.value;
+        if (password === 'yoshito') {
+            adminPasswordModal?.classList.remove('active');
+            adminPanel.classList.add('open');
+            loadMembersList();
+            loadAllUsersList();
+        } else {
+            alert('パスワードが正しくありません');
+            if (adminPasswordInput) {
+                adminPasswordInput.value = '';
+                adminPasswordInput.focus();
+            }
+        }
+    });
+
+    // パスワードモーダルを閉じる
+    closeAdminPasswordModal?.addEventListener('click', () => {
+        adminPasswordModal?.classList.remove('active');
+    });
+
+    cancelAdminPassword?.addEventListener('click', () => {
+        adminPasswordModal?.classList.remove('active');
+    });
+
+    // 権限変更フォーム
+    changeRoleForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const userId = changeRoleForm.dataset.userId;
+        const newRole = document.getElementById('change-role-select')?.value;
+        if (userId && newRole) {
+            await updateMemberRole(userId, newRole);
+            changeRoleModal?.classList.remove('active');
+        }
+    });
+
+    // 権限変更モーダルを閉じる
+    closeChangeRoleModal?.addEventListener('click', () => {
+        changeRoleModal?.classList.remove('active');
+    });
+
+    cancelChangeRole?.addEventListener('click', () => {
+        changeRoleModal?.classList.remove('active');
+    });
+
+    // モーダル外クリックで閉じる
+    adminPasswordModal?.addEventListener('click', (e) => {
+        if (e.target === adminPasswordModal) {
+            adminPasswordModal.classList.remove('active');
+        }
+    });
+
+    changeRoleModal?.addEventListener('click', (e) => {
+        if (e.target === changeRoleModal) {
+            changeRoleModal.classList.remove('active');
+        }
     });
 
     // 管理画面を閉じる
@@ -122,11 +204,15 @@ async function loadMembersList() {
             return;
         }
 
+        // 現在のユーザーのロールを取得
+        const currentUserMember = members.find(m => m.user_id === appState.currentUser?.id);
+        const currentUserRole = currentUserMember?.role || 'viewer';
+        const canManage = currentUserRole === 'owner' || currentUserRole === 'admin';
+
         membersList.innerHTML = members.map(member => {
             const userName = member.user?.display_name || member.user?.username || '不明';
             const userEmail = member.user?.email || '';
             const isOwner = member.role === 'owner';
-            const canDelete = appState.currentUser.role === 'owner' || appState.currentUser.role === 'admin';
 
             return `
                 <div class="member-item">
@@ -136,13 +222,15 @@ async function loadMembersList() {
                     </div>
                     <div class="member-role ${member.role}">${getRoleLabel(member.role)}</div>
                     <div class="member-actions">
-                        ${!isOwner && canDelete ? `
+                        ${canManage ? `
                             <button class="btn btn-sm btn-secondary change-role-btn" data-user-id="${member.user_id}" data-current-role="${member.role}">
                                 変更
                             </button>
-                            <button class="btn btn-sm btn-danger remove-member-btn" data-user-id="${member.user_id}">
-                                削除
-                            </button>
+                            ${!isOwner ? `
+                                <button class="btn btn-sm btn-danger remove-member-btn" data-user-id="${member.user_id}">
+                                    削除
+                                </button>
+                            ` : ''}
                         ` : ''}
                     </div>
                 </div>
@@ -329,40 +417,29 @@ async function showChangeRoleModal(userId, currentRole) {
 
         if (error) throw error;
 
+        if (!member) {
+            alert('メンバー情報が見つかりません');
+            return;
+        }
+
         const userName = member?.user?.display_name || member?.user?.username || '不明';
-        const currentRoleLabel = getRoleLabel(currentRole);
+        const changeRoleModal = document.getElementById('change-role-modal');
+        const changeRoleForm = document.getElementById('change-role-form');
+        const changeRoleUserName = document.getElementById('change-role-user-name');
+        const changeRoleSelect = document.getElementById('change-role-select');
 
-        // シンプルな確認ダイアログ
-        const roles = ['member', 'admin', 'viewer'];
-        const roleLabels = {
-            'member': 'メンバー',
-            'admin': '管理者',
-            'viewer': '閲覧者'
-        };
-
-        let options = '現在の権限: ' + currentRoleLabel + '\n\n新しい権限を選択してください:\n';
-        roles.forEach((role, index) => {
-            options += `${index + 1}. ${roleLabels[role]}\n`;
-        });
-
-        const newRoleIndex = prompt(options + '\n番号を入力:');
-        
-        if (newRoleIndex === null) return; // キャンセル
-
-        const newRole = roles[parseInt(newRoleIndex) - 1];
-
-        if (!newRole) {
-            alert('無効な選択です');
+        if (!changeRoleModal || !changeRoleForm || !changeRoleUserName || !changeRoleSelect) {
+            alert('権限変更モーダルの要素が見つかりません');
             return;
         }
 
-        if (newRole === currentRole) {
-            alert('同じ権限が選択されています');
-            return;
-        }
+        // フォームにデータを設定
+        changeRoleUserName.value = userName;
+        changeRoleSelect.value = currentRole;
+        changeRoleForm.dataset.userId = userId;
 
-        // 権限を更新
-        await updateMemberRole(userId, newRole);
+        // モーダルを表示
+        changeRoleModal.classList.add('active');
     } catch (error) {
         console.error('権限変更モーダル表示エラー:', error);
         alert('エラーが発生しました: ' + error.message);
