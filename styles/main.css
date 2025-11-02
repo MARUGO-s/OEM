@@ -3738,3 +3738,49 @@ body {
         flex-direction: column;
     }
 }
+
+/* プロジェクト選択画面のモバイル対応 */
+@media (max-width: 768px) {
+    .project-select-container {
+        padding: 1.5rem;
+    }
+    
+    .project-select-header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .user-info-compact {
+        font-size: 0.8rem;
+        gap: 0.25rem;
+    }
+    
+    .projects-list {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .project-select-container {
+        padding: 1rem;
+    }
+    
+    .project-select-header h1 {
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .user-info-compact {
+        font-size: 0.7rem;
+        gap: 0.25rem;
+        top: -0.5rem;
+        right: 0;
+    }
+    
+    .project-card {
+        padding: 1rem;
+    }
+    
+    .project-card-title {
+        font-size: 1.1rem;
+    }
+}

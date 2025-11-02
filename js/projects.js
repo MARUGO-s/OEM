@@ -250,7 +250,10 @@ function initProjectSelectScreen() {
     // ユーザー名を表示
     const projectUserName = document.getElementById('project-user-name');
     if (projectUserName && appState.currentUser) {
-        projectUserName.textContent = appState.currentUser.username || appState.currentUser.email;
+        const displayName = appState.currentUser.display_name || appState.currentUser.username || appState.currentUser.email;
+        // モバイルでは短縮表示
+        const isMobile = window.innerWidth <= 480;
+        projectUserName.textContent = isMobile && displayName.length > 8 ? displayName.substring(0, 8) + '...' : displayName;
     }
 
     // プロジェクト一覧を読み込み
