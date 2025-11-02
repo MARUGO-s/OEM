@@ -322,8 +322,8 @@ async function loadAllUsersList() {
                         ${userEmail ? `<div class="user-email">${escapeHtml(userEmail)}</div>` : ''}
                     </div>
                     <div class="user-actions">
-                        ${isMember ? '<span style="color: var(--text-secondary); font-size: 0.875rem;">メンバー</span>' : ''}
-                        ${isCurrentUser ? '<span style="color: var(--text-secondary); font-size: 0.875rem;">自分</span>' : ''}
+                        ${isMember ? '<span style="color: var(--text-secondary); font-size: 0.875rem;">メンバー</span>' : '<span style="color: #94a3b8; font-size: 0.875rem;">未招待</span>'}
+                        ${isCurrentUser ? '<span style="color: var(--text-secondary); font-size: 0.875rem; margin-left: 0.5rem;">自分</span>' : ''}
                     </div>
                 </div>
             `;
