@@ -1169,7 +1169,7 @@ body {
     
     /* 追加の要素のフォントサイズ調整 */
     .roadmap-task-comments .comment-text {
-        font-size: 0.625rem; /* 10px */
+        font-size: 0.75rem; /* 12px - タスクタイトルと同じサイズ */
     }
     
     .roadmap-task-meta {
