@@ -2183,7 +2183,7 @@ body {
 
 .roadmap-side-comments.left .roadmap-task-comments {
     align-items: flex-end;
-    text-align: right;
+    text-align: left;
     margin-right: 1.25rem;
 }
 
@@ -2221,6 +2221,16 @@ body {
 
 .roadmap-side-comments.left .roadmap-comment-bullet {
     flex-direction: row;
+    text-align: left !important;
+}
+
+.roadmap-side-comments.left .comment-text {
+    text-align: left !important;
+    direction: ltr !important;
+}
+
+.roadmap-side-comments.left .comment-content {
+    text-align: left !important;
 }
 
 .roadmap-task-comments .comment-bullet {
