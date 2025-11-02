@@ -49,12 +49,15 @@ async function loadProjectMembers() {
 }
 
 // メンション候補リストを表示
-function showMentionSuggestions(inputElement, query = '') {
+async function showMentionSuggestions(inputElement, query = '') {
     // 既存の候補リストを削除
     const existingSuggestions = document.querySelector('.mention-suggestions');
     if (existingSuggestions) {
         existingSuggestions.remove();
     }
+
+    // 最新のメンバーリストを取得（削除されたメンバーを除外）
+    await loadProjectMembers();
 
     // クエリでフィルタリング
     const filteredMembers = projectMembersCache.filter(member =>
@@ -187,7 +190,7 @@ function attachMentionListener(inputElement) {
         return;
     }
 
-    inputElement.addEventListener('input', (e) => {
+    inputElement.addEventListener('input', async (e) => {
         const value = e.target.value;
         const cursorPos = e.target.selectionStart;
 
@@ -202,7 +205,7 @@ function attachMentionListener(inputElement) {
 
         if (currentWord.startsWith('@')) {
             const query = currentWord.substring(1);
-            showMentionSuggestions(e.target, query);
+            await showMentionSuggestions(e.target, query);
         } else {
             // 候補リストを閉じる
             const existingSuggestions = document.querySelector('.mention-suggestions');
