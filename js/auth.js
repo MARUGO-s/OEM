@@ -394,12 +394,9 @@ async function checkSession() {
             console.log('Supabaseセッション存在:', session);
             await refreshCurrentUser();
             
-            // プロジェクト選択画面へ遷移（プロジェクト選択は必須）
-            console.log('プロジェクト選択画面に遷移します');
-            showProjectSelectScreen();
-            if (typeof initProjectSelectScreen === 'function') {
-                initProjectSelectScreen();
-            }
+            // 常にログイン画面から開始
+            console.log('ログイン画面を表示します');
+            showLoginScreen();
         } else {
             console.log('Supabaseセッションなし');
             showLoginScreen();
