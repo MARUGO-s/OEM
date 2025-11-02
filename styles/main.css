@@ -2434,26 +2434,26 @@ body {
 
     .roadmap-side-task.left,
     .roadmap-side-comments.left {
-        text-align: right;
-        align-items: flex-end;
+        justify-content: flex-end;
     }
 
     .roadmap-side-task.right,
     .roadmap-side-comments.right {
-        text-align: left;
-        align-items: flex-start;
+        justify-content: flex-start;
     }
 
     .roadmap-side-task.left .roadmap-task,
     .roadmap-side-comments.left .roadmap-task-comments {
         margin-left: auto;
         margin-right: 0.5rem;
+        text-align: left;
     }
 
     .roadmap-side-task.right .roadmap-task,
     .roadmap-side-comments.right .roadmap-task-comments {
         margin-left: 0.5rem;
         margin-right: auto;
+        text-align: left;
     }
 }
 
