@@ -128,25 +128,30 @@ function initAdminPanel() {
     });
 
     // ユーザー招待モーダルを閉じる
-    closeInviteModal?.addEventListener('click', () => {
-        inviteUserModal.classList.remove('active');
-    });
+    const closeInviteModalHandler = () => {
+        inviteUserModal?.classList.remove('active');
+        const inviteUsernameInput = document.getElementById('invite-username');
+        if (inviteUsernameInput) {
+            inviteUsernameInput.readOnly = false;
+            delete inviteUsernameInput.dataset.targetUserId;
+        }
+    };
 
-    cancelInvite?.addEventListener('click', () => {
-        inviteUserModal.classList.remove('active');
+    closeInviteModal?.addEventListener('click', closeInviteModalHandler);
+
+    cancelInvite?.addEventListener('click', closeInviteModalHandler);
+
+    // モーダル外クリックで閉じる
+    inviteUserModal?.addEventListener('click', (e) => {
+        if (e.target === inviteUserModal) {
+            closeInviteModalHandler();
+        }
     });
 
     // ユーザー招待フォーム送信
     inviteUserForm?.addEventListener('submit', async (e) => {
         e.preventDefault();
         await handleInviteUser(e);
-    });
-
-    // モーダル外クリックで閉じる
-    inviteUserModal?.addEventListener('click', (e) => {
-        if (e.target === inviteUserModal) {
-            inviteUserModal.classList.remove('active');
-        }
     });
 
     adminPanel?.addEventListener('click', (e) => {
@@ -296,13 +301,22 @@ async function loadAllUsersList() {
 
         if (error) throw error;
 
-        // 現在のプロジェクトのメンバーIDを取得
+        // 現在のプロジェクトのメンバー情報を取得（ロール情報も含む）
         const { data: members } = await supabase
             .from('project_members')
-            .select('user_id')
+            .select('user_id, role')
             .eq('project_id', appState.currentProject.id);
 
-        const memberIds = new Set(members?.map(m => m.user_id) || []);
+        const memberMap = new Map();
+        members?.forEach(m => {
+            memberMap.set(m.user_id, m.role);
+        });
+        const memberIds = new Set(memberMap.keys());
+
+        // 現在のユーザーのロールを取得
+        const currentUserMember = members?.find(m => m.user_id === appState.currentUser?.id);
+        const currentUserRole = currentUserMember?.role || 'viewer';
+        const canManage = currentUserRole === 'owner' || currentUserRole === 'admin';
 
         if (!users || users.length === 0) {
             allUsersList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">ユーザーがいません</p>';
@@ -314,6 +328,7 @@ async function loadAllUsersList() {
             const userEmail = user.email || '';
             const isMember = memberIds.has(user.id);
             const isCurrentUser = user.id === appState.currentUser.id;
+            const memberRole = memberMap.get(user.id);
 
             return `
                 <div class="user-item">
@@ -322,12 +337,26 @@ async function loadAllUsersList() {
                         ${userEmail ? `<div class="user-email">${escapeHtml(userEmail)}</div>` : ''}
                     </div>
                     <div class="user-actions">
-                        ${isMember ? '<span style="color: var(--text-secondary); font-size: 0.875rem;">メンバー</span>' : '<span style="color: #94a3b8; font-size: 0.875rem;">未招待</span>'}
-                        ${isCurrentUser ? '<span style="color: var(--text-secondary); font-size: 0.875rem; margin-left: 0.5rem;">自分</span>' : ''}
+                        ${isMember ? `<span class="user-role ${memberRole}" style="margin-right: 0.5rem;">${getRoleLabel(memberRole)}</span>` : '<span style="color: #94a3b8; font-size: 0.875rem; margin-right: 0.5rem;">未招待</span>'}
+                        ${isCurrentUser ? '<span style="color: var(--text-secondary); font-size: 0.875rem; margin-right: 0.5rem;">自分</span>' : ''}
+                        ${canManage ? `
+                            ${isMember ? `
+                                <button class="btn btn-sm btn-secondary change-role-btn" data-user-id="${user.id}" data-current-role="${memberRole}">
+                                    変更
+                                </button>
+                            ` : `
+                                <button class="btn btn-sm btn-primary invite-from-list-btn" data-user-id="${user.id}" data-username="${escapeHtml(userName)}">
+                                    招待
+                                </button>
+                            `}
+                        ` : ''}
                     </div>
                 </div>
             `;
         }).join('');
+
+        // 全ユーザー一覧のイベントリスナーを追加
+        attachAllUsersEventListeners();
     } catch (error) {
         console.error('全ユーザー一覧読み込みエラー:', error);
         const allUsersList = document.getElementById('all-users-list');
@@ -339,47 +368,114 @@ async function loadAllUsersList() {
 
 // メンバーイベントリスナーを追加
 function attachMemberEventListeners() {
-    // 権限変更ボタン
+    // 権限変更ボタン（既にリスナーが付いている場合はスキップ）
     document.querySelectorAll('.change-role-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const userId = e.target.dataset.userId;
-            const currentRole = e.target.dataset.currentRole;
-            await showChangeRoleModal(userId, currentRole);
-        });
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', async (e) => {
+                const userId = e.target.dataset.userId;
+                const currentRole = e.target.dataset.currentRole;
+                await showChangeRoleModal(userId, currentRole);
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
     });
 
-    // メンバー削除ボタン
+    // メンバー削除ボタン（既にリスナーが付いている場合はスキップ）
     document.querySelectorAll('.remove-member-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const userId = e.target.dataset.userId;
-            await handleRemoveMember(userId);
-        });
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', async (e) => {
+                const userId = e.target.dataset.userId;
+                await handleRemoveMember(userId);
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
     });
+}
+
+// 全ユーザー一覧のイベントリスナーを追加
+function attachAllUsersEventListeners() {
+    // 権限変更ボタン（メンバーの場合）
+    document.querySelectorAll('.change-role-btn').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', async (e) => {
+                const userId = e.target.dataset.userId;
+                const currentRole = e.target.dataset.currentRole;
+                await showChangeRoleModal(userId, currentRole);
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
+    });
+
+    // 招待ボタン（未招待の場合）
+    document.querySelectorAll('.invite-from-list-btn').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.addEventListener('click', async (e) => {
+                const userId = e.target.dataset.userId;
+                const username = e.target.dataset.username;
+                await showInviteFromListModal(userId, username);
+            });
+            btn.dataset.listenerAttached = 'true';
+        }
+    });
+}
+
+// 全ユーザー一覧から招待するモーダルを表示
+async function showInviteFromListModal(userId, username) {
+    const inviteUserModal = document.getElementById('invite-user-modal');
+    const inviteUsernameInput = document.getElementById('invite-username');
+    const inviteRoleSelect = document.getElementById('invite-role');
+
+    if (!inviteUserModal || !inviteUsernameInput || !inviteRoleSelect) {
+        alert('招待モーダルの要素が見つかりません');
+        return;
+    }
+
+    // フォームにデータを設定
+    inviteUsernameInput.value = username;
+    inviteRoleSelect.value = 'member'; // デフォルトはメンバー
+
+    // モーダルを表示
+    inviteUserModal.classList.add('active');
+
+    // ユーザー名フィールドを読み取り専用にして、userIdを保存
+    inviteUsernameInput.readOnly = true;
+    inviteUsernameInput.dataset.targetUserId = userId;
 }
 
 // ユーザー招待処理
 async function handleInviteUser(e) {
     try {
-        const username = document.getElementById('invite-username').value.trim();
+        const inviteUsernameInput = document.getElementById('invite-username');
+        const username = inviteUsernameInput.value.trim();
         const role = document.getElementById('invite-role').value;
+        const targetUserId = inviteUsernameInput.dataset.targetUserId;
 
-        if (!username) {
-            alert('ユーザー名を入力してください');
-            return;
-        }
+        let userId;
 
-        // ユーザーを検索
-        const { data: user, error: userError } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('username', username)
-            .maybeSingle();
+        // userIdが設定されている場合はそれを使用（全ユーザー一覧から招待の場合）
+        if (targetUserId) {
+            userId = targetUserId;
+        } else {
+            // ユーザー名から検索（従来の方法）
+            if (!username) {
+                alert('ユーザー名を入力してください');
+                return;
+            }
 
-        if (userError) throw userError;
+            const { data: user, error: userError } = await supabase
+                .from('user_profiles')
+                .select('*')
+                .eq('username', username)
+                .maybeSingle();
 
-        if (!user) {
-            alert('ユーザーが見つかりません');
-            return;
+            if (userError) throw userError;
+
+            if (!user) {
+                alert('ユーザーが見つかりません');
+                return;
+            }
+
+            userId = user.id;
         }
 
         // プロジェクトメンバーを追加
@@ -387,7 +483,7 @@ async function handleInviteUser(e) {
             .from('project_members')
             .insert([{
                 project_id: appState.currentProject.id,
-                user_id: user.id,
+                user_id: userId,
                 role: role
             }]);
 
@@ -401,8 +497,19 @@ async function handleInviteUser(e) {
         }
 
         alert('ユーザーを招待しました');
-        document.getElementById('invite-user-modal').classList.remove('active');
-        document.getElementById('invite-user-form').reset();
+        const inviteUserModal = document.getElementById('invite-user-modal');
+        const inviteUserForm = document.getElementById('invite-user-form');
+        
+        if (inviteUserModal) inviteUserModal.classList.remove('active');
+        if (inviteUserForm) {
+            inviteUserForm.reset();
+            // readOnlyを解除
+            if (inviteUsernameInput) {
+                inviteUsernameInput.readOnly = false;
+                delete inviteUsernameInput.dataset.targetUserId;
+            }
+        }
+        
         await loadMembersList();
         await loadAllUsersList();
     } catch (error) {
