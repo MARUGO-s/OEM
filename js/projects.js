@@ -114,6 +114,7 @@ async function selectProject(projectId) {
 
         // 現在のプロジェクトを設定
         window.currentProject = data;
+        appState.currentProject = data;
         sessionStorage.setItem('currentProjectId', projectId);
         sessionStorage.setItem('currentProjectName', data.name);
 
@@ -314,6 +315,7 @@ function initProjectSelectScreen() {
         sessionStorage.removeItem('currentProjectId');
         sessionStorage.removeItem('currentProjectName');
         appState.currentUser = null;
+        appState.currentProject = null;
         window.currentProject = null;
         showScreen('login-screen');
     });

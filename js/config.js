@@ -134,6 +134,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, s
 // グローバル状態
 const appState = {
     currentUser: null,
+    currentProject: null,
     tasks: [],
     comments: [],
     notifications: [],
