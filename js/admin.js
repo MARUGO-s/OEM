@@ -63,7 +63,12 @@ function initAdminPanel() {
 // 管理者権限のチェック
 async function checkAdminAccess() {
     try {
+        console.log('🔍 管理者権限チェック開始');
+        console.log('currentUser:', appState.currentUser);
+        console.log('currentProject:', appState.currentProject);
+
         if (!appState.currentUser || !appState.currentProject) {
+            console.log('❌ currentUserまたはcurrentProjectが未設定');
             return;
         }
 
@@ -77,13 +82,19 @@ async function checkAdminAccess() {
 
         if (error) throw error;
 
+        console.log('project_membersデータ:', data);
         const isAdmin = data && (data.role === 'owner' || data.role === 'admin');
+        console.log('isAdmin:', isAdmin);
+
         const adminPanelBtn = document.getElementById('admin-panel-btn');
+        console.log('adminPanelBtn:', adminPanelBtn);
 
         if (isAdmin && adminPanelBtn) {
             adminPanelBtn.style.display = 'inline-block';
+            console.log('✅ 管理画面ボタンを表示');
         } else if (adminPanelBtn) {
             adminPanelBtn.style.display = 'none';
+            console.log('❌ 管理画面ボタンを非表示');
         }
     } catch (error) {
         console.error('管理者権限チェックエラー:', error);
