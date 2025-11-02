@@ -2278,7 +2278,7 @@ body {
     color: #0f172a;
     font-size: 0.9rem;
     font-weight: 600;
-    white-space: pre-wrap;
+    white-space: normal;
     word-break: break-word;
     overflow-wrap: break-word;
     max-width: 100%;
