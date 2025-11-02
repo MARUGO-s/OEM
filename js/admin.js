@@ -200,9 +200,14 @@ async function checkAdminAccess() {
 // プロジェクトメンバー一覧を読み込む
 async function loadMembersList() {
     try {
+        console.log('📋 loadMembersList開始');
         const membersList = document.getElementById('members-list');
-        if (!membersList || !appState.currentProject) return;
+        if (!membersList || !appState.currentProject) {
+            console.log('❌ membersListまたはcurrentProjectが未設定');
+            return;
+        }
 
+        console.log('データベースからメンバーを取得中...', { projectId: appState.currentProject.id });
         const { data: members, error } = await supabase
             .from('project_members')
             .select(`
@@ -212,7 +217,12 @@ async function loadMembersList() {
             .eq('project_id', appState.currentProject.id)
             .order('role', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            console.error('メンバー取得エラー:', error);
+            throw error;
+        }
+
+        console.log('取得したメンバー:', members);
 
         if (!members || members.length === 0) {
             membersList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">メンバーがいません</p>';
@@ -224,6 +234,13 @@ async function loadMembersList() {
         const currentUserRole = currentUserMember?.role || 'viewer';
         const canManage = currentUserRole === 'owner' || currentUserRole === 'admin';
 
+        // 各メンバーのロールをログに出力（デバッグ用）
+        members.forEach(member => {
+            const userName = member.user?.display_name || member.user?.username || '不明';
+            console.log(`  - ${userName}: ${member.role}`);
+        });
+
+        console.log('HTMLを更新します');
         membersList.innerHTML = members.map(member => {
             const userName = member.user?.display_name || member.user?.username || '不明';
             const userEmail = member.user?.email || '';
@@ -252,8 +269,10 @@ async function loadMembersList() {
             `;
         }).join('');
 
+        console.log('✅ HTML更新完了、イベントリスナーを追加します');
         // イベントリスナーを追加
         attachMemberEventListeners();
+        console.log('✅ メンバーリストの読み込み完了');
     } catch (error) {
         console.error('メンバー一覧読み込みエラー:', error);
         const membersList = document.getElementById('members-list');
@@ -480,11 +499,18 @@ async function updateMemberRole(userId, newRole) {
         }
 
         console.log('権限更新成功:', data);
+        
+        // 更新を確実に反映させるため、少し待機してから再読み込み
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         alert('権限を変更しました');
         
-        // メンバーリストを再読み込み
+        // メンバーリストを再読み込み（明示的にキャッシュを無効化）
+        console.log('メンバーリストを再読み込みします');
         await loadMembersList();
         await loadAllUsersList();
+        
+        console.log('メンバーリストの再読み込み完了');
     } catch (error) {
         console.error('権限更新エラー:', error);
         alert('権限変更に失敗しました: ' + error.message);
