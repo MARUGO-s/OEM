@@ -443,6 +443,23 @@ function attachReactionListeners() {
     });
 }
 
+// プレースホルダーにリアクションUIをロード
+async function loadReactionUI(placeholder, commentId, commentType) {
+    try {
+        const reactions = await loadReactions(commentId, commentType);
+        const reactionUI = createReactionUI(commentId, commentType, reactions);
+        placeholder.innerHTML = reactionUI;
+
+        // イベントリスナーをアタッチ
+        const container = placeholder.querySelector('.reaction-container');
+        if (container) {
+            attachReactionListenersToContainer(container);
+        }
+    } catch (error) {
+        console.error('リアクションUI読み込みエラー:', error);
+    }
+}
+
 // グローバル関数として公開
 window.loadReactions = loadReactions;
 window.addReaction = addReaction;
@@ -450,3 +467,4 @@ window.removeReaction = removeReaction;
 window.createReactionUI = createReactionUI;
 window.refreshReactionUI = refreshReactionUI;
 window.attachReactionListeners = attachReactionListeners;
+window.loadReactionUI = loadReactionUI;
