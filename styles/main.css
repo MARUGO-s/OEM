@@ -3773,6 +3773,7 @@ body {
     
     .projects-list {
         grid-template-columns: 1fr;
+        max-height: 50vh;
     }
 }
 
@@ -3790,6 +3791,10 @@ body {
         gap: 0.25rem;
     }
     
+    .projects-list {
+        max-height: 40vh;
+    }
+    
     .project-card {
         padding: 1rem;
     }
@@ -3797,4 +3802,28 @@ body {
     .project-card-title {
         font-size: 1.1rem;
     }
+}
+
+/* プロジェクトリストのスクロールバースタイル */
+.projects-list {
+    -webkit-overflow-scrolling: touch;
+}
+
+.projects-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.projects-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.projects-list::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.projects-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
 }
