@@ -1272,6 +1272,8 @@ body {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        text-align: left !important;
+        direction: ltr !important;
     }
 
     .roadmap-task-comments .comment-meta {
@@ -2371,7 +2373,7 @@ body {
 
 .roadmap-side-comments.left .roadmap-task-comments {
     align-items: flex-end;
-    text-align: right;
+    text-align: left;
 }
 
 .roadmap-side-comments.right .roadmap-task-comments {
@@ -2400,7 +2402,15 @@ body {
     .roadmap-side-comments.left .roadmap-task-comments {
         margin-right: 1rem;
         align-items: flex-end;
-        text-align: right;
+        text-align: left;
+    }
+
+    .roadmap-side-comments.left .comment-text {
+        text-align: left !important;
+    }
+
+    .roadmap-side-comments.left .roadmap-comment-bullet {
+        text-align: left !important;
     }
 
     .roadmap-side-comments.right .roadmap-task-comments {
@@ -2518,6 +2528,8 @@ body {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        text-align: left !important;
+        direction: ltr !important;
     }
 
     .roadmap-task-comments .comment-meta {
