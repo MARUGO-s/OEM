@@ -11,8 +11,10 @@ function initAdminPanel() {
     const cancelInvite = document.getElementById('cancel-invite');
     const inviteUserForm = document.getElementById('invite-user-form');
 
-    // 管理者権限のチェックとボタン表示
-    checkAdminAccess();
+    // 管理者権限のチェックとボタン表示（遅延実行）
+    setTimeout(() => {
+        checkAdminAccess();
+    }, 100);
 
     // 管理画面を開く
     adminPanelBtn?.addEventListener('click', () => {

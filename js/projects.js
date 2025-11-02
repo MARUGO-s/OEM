@@ -139,8 +139,12 @@ async function selectProject(projectId) {
         }
 
         // 管理画面のアクセス権限をチェック
+        console.log('🔍 checkAdminAccess関数の存在チェック:', typeof checkAdminAccess);
         if (typeof checkAdminAccess === 'function') {
+            console.log('✅ checkAdminAccessを呼び出します');
             await checkAdminAccess();
+        } else {
+            console.error('❌ checkAdminAccessが関数として見つかりません');
         }
     } catch (error) {
         console.error('プロジェクト選択エラー:', error);
