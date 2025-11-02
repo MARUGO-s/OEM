@@ -633,7 +633,7 @@ body {
     .roadmap-task-comments .comment-text {
         font-size: 1rem;
         line-height: 1.5;
-        white-space: pre-wrap;
+        white-space: normal;
         word-break: break-word;
         overflow-wrap: break-word;
     }
@@ -989,7 +989,7 @@ body {
     .roadmap-task-comments .comment-text {
         font-size: 0.95rem;
         line-height: 1.4;
-        white-space: pre-wrap;
+        white-space: normal;
         word-break: break-word;
         overflow-wrap: break-word;
     }
