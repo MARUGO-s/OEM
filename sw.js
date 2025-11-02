@@ -1,5 +1,5 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'oem-app-v40';
+const CACHE_NAME = 'oem-app-v41';
 
 // ベースパスを自動検出（GitHub Pages対応）
 const BASE_PATH = self.registration.scope;
@@ -19,6 +19,7 @@ const urlsToCache = [
   '/OEM/js/roadmap-comments.js',
   '/OEM/js/sample-data.js',
   '/OEM/js/tasks.js',
+  '/OEM/js/admin.js',
   '/OEM/manifest.json',
   '/OEM/favicon.ico',
   '/OEM/favicon.svg',

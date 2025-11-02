@@ -187,6 +187,9 @@
                 <div class="header-content">
                     <h1>🍽️ MARUGO OEM<br>商品企画管理</h1>
                     <div class="header-actions">
+                        <button id="admin-panel-btn" class="btn btn-outline" style="display: none; margin-right: 0.5rem;">
+                            ⚙️ 管理画面
+                        </button>
                         <div class="notification-bell" id="notification-bell">
                             🔔
                             <span class="notification-badge" id="notification-badge">0</span>
@@ -217,6 +220,61 @@
                 </div>
                 <div id="notification-list" class="notification-list">
                     <!-- 通知がここに表示されます -->
+                </div>
+            </div>
+
+            <!-- 管理画面パネル -->
+            <div id="admin-panel" class="admin-panel">
+                <div class="admin-header">
+                    <h3>⚙️ 管理画面</h3>
+                    <div class="admin-actions">
+                        <button id="close-admin-panel" class="btn-icon">✕</button>
+                    </div>
+                </div>
+                <div class="admin-body">
+                    <div class="admin-section">
+                        <h4>📋 プロジェクトメンバー管理</h4>
+                        <div class="admin-controls">
+                            <button id="invite-user-btn" class="btn btn-primary btn-sm">+ ユーザーを招待</button>
+                        </div>
+                        <div id="members-list" class="members-list">
+                            <!-- メンバー一覧がここに表示されます -->
+                        </div>
+                    </div>
+                    <div class="admin-section">
+                        <h4>👥 全ユーザー一覧</h4>
+                        <div id="all-users-list" class="all-users-list">
+                            <!-- 全ユーザー一覧がここに表示されます -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ユーザー招待モーダル -->
+            <div id="invite-user-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>👤 ユーザーを招待</h3>
+                        <button id="close-invite-modal" class="btn-icon">✕</button>
+                    </div>
+                    <form id="invite-user-form">
+                        <div class="form-group">
+                            <label for="invite-username">ユーザー名</label>
+                            <input type="text" id="invite-username" required placeholder="ユーザー名を入力">
+                        </div>
+                        <div class="form-group">
+                            <label for="invite-role">権限</label>
+                            <select id="invite-role" required>
+                                <option value="member">メンバー</option>
+                                <option value="admin">管理者</option>
+                                <option value="viewer">閲覧者</option>
+                            </select>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-invite">キャンセル</button>
+                            <button type="submit" class="btn btn-primary">招待する</button>
+                        </div>
+                    </form>
                 </div>
             </div>
 
@@ -589,5 +647,6 @@
     <script src="./js/reactions.js"></script>
     <script src="./js/mentions.js"></script>
     <script src="./js/roadmap-comments.js"></script>
+    <script src="./js/admin.js"></script>
 </body>
 </html>
