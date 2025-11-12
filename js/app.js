@@ -105,7 +105,8 @@ async function loadAllData() {
             loadComments().catch(err => console.error('コメント読み込みエラー:', err)),
             loadDiscussionComments().catch(err => console.error('意見交換コメント読み込みエラー:', err)),
             loadNotifications().catch(err => console.error('通知読み込みエラー:', err)),
-            typeof loadMeetings === 'function' ? loadMeetings().catch(err => console.error('会議読み込みエラー:', err)) : Promise.resolve()
+            typeof loadMeetings === 'function' ? loadMeetings().catch(err => console.error('会議読み込みエラー:', err)) : Promise.resolve(),
+            typeof loadProjectFiles === 'function' ? loadProjectFiles().catch(err => console.error('資料ファイル読み込みエラー:', err)) : Promise.resolve()
         ]);
         
         // データ読み込み後にUIを強制更新
@@ -166,6 +167,11 @@ async function loadAllData() {
             if (typeof subscribeToMeetings === 'function') {
                 console.log('📅 会議サブスクリプション開始...');
                 subscribeToMeetings();
+            }
+
+            if (typeof subscribeToProjectFiles === 'function') {
+                console.log('📁 プロジェクトファイルサブスクリプション開始...');
+                subscribeToProjectFiles();
             }
             
             console.log('✅ すべてのリアルタイムサブスクリプションを開始しました');
@@ -330,6 +336,7 @@ console.log('OEM商品企画管理システムを起動しました');
 function updateUIByPermissions() {
     const canEditContent = canEdit();
     const role = appState.currentUserRole;
+    const canManageFiles = role === 'owner' || role === 'member';
     
     console.log('🔒 権限チェック結果:', { role, canEditContent });
     
@@ -431,9 +438,25 @@ function updateUIByPermissions() {
             btn.style.display = canEditContent ? '' : 'none';
         }
     });
-    
+
+    document.querySelectorAll('.project-files-manage-only').forEach(el => {
+        el.style.display = canManageFiles ? '' : 'none';
+    });
+
+    document.querySelectorAll('.project-file-memo-input').forEach(textarea => {
+        textarea.disabled = !canManageFiles;
+    });
+
+    document.querySelectorAll('.project-file-memo-save, .project-file-delete-btn').forEach(btn => {
+        btn.style.display = canManageFiles ? '' : 'none';
+    });
+
     if (role === 'viewer') {
         console.log('👀 閲覧者モード: すべての編集機能を非表示にしました');
+    }
+
+    if (typeof renderProjectFiles === 'function') {
+        renderProjectFiles();
     }
 }
 

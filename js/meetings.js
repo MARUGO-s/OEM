@@ -53,14 +53,20 @@ async function createGoogleMeetMeeting(title, date, duration = 60, participants 
             title,
             start_time: date.toISOString(),
             duration,
-            participants,
+            participants: Array.isArray(participants) ? participants : [],
             meet_url: meetUrl,
             meeting_code: rawMeetingCode || (meetUrl.startsWith('https://meet.google.com/') ? meetUrl.replace('https://meet.google.com/', '') : ''),
             calendar_event_id: `event_${Date.now()}`,
             status: 'scheduled',
             created_at: new Date().toISOString(),
             created_by: appState.currentUser ? appState.currentUser.id : null,
-            project_id: appState.currentProject ? appState.currentProject.id : null
+            project_id: appState.currentProject ? appState.currentProject.id : null,
+            minutes_path: null,
+            minutes_public_url: null,
+            minutes_file_name: null,
+            minutes_uploaded_at: null,
+            minutes_uploaded_by: null,
+            minutes_history: []
         };
 
         // Supabaseに会議を保存（エラーハンドリング強化）
@@ -321,6 +327,30 @@ function renderMeetings() {
         const isUpcoming = startTime > new Date();
         const isPast = startTime < new Date();
         const meetingDisplayCode = getMeetingDisplayCode(meeting);
+        const minutesHistory = getMeetingMinutesHistory(meeting);
+        const minutesHistoryItems = minutesHistory
+            .map((entry, index) => {
+                const url = getMinutesEntryUrl(entry);
+                if (!url) return '';
+                const fileName = escapeHtml(entry.file_name || `議事録 ${index + 1}`);
+                const uploadedAtText = entry.uploaded_at
+                    ? new Date(entry.uploaded_at).toLocaleString('ja-JP')
+                    : '';
+                const label = index === 0 ? `<span class="meeting-minutes-label">最新</span>` : '';
+                return `
+                    <li>
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="meeting-minutes-link" data-url="${url}">${fileName}</a>
+                        ${uploadedAtText ? `<span class="meeting-minutes-date">${uploadedAtText}</span>` : ''}
+                        ${label}
+                    </li>
+                `;
+            })
+            .filter(Boolean)
+            .join('');
+        const minutesHistoryHtml = minutesHistoryItems
+            ? `<ul class="meeting-minutes-list">${minutesHistoryItems}</ul>`
+            : `<div class="meeting-minutes-empty">議事録はまだアップロードされていません</div>`;
+        const canUploadMinutes = canEditContent && isPast;
         
         return `
             <div class="meeting-card ${isPast ? 'past' : ''}">
@@ -336,6 +366,13 @@ function renderMeetings() {
                     <div class="meeting-duration">${meeting.duration}分</div>
                     <div class="meeting-participants">参加者: ${meeting.participants.length}名</div>
                     ${meetingDisplayCode ? `<div class="meeting-code">コード: ${escapeHtml(meetingDisplayCode)}</div>` : ''}
+                </div>
+                <div class="meeting-minutes">
+                    ${minutesHistoryHtml}
+                    ${canUploadMinutes ? `
+                        <button onclick="uploadMeetingMinutes('${meeting.id}')" class="btn btn-secondary">議事録をアップロード</button>
+                        <div class="meeting-minutes-hint">対応形式: PDF / Word / PowerPoint / Excel / CSV / TXT / Markdown / ZIP（50MBまで）</div>
+                    ` : ''}
                 </div>
                 <div class="meeting-actions">
                     ${isUpcoming ? `
@@ -376,6 +413,178 @@ function getMeetingDisplayCode(meeting) {
     return '';
 }
 
+function getMeetingMinutesHistory(meeting) {
+    if (!meeting) return [];
+    const history = Array.isArray(meeting.minutes_history)
+        ? meeting.minutes_history.filter(entry => entry && (entry.path || entry.public_url))
+        : [];
+
+    if (history.length === 0 && (meeting.minutes_path || meeting.minutes_public_url)) {
+        history.push({
+            path: meeting.minutes_path || null,
+            public_url: meeting.minutes_public_url || null,
+            file_name: meeting.minutes_file_name || null,
+            uploaded_at: meeting.minutes_uploaded_at || null,
+            uploaded_by: meeting.minutes_uploaded_by || null
+        });
+    }
+
+    return history;
+}
+
+function getMinutesEntryUrl(entry) {
+    if (!entry) return '';
+    if (entry.public_url) {
+        return entry.public_url;
+    }
+    if (entry.path) {
+        const { data } = supabase.storage.from('meeting-minutes').getPublicUrl(entry.path);
+        return data?.publicUrl || '';
+    }
+    return '';
+}
+
+document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (target && target.classList && target.classList.contains('meeting-minutes-link')) {
+        event.preventDefault();
+        const url = target.getAttribute('data-url');
+        if (url) {
+            window.open(url, '_blank', 'noopener');
+        }
+    }
+});
+
+function getMeetingMinutesLink(meeting) {
+    if (!meeting) return '';
+    const history = getMeetingMinutesHistory(meeting);
+    if (history.length > 0) {
+        const firstUrl = getMinutesEntryUrl(history[0]);
+        if (firstUrl) {
+            return firstUrl;
+        }
+    }
+    if (meeting.minutes_public_url) {
+        return meeting.minutes_public_url;
+    }
+    if (meeting.minutes_path) {
+        const { data } = supabase.storage.from('meeting-minutes').getPublicUrl(meeting.minutes_path);
+        return data?.publicUrl || '';
+    }
+    return '';
+}
+
+window.uploadMeetingMinutes = function(meetingId) {
+    const meeting = (appState.meetings || []).find(m => m.id === meetingId);
+    if (!meeting) {
+        alert('会議が見つかりません');
+        return;
+    }
+    if (!appState.currentUser) {
+        alert('議事録のアップロードにはログインが必要です');
+        return;
+    }
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.zip';
+
+    fileInput.addEventListener('change', async (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) {
+            return;
+        }
+
+        if (file.size > 50 * 1024 * 1024) {
+            alert('ファイルサイズは50MB以下にしてください');
+            return;
+        }
+
+        const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        const timestamp = Date.now();
+        const projectSegment = meeting.project_id || 'general';
+        const storagePath = `${projectSegment}/${meetingId}/${timestamp}_${sanitizedFileName}`;
+
+        try {
+            const { error: uploadError } = await supabase.storage
+                .from('meeting-minutes')
+                .upload(storagePath, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (uploadError) {
+                throw uploadError;
+            }
+
+            const { data: publicData } = supabase.storage
+                .from('meeting-minutes')
+                .getPublicUrl(storagePath);
+
+            const existingHistory = getMeetingMinutesHistory(meeting);
+            const normalizedHistory = existingHistory
+                .map(entry => ({
+                    path: entry.path || null,
+                    public_url: entry.public_url || null,
+                    file_name: entry.file_name || null,
+                    uploaded_at: entry.uploaded_at || null,
+                    uploaded_by: entry.uploaded_by || null
+                }))
+                .filter(entry => entry.path || entry.public_url);
+
+            if (meeting.minutes_path && !normalizedHistory.some(entry => entry.path === meeting.minutes_path)) {
+                normalizedHistory.push({
+                    path: meeting.minutes_path,
+                    public_url: meeting.minutes_public_url || null,
+                    file_name: meeting.minutes_file_name || null,
+                    uploaded_at: meeting.minutes_uploaded_at || null,
+                    uploaded_by: meeting.minutes_uploaded_by || null
+                });
+            }
+
+            const newEntry = {
+                path: storagePath,
+                public_url: publicData?.publicUrl || null,
+                file_name: file.name,
+                uploaded_at: new Date().toISOString(),
+                uploaded_by: appState.currentUser?.id || null
+            };
+
+            const updatePayload = {
+                minutes_path: storagePath,
+                minutes_public_url: newEntry.public_url,
+                minutes_file_name: file.name,
+                minutes_uploaded_at: newEntry.uploaded_at,
+                minutes_uploaded_by: newEntry.uploaded_by,
+                minutes_history: [newEntry, ...normalizedHistory]
+            };
+
+            const { error: updateError } = await supabase
+                .from('meetings')
+                .update(updatePayload)
+                .eq('id', meetingId);
+
+            if (updateError) {
+                throw updateError;
+            }
+
+            alert('議事録をアップロードしました');
+            await loadMeetings();
+        } catch (error) {
+            console.error('議事録アップロードエラー:', error);
+            if (error?.message?.toLowerCase().includes('bucket')) {
+                alert('議事録用ストレージバケットが見つかりません。Supabaseで meeting-minutes バケットを作成してください。');
+            } else {
+                alert('議事録のアップロードに失敗しました');
+            }
+        } finally {
+            fileInput.value = '';
+        }
+    });
+
+    fileInput.click();
+};
+
 // 会議の編集
 window.editMeeting = function(meetingId) {
     const meeting = (appState.meetings || []).find(m => m.id === meetingId);
@@ -390,11 +599,32 @@ window.editMeeting = function(meetingId) {
 window.deleteMeeting = async function(meetingId) {
     if (!confirm('この会議を削除しますか？\nこの操作は取り消せません。')) return;
     try {
+        const meeting = (appState.meetings || []).find(m => m.id === meetingId);
+
         const { error } = await supabase
             .from('meetings')
             .delete()
             .eq('id', meetingId);
         if (error) throw error;
+
+        const historyPaths = getMeetingMinutesHistory(meeting)
+            .map(entry => entry.path)
+            .filter(Boolean);
+        const pathsToRemove = Array.from(new Set([
+            ...(meeting?.minutes_path ? [meeting.minutes_path] : []),
+            ...historyPaths
+        ]));
+
+        if (pathsToRemove.length > 0) {
+            try {
+                await supabase.storage
+                    .from('meeting-minutes')
+                    .remove(pathsToRemove);
+            } catch (storageError) {
+                console.warn('議事録ファイル削除エラー（無視）:', storageError);
+            }
+        }
+
         await loadMeetings();
 
         try {
@@ -441,7 +671,7 @@ function showMeetingEditForm(meeting) {
                     </div>
                     <div class="form-group">
                         <label for="meeting-date">日時</label>
-                        <input type="datetime-local" id="meeting-date" value="${new Date(meeting.startTime).toISOString().slice(0, 16)}" required>
+                        <input type="datetime-local" id="meeting-date" value="${meeting.start_time ? new Date(meeting.start_time).toISOString().slice(0, 16) : ''}" required>
                     </div>
                     <div class="form-group">
                         <label for="meeting-duration">時間（分）</label>
@@ -477,10 +707,13 @@ window.saveMeetingEdit = async function(meetingId) {
     const title = document.getElementById('meeting-title').value.trim();
     const date = new Date(document.getElementById('meeting-date').value);
     const duration = parseInt(document.getElementById('meeting-duration').value);
-    const participants = document.getElementById('meeting-participants').value
-        .split(',')
-        .map(email => email.trim())
-        .filter(email => email);
+    const participantsField = document.getElementById('meeting-participants');
+    const participants = participantsField
+        ? participantsField.value
+            .split(',')
+            .map(email => email.trim())
+            .filter(email => email)
+        : [];
     const meetingCodeInput = document.getElementById('meeting-code');
     const rawMeetingCode = meetingCodeInput ? meetingCodeInput.value.trim() : '';
 
@@ -581,13 +814,15 @@ async function initializeMeetings() {
         meetingForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const title = document.getElementById('meeting-title-input').value.trim();
-            const date = new Date(document.getElementById('meeting-date-input').value);
-            const duration = parseInt(document.getElementById('meeting-duration-input').value);
-            const participants = document.getElementById('meeting-participants-input').value
-                .split(',')
-                .map(email => email.trim())
-                .filter(email => email);
+            const titleInput = document.getElementById('meeting-title-input');
+            const dateInput = document.getElementById('meeting-date-input');
+            const durationInput = document.getElementById('meeting-duration-input');
+            const participantsInput = document.getElementById('meeting-participants-input');
+
+            const title = titleInput ? titleInput.value.trim() : '';
+            const date = dateInput ? new Date(dateInput.value) : null;
+            const duration = durationInput ? parseInt(durationInput.value, 10) : NaN;
+            const participants = [];
             const meetingCodeInput = document.getElementById('meeting-code-input');
             const meetingCode = meetingCodeInput ? meetingCodeInput.value.trim() : '';
 

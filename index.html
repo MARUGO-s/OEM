@@ -514,6 +514,40 @@
                     </div>
                 </section>
 
+                <!-- プロジェクト資料ライブラリ -->
+                <section class="project-files-section" id="project-files-section">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>📁 プロジェクト資料ライブラリ</h2>
+                            <div class="project-files-actions project-files-manage-only">
+                                <button id="project-files-upload-btn" class="btn btn-primary">+ ファイルを追加</button>
+                                <input type="file" id="project-files-input" accept=".jpg,.jpeg,.pdf" multiple style="display: none;">
+                            </div>
+                        </div>
+                        <div class="project-files-toolbar">
+                            <div class="project-files-filter">
+                                <label for="project-files-filter">表示:</label>
+                                <select id="project-files-filter">
+                                    <option value="all">すべて</option>
+                                    <option value="jpeg">JPEGのみ</option>
+                                    <option value="pdf">PDFのみ</option>
+                                </select>
+                            </div>
+                            <div class="project-files-sort">
+                                <label for="project-files-sort">並び替え:</label>
+                                <select id="project-files-sort">
+                                    <option value="recent">新しい順</option>
+                                    <option value="name">名前順</option>
+                                    <option value="type">ファイル種別</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="project-files-list" class="project-files-list">
+                            <div class="empty-state">📂 プロジェクト資料がまだありません</div>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- タスクコメントセクション（非表示） -->
                 <section class="comments-section" style="display: none;">
                     <div class="card">
@@ -685,6 +719,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="./js/roadmap-export.js"></script>
     <!-- loadAllData 定義 -->
+    <script src="./js/project-files.js"></script>
     <script src="./js/app.js"></script>
     <!-- プロジェクト管理機能 -->
     <script src="./js/projects.js"></script>

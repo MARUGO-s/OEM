@@ -4132,3 +4132,152 @@ body {
         line-height: 1.4;
     }
 }
+
+.meeting-minutes-hint {
+    font-size: 12px;
+    color: rgba(15, 23, 42, 0.55);
+    margin-top: 6px;
+}
+
++.project-files-section .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
++.project-files-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
++.project-files-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
++.project-files-toolbar label {
+    font-weight: 600;
+    color: rgba(15, 23, 42, 0.65);
+    margin-right: 6px;
+}
+
++.project-files-toolbar select {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.55);
+    background: rgba(255, 255, 255, 0.92);
+}
+
++.project-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
++.project-file-item {
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 14px;
+    padding: 16px;
+    background: #fff;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: space-between;
+}
+
++.project-file-main {
+    flex: 1 1 320px;
+}
+
++.project-file-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f2937;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
++.project-file-tag {
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(59, 130, 246, 0.12);
+    color: #0f172a;
+    border-radius: 999px;
+    padding: 4px 10px;
+}
+
++.project-file-meta {
+    font-size: 13px;
+    color: rgba(15, 23, 42, 0.6);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
++.project-file-memo textarea {
+    width: 100%;
+    min-height: 70px;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.55);
+    padding: 10px;
+    resize: vertical;
+}
+
++.project-file-memo-display {
+    font-size: 14px;
+    color: #1f2937;
+    background: rgba(148, 163, 184, 0.12);
+    padding: 10px;
+    border-radius: 10px;
+}
+
++.project-file-memo-actions {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
++.project-file-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+    min-width: 160px;
+}
+
++.project-file-actions .btn {
+    width: 160px;
+    max-width: 100%;
+}
+
++.project-file-delete-btn {
+    background: linear-gradient(120deg, #f87171, #ef4444);
+}
+
++.project-files-hint {
+    font-size: 12px;
+    color: rgba(15, 23, 42, 0.6);
+}
+
+@media (max-width: 768px) {
+    .project-file-actions {
+        align-items: stretch;
+        min-width: 100%;
+    }
+
+    .project-file-actions .btn {
+        width: 100%;
+    }
+}

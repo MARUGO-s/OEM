@@ -144,6 +144,7 @@ const appState = {
     brainstormVotes: [],
     brainstormFilter: 'all',
     brainstormSubscribed: false,
+    projectFiles: [],
     subscriptions: []
 };
 
