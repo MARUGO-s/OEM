@@ -277,7 +277,7 @@ async function loadMembersList() {
         membersList.innerHTML = members.map(member => {
             const userName = member.user?.display_name || member.user?.username || '不明';
             const userEmail = member.user?.email || '';
-            const testPassword = member.user?.test_password || '未設定';
+            const passwordDisplay = member.user?.test_password ? '******' : '未設定';
             const isOwner = member.role === 'owner';
 
             return `
@@ -286,7 +286,7 @@ async function loadMembersList() {
                         <div class="member-name">${escapeHtml(userName)}</div>
                         ${userEmail ? `<div class="member-email">${escapeHtml(userEmail)}</div>` : ''}
                         <div class="member-password" style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">
-                            パスワード: <code class="edit-password-btn" data-user-id="${member.user_id}" style="background: #f1f5f9; padding: 0.125rem 0.25rem; border-radius: 0.25rem; cursor: pointer; user-select: none;" title="クリックして編集">${escapeHtml(testPassword)}</code>
+                            パスワード: <code class="edit-password-btn" data-user-id="${member.user_id}" style="background: #f1f5f9; padding: 0.125rem 0.25rem; border-radius: 0.25rem; cursor: pointer; user-select: none;">${passwordDisplay}</code>
                         </div>
                     </div>
                     <div class="member-role ${member.role}">${getRoleLabel(member.role)}</div>
@@ -369,7 +369,7 @@ async function loadAllUsersList() {
         allUsersList.innerHTML = users.map(user => {
             const userName = user.display_name || user.username || '不明';
             const userEmail = user.email || '';
-            const testPassword = user.test_password || '未設定';
+            const passwordDisplay = user.test_password ? '******' : '未設定';
             const isMember = memberIds.has(user.id);
             const isCurrentUser = user.id === appState.currentUser.id;
             const memberRole = memberMap.get(user.id);
@@ -391,7 +391,7 @@ async function loadAllUsersList() {
                         <div class="user-name">${escapeHtml(userName)}</div>
                         ${userEmail ? `<div class="user-email">${escapeHtml(userEmail)}</div>` : ''}
                         <div class="user-password" style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">
-                            パスワード: <code class="edit-password-btn" data-user-id="${user.id}" style="background: #f1f5f9; padding: 0.125rem 0.25rem; border-radius: 0.25rem; cursor: pointer; user-select: none;" title="クリックして編集">${escapeHtml(testPassword)}</code>
+                            パスワード: <code class="edit-password-btn" data-user-id="${user.id}" style="background: #f1f5f9; padding: 0.125rem 0.25rem; border-radius: 0.25rem; cursor: pointer; user-select: none;">${passwordDisplay}</code>
                         </div>
                     </div>
                     <div class="user-actions">
@@ -764,7 +764,7 @@ async function handleEditPassword(userId) {
         const userName = user.display_name || user.username || '不明';
 
         // パスワードを入力してもらう
-        const newPassword = prompt(`${userName} のテスト用パスワードを入力してください:`, currentPassword);
+        const newPassword = prompt(`${userName} のテスト用パスワードを入力してください（現在のパスワードは非表示です）:`, '');
 
         if (newPassword === null) {
             // キャンセルされた場合
