@@ -4,6 +4,86 @@
 // 実際のメール入力が無い場合はこのドメインを付けて擬似アドレスを生成する。
 const AUTH_EMAIL_DOMAIN = 'hotmail.com';
 
+// ログイン情報の保存・読み込み機能
+const LOGIN_STORAGE_KEY = 'marugo_oem_login_info';
+
+// UTF-8対応のBase64エンコード（日本語対応）
+function encodeBase64(str) {
+    try {
+        return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+            return String.fromCharCode(parseInt(p1, 16));
+        }));
+    } catch (error) {
+        console.error('Base64エンコードエラー:', error);
+        return '';
+    }
+}
+
+// UTF-8対応のBase64デコード（日本語対応）
+function decodeBase64(str) {
+    try {
+        return decodeURIComponent(Array.prototype.map.call(atob(str), (c) => {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+    } catch (error) {
+        console.error('Base64デコードエラー:', error);
+        return '';
+    }
+}
+
+function saveLoginInfo(username, password) {
+    try {
+        const loginInfo = {
+            username: encodeBase64(username), // UTF-8対応Base64エンコード
+            password: encodeBase64(password), // UTF-8対応Base64エンコード
+            timestamp: Date.now()
+        };
+        localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify(loginInfo));
+        console.log('✅ ログイン情報を保存しました', { key: LOGIN_STORAGE_KEY, username });
+
+        // 確認のため読み込んでみる
+        const verify = localStorage.getItem(LOGIN_STORAGE_KEY);
+        console.log('保存確認:', verify ? 'OK' : 'NG');
+    } catch (error) {
+        console.error('❌ ログイン情報の保存に失敗:', error);
+    }
+}
+
+function loadLoginInfo() {
+    try {
+        console.log('ログイン情報の読み込みを試行...');
+        const saved = localStorage.getItem(LOGIN_STORAGE_KEY);
+        console.log('localStorage取得結果:', saved ? '見つかりました' : '見つかりません');
+
+        if (!saved) return null;
+
+        const loginInfo = JSON.parse(saved);
+        const decoded = {
+            username: decodeBase64(loginInfo.username), // UTF-8対応Base64デコード
+            password: decodeBase64(loginInfo.password), // UTF-8対応Base64デコード
+            timestamp: loginInfo.timestamp
+        };
+        console.log('✅ ログイン情報を読み込みました:', { username: decoded.username, timestamp: new Date(decoded.timestamp) });
+        return decoded;
+    } catch (error) {
+        console.error('❌ ログイン情報の読み込みに失敗:', error);
+        return null;
+    }
+}
+
+function clearLoginInfo() {
+    try {
+        localStorage.removeItem(LOGIN_STORAGE_KEY);
+        console.log('🗑️ ログイン情報をクリアしました');
+
+        // 確認のため読み込んでみる
+        const verify = localStorage.getItem(LOGIN_STORAGE_KEY);
+        console.log('クリア確認:', verify ? 'まだ残っている' : 'OK');
+    } catch (error) {
+        console.error('❌ ログイン情報のクリアに失敗:', error);
+    }
+}
+
 // loadAllData 安全呼び出しラッパー（読み込み順の差異に強い）
 function callLoadAllDataSafely(maxRetries = 20, intervalMs = 100) {
     return new Promise((resolve) => {
@@ -161,7 +241,7 @@ async function login(username, password) {
     try {
         if (!username || !password) {
             showError('ユーザー名とパスワードを入力してください');
-            return;
+            return false;
         }
 
         const trimmedIdentifier = username.trim();
@@ -170,7 +250,7 @@ async function login(username, password) {
         if (trimmedIdentifier.includes('@')) {
             if (!isValidEmail(trimmedIdentifier)) {
                 showError('有効なメールアドレスを入力してください');
-                return;
+                return false;
             }
             email = trimmedIdentifier.toLowerCase();
             console.log('📧 メールアドレスでログイン:', email);
@@ -184,7 +264,7 @@ async function login(username, password) {
 
             if (profileError || !profile) {
                 showError('ユーザーが見つかりません');
-                return;
+                return false;
             }
 
             email = profile.email;
@@ -208,13 +288,13 @@ async function login(username, password) {
                     message = `ログインに失敗しました: ${error.message}`;
                 }
             showError(message);
-            return;
+            return false;
         }
 
-        console.log('✅ Supabaseログイン成功:', { 
-            userId: data?.user?.id, 
+        console.log('✅ Supabaseログイン成功:', {
+            userId: data?.user?.id,
             email: data?.user?.email,
-            metadata: data?.user?.user_metadata 
+            metadata: data?.user?.user_metadata
         });
         const refreshedUser = await refreshCurrentUser();
         console.log('✅ refreshCurrentUser完了:', refreshedUser);
@@ -224,10 +304,13 @@ async function login(username, password) {
         if (typeof initProjectSelectScreen === 'function') {
             initProjectSelectScreen();
         }
-        
+
+        return true; // ログイン成功
+
     } catch (error) {
         console.error('Supabaseログインエラー:', error);
         showError('ログインに失敗しました: ' + error.message);
+        return false;
     }
 }
 
@@ -406,7 +489,9 @@ async function logout() {
         appState.brainstormVotes = [];
         appState.brainstormFilter = 'all';
         appState.brainstormSubscribed = false;
-        
+
+        // ログイン情報は保持（チェックがついていた場合は無期限で記憶）
+
         console.log('Supabaseログアウト完了');
         showLoginScreen();
         
@@ -553,19 +638,53 @@ function showRegisterForm() {
 // イベントリスナー設定
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM読み込み完了');
-    
+
+    // 保存されたログイン情報を自動入力
+    const savedLoginInfo = loadLoginInfo();
+    if (savedLoginInfo) {
+        console.log('保存されたログイン情報を読み込みました');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const rememberCheckbox = document.getElementById('remember-login');
+
+        if (usernameInput && passwordInput && rememberCheckbox) {
+            usernameInput.value = savedLoginInfo.username;
+            passwordInput.value = savedLoginInfo.password;
+            rememberCheckbox.checked = true;
+            console.log('ログイン情報を自動入力しました');
+        }
+    }
+
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
         console.log('ログインフォームが見つかりました');
         loginForm.addEventListener('submit', async (e) => {
             console.log('ログインフォーム送信イベント発生');
             e.preventDefault();
-            
+
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
-            
-            console.log('フォームデータ:', { username, password });
-            await login(username, password);
+            const rememberLogin = document.getElementById('remember-login').checked;
+
+            console.log('フォームデータ:', { username, rememberLogin });
+
+            // ログイン実行
+            const success = await login(username, password);
+            console.log('ログイン結果:', success);
+
+            // ログイン成功時の処理
+            if (success) {
+                console.log('ログイン成功 - 記憶設定を確認:', rememberLogin);
+                if (rememberLogin) {
+                    console.log('ログイン情報を保存します');
+                    saveLoginInfo(username, password);
+                } else {
+                    console.log('ログイン情報をクリアします');
+                    clearLoginInfo();
+                }
+            } else {
+                console.log('ログイン失敗 - 情報は保存されません');
+            }
         });
     } else {
         console.error('ログインフォームが見つかりません');

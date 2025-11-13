@@ -189,20 +189,11 @@ document.addEventListener('DOMContentLoaded', function() {
         addTaskBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            
+
             console.log('タスク追加ボタンがクリックされました');
-            
-            // ローディング画面を表示
-            showLoadingScreen('新規タスクモーダルを準備中...');
-            
-            // 少し遅延してからページをリロード（ローディング画面が表示されるように）
-            setTimeout(() => {
-                console.log('ページをリロードします');
-                // リロード後に新規タスク追加モーダルを開くためのフラグを設定
-                safeSessionStorageSet('openTaskModalAfterReload', 'true');
-                window.location.reload();
-            }, 300);
-            
+
+            // 直接タスクモーダルを開く
+            openTaskModal();
         });
         addTaskBtn.dataset.listenerAttached = 'true';
         console.log('タスク追加ボタンのイベントリスナーが設定されました');

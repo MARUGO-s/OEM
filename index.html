@@ -70,6 +70,12 @@
                         <label for="password">パスワード</label>
                         <input type="password" id="password" required placeholder="パスワード">
                     </div>
+                    <div class="form-group" style="margin-bottom: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 400;">
+                            <input type="checkbox" id="remember-login" style="width: auto; cursor: pointer;">
+                            <span>ログイン情報を記憶する</span>
+                        </label>
+                    </div>
                     <button type="submit" class="btn btn-primary">ログイン</button>
                 </form>
                 
@@ -539,6 +545,12 @@
                                     <option value="recent">新しい順</option>
                                     <option value="name">名前順</option>
                                     <option value="type">ファイル種別</option>
+                                </select>
+                            </div>
+                            <div class="project-files-task-filter">
+                                <label for="project-files-task-filter">タスク:</label>
+                                <select id="project-files-task-filter">
+                                    <option value="all">すべて</option>
                                 </select>
                             </div>
                         </div>

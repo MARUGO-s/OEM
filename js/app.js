@@ -173,7 +173,12 @@ async function loadAllData() {
                 console.log('📁 プロジェクトファイルサブスクリプション開始...');
                 subscribeToProjectFiles();
             }
-            
+
+            if (typeof subscribeToProjectTasks === 'function') {
+                console.log('📌 タスク変更監視サブスクリプション開始...');
+                subscribeToProjectTasks();
+            }
+
             console.log('✅ すべてのリアルタイムサブスクリプションを開始しました');
             console.log('📊 登録済みサブスクリプション数:', appState.subscriptions.length);
             

@@ -364,7 +364,6 @@ function renderMeetings() {
                         <span class="meeting-time">${startTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                     <div class="meeting-duration">${meeting.duration}分</div>
-                    <div class="meeting-participants">参加者: ${meeting.participants.length}名</div>
                     ${meetingDisplayCode ? `<div class="meeting-code">コード: ${escapeHtml(meetingDisplayCode)}</div>` : ''}
                 </div>
                 <div class="meeting-minutes">
