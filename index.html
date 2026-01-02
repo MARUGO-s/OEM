@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MARUGO OEM Special Menu - 商品企画管理システム</title>
-    
+
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="./favicon.svg">
     <link rel="icon" type="image/x-icon" href="./favicon.ico">
     <link rel="apple-touch-icon" href="./icon-192.svg">
-    
+
     <!-- 
     ストレージポリシー:
     - このアプリはlocalStorageを一切使用しません
@@ -17,35 +18,36 @@
     - データ保存: Supabase PostgreSQL
     詳細: STORAGE_POLICY.md を参照
     -->
-    
+
     <link rel="stylesheet" href="./styles/main.css">
-    
+
     <!-- Supabase SDK -->
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <!-- PWA対応 -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#8B4513">
     <meta name="theme-color" content="#8B4513" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#654321" media="(prefers-color-scheme: dark)">
-    
+
     <!-- Mobile Web App -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="application-name" content="MARUGO OEM">
-    
+
     <!-- Apple iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="MARUGO OEM">
-    
+
     <!-- Microsoft -->
     <meta name="msapplication-TileColor" content="#8B4513">
     <meta name="msapplication-tap-highlight" content="no">
-    
+
     <!-- Additional PWA Meta -->
     <meta name="format-detection" content="telephone=no">
     <meta name="apple-touch-fullscreen" content="yes">
 </head>
+
 <body>
     <!-- ローディング画面 -->
     <div id="loading-screen" class="loading-screen">
@@ -54,7 +56,7 @@
             <div class="loading-text">タスクモーダルを準備中...</div>
         </div>
     </div>
-    
+
     <div id="app">
         <!-- ログイン画面 -->
         <div id="login-screen" class="screen active">
@@ -78,11 +80,11 @@
                     </div>
                     <button type="submit" class="btn btn-primary">ログイン</button>
                 </form>
-                
+
                 <div class="auth-switch">
                     <p>アカウントをお持ちでない方は <a href="#" id="show-register">新規登録</a></p>
                 </div>
-                
+
                 <!-- 新規登録フォーム -->
                 <form id="register-form" style="display: none;">
                     <div class="form-group">
@@ -104,7 +106,7 @@
                     </div>
                     <button type="submit" class="btn btn-primary">新規登録</button>
                 </form>
-                
+
                 <div class="auth-switch" id="register-switch" style="display: none;">
                     <p>既にアカウントをお持ちの方は <a href="#" id="show-login">ログイン</a></p>
                 </div>
@@ -146,10 +148,12 @@
                             </div>
                             <div class="form-group">
                                 <label for="new-project-description">説明</label>
-                                <textarea id="new-project-description" rows="3" placeholder="プロジェクトの説明を入力..."></textarea>
+                                <textarea id="new-project-description" rows="3"
+                                    placeholder="プロジェクトの説明を入力..."></textarea>
                             </div>
                             <div class="form-actions">
-                                <button type="button" class="btn btn-secondary" id="cancel-create-project">キャンセル</button>
+                                <button type="button" class="btn btn-secondary"
+                                    id="cancel-create-project">キャンセル</button>
                                 <button type="submit" class="btn btn-primary">作成</button>
                             </div>
                         </form>
@@ -174,11 +178,14 @@
                                 削除を実行するには、下記に <strong style="color: var(--danger-color);">delete</strong> と入力してください。
                             </p>
                             <div class="form-group">
-                                <input type="text" id="delete-confirmation-input" placeholder="delete と入力" autocomplete="off">
+                                <input type="text" id="delete-confirmation-input" placeholder="delete と入力"
+                                    autocomplete="off">
                             </div>
                             <div class="form-actions">
-                                <button type="button" class="btn btn-secondary" id="cancel-delete-project">キャンセル</button>
-                                <button type="button" class="btn btn-danger" id="confirm-delete-project" disabled>削除する</button>
+                                <button type="button" class="btn btn-secondary"
+                                    id="cancel-delete-project">キャンセル</button>
+                                <button type="button" class="btn btn-danger" id="confirm-delete-project"
+                                    disabled>削除する</button>
                             </div>
                         </div>
                     </div>
@@ -193,14 +200,16 @@
                 <div class="header-content">
                     <h1>🍽️ MARUGO OEM<br>商品企画管理</h1>
                     <div class="header-actions">
-                        <button id="admin-panel-btn" class="btn btn-outline" style="display: none; margin-right: 0.5rem;">
+                        <button id="admin-panel-btn" class="btn btn-outline"
+                            style="display: none; margin-right: 0.5rem;">
                             ⚙️ 管理画面
                         </button>
                         <div class="notification-bell" id="notification-bell">
                             🔔
                             <span class="notification-badge" id="notification-badge">0</span>
                         </div>
-                        <button id="notification-permission-btn" class="btn btn-outline" style="display: none; margin-right: 0.5rem;">
+                        <button id="notification-permission-btn" class="btn btn-outline"
+                            style="display: none; margin-right: 0.5rem;">
                             🔔 通知を許可
                         </button>
                         <div class="user-info">
@@ -217,10 +226,12 @@
                 <div class="notification-header">
                     <h3>通知</h3>
                     <div class="notification-actions">
-                        <button id="enable-push-notifications-btn" class="btn btn-sm btn-primary" style="display: none; margin-right: 0.5rem;">
+                        <button id="enable-push-notifications-btn" class="btn btn-sm btn-primary"
+                            style="display: none; margin-right: 0.5rem;">
                             🔔 プッシュ通知を有効化
                         </button>
-                        <button id="mark-all-read-btn" class="btn btn-sm btn-secondary" style="margin-right: 0.5rem;">すべて既読</button>
+                        <button id="mark-all-read-btn" class="btn btn-sm btn-secondary"
+                            style="margin-right: 0.5rem;">すべて既読</button>
                         <button id="delete-all-notifications-btn" class="btn btn-sm btn-danger">すべて削除</button>
                         <button id="close-notifications" class="btn-icon">✕</button>
                     </div>
@@ -384,19 +395,22 @@
                         <div id="roadmap-container" class="roadmap-container">
                             <!-- ロードマップがここに表示されます -->
                         </div>
-                        
+
                         <!-- ロードマップ項目詳細モーダル -->
                         <div id="roadmap-item-modal" class="roadmap-item-modal">
                             <div class="roadmap-item-modal-content">
                                 <div class="roadmap-item-modal-header">
                                     <h3 id="roadmap-item-title">タスクタイトル</h3>
                                     <div class="roadmap-item-modal-actions">
-                                        <button id="roadmap-item-edit-btn" class="btn btn-secondary" style="margin-right: 0.5rem; display: none;">✏️ 編集</button>
-                                        <button id="roadmap-item-delete-btn" class="btn btn-danger" style="margin-right: 0.5rem; display: none;">🗑️ 削除</button>
-                                        <button class="roadmap-item-modal-close" onclick="closeRoadmapItemModal()">×</button>
+                                        <button id="roadmap-item-edit-btn" class="btn btn-secondary"
+                                            style="margin-right: 0.5rem; display: none;">✏️ 編集</button>
+                                        <button id="roadmap-item-delete-btn" class="btn btn-danger"
+                                            style="margin-right: 0.5rem; display: none;">🗑️ 削除</button>
+                                        <button class="roadmap-item-modal-close"
+                                            onclick="closeRoadmapItemModal()">×</button>
                                     </div>
                                 </div>
-                                
+
                                 <div class="roadmap-item-modal-body">
                                     <!-- 表示モード -->
                                     <div id="roadmap-item-display-mode" class="roadmap-item-info">
@@ -418,9 +432,10 @@
                                             </div>
                                         </div>
                                     </div>
-                                    
+
                                     <!-- 編集モード -->
-                                    <div id="roadmap-item-edit-mode" class="roadmap-item-edit-form" style="display: none;">
+                                    <div id="roadmap-item-edit-mode" class="roadmap-item-edit-form"
+                                        style="display: none;">
                                         <form id="roadmap-item-edit-form">
                                             <div class="form-group">
                                                 <label for="roadmap-edit-title">タイトル</label>
@@ -454,15 +469,17 @@
                                             </div>
                                             <div class="form-actions">
                                                 <button type="submit" class="btn btn-primary">保存</button>
-                                                <button type="button" id="roadmap-edit-cancel" class="btn btn-secondary">キャンセル</button>
+                                                <button type="button" id="roadmap-edit-cancel"
+                                                    class="btn btn-secondary">キャンセル</button>
                                             </div>
                                         </form>
                                     </div>
-                                    
+
                                     <div class="roadmap-item-comments">
                                         <h4>💬 意見・コメント</h4>
                                         <div class="roadmap-comment-input">
-                                            <textarea id="roadmap-comment-input" placeholder="このタスクについて意見やコメントを入力..."></textarea>
+                                            <textarea id="roadmap-comment-input"
+                                                placeholder="このタスクについて意見やコメントを入力..."></textarea>
                                             <button id="roadmap-comment-submit" class="btn btn-primary">投稿</button>
                                         </div>
                                         <div id="roadmap-comments-list" class="roadmap-comments-list">
@@ -489,7 +506,8 @@
                                     <div class="form-row">
                                         <div class="form-group">
                                             <label for="meeting-title-input">会議タイトル</label>
-                                            <input type="text" id="meeting-title-input" placeholder="例: 週次進捗会議" required>
+                                            <input type="text" id="meeting-title-input" placeholder="例: 週次進捗会議"
+                                                required>
                                         </div>
                                         <div class="form-group">
                                             <label for="meeting-date-input">日時</label>
@@ -498,18 +516,25 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="meeting-duration-input">時間（分）</label>
-                                        <input type="number" id="meeting-duration-input" value="60" min="15" max="480" required>
+                                        <input type="number" id="meeting-duration-input" value="60" min="15" max="480"
+                                            required>
                                     </div>
                                     <div class="form-group">
                                         <label for="meeting-code-input">ミーティングコード</label>
-                                        <input type="text" id="meeting-code-input" placeholder="例: abc-defg-hij または URL" required>
-                                        <small style="color: var(--text-secondary); display: block; margin-top: 0.25rem;">
-                                            会議コードをお持ちでない方は <a href="https://meet.google.com/landing" target="_blank" rel="noopener noreferrer" style="color: var(--primary-color); text-decoration: underline;">Google Meetで作成</a> してください
+                                        <input type="text" id="meeting-code-input" placeholder="例: abc-defg-hij または URL"
+                                            required>
+                                        <small
+                                            style="color: var(--text-secondary); display: block; margin-top: 0.25rem;">
+                                            会議コードをお持ちでない方は <a href="https://meet.google.com/landing" target="_blank"
+                                                rel="noopener noreferrer"
+                                                style="color: var(--primary-color); text-decoration: underline;">Google
+                                                Meetで作成</a> してください
                                         </small>
                                     </div>
                                     <div class="form-actions">
                                         <button type="submit" class="btn btn-primary">会議をスケジュール</button>
-                                        <button type="button" onclick="hideMeetingForm()" class="btn btn-secondary">キャンセル</button>
+                                        <button type="button" onclick="hideMeetingForm()"
+                                            class="btn btn-secondary">キャンセル</button>
                                     </div>
                                 </form>
                             </div>
@@ -527,7 +552,8 @@
                             <h2>📁 プロジェクト資料ライブラリ</h2>
                             <div class="project-files-actions project-files-manage-only">
                                 <button id="project-files-upload-btn" class="btn btn-primary">+ ファイルを追加</button>
-                                <input type="file" id="project-files-input" accept=".jpg,.jpeg,.pdf" multiple style="display: none;">
+                                <input type="file" id="project-files-input" accept=".jpg,.jpeg,.pdf" multiple
+                                    style="display: none;">
                             </div>
                         </div>
                         <div class="project-files-toolbar">
@@ -661,11 +687,11 @@
                 </div>
                 <button class="task-detail-close" id="modal-close-btn">×</button>
             </div>
-            
+
             <div class="task-detail-description" id="modal-task-description">
                 タスクの詳細説明がここに表示されます。
             </div>
-            
+
             <div class="task-detail-meta">
                 <div class="task-detail-meta-item">
                     <div class="task-detail-meta-label">ステータス</div>
@@ -673,35 +699,35 @@
                         <span class="status-badge" id="modal-status-badge">未着手</span>
                     </div>
                 </div>
-                
+
                 <div class="task-detail-meta-item">
                     <div class="task-detail-meta-label">優先度</div>
                     <div class="task-detail-meta-value">
                         <span class="priority-badge" id="modal-priority-badge">中</span>
                     </div>
                 </div>
-                
+
                 <div class="task-detail-meta-item">
                     <div class="task-detail-meta-label">期限</div>
                     <div class="task-detail-meta-value">
                         <span class="roadmap-task-date" id="modal-deadline">2025/12/15</span>
                     </div>
                 </div>
-                
+
                 <div class="task-detail-meta-item">
                     <div class="task-detail-meta-label">担当者</div>
                     <div class="task-detail-meta-value">
                         <span id="modal-assigned-user">chef1</span>
                     </div>
                 </div>
-                
+
                 <div class="task-detail-meta-item">
                     <div class="task-detail-meta-label">作成日</div>
                     <div class="task-detail-meta-value">
                         <span id="modal-created-date">2025/10/19</span>
                     </div>
                 </div>
-                
+
                 <div class="task-detail-meta-item">
                     <div class="task-detail-meta-label">更新日</div>
                     <div class="task-detail-meta-value">
@@ -709,7 +735,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="task-detail-actions">
                 <button class="task-detail-btn danger" id="modal-delete-action">削除</button>
                 <button class="task-detail-btn secondary" id="modal-close-action">閉じる</button>
@@ -719,7 +745,7 @@
     </div>
 
     <!-- Supabase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <script src="./js/config.js"></script>
     <!-- 依存関係: loadAllDataが呼ぶ関数を先に読み込む -->
     <script src="./js/modal-utils.js"></script>
@@ -745,4 +771,5 @@
     <script src="./js/roadmap-comments.js"></script>
     <script src="./js/admin.js"></script>
 </body>
+
 </html>

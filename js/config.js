@@ -104,7 +104,7 @@ const supabaseConfig = {
 // モバイル環境での追加設定
 if (isMobile) {
     console.log('📱 モバイル環境を検出、Supabase設定を最適化します');
-    
+
     // モバイル環境でのリアルタイム設定
     supabaseConfig.realtime = {
         // モバイル環境での接続タイムアウトを延長
@@ -114,13 +114,13 @@ if (isMobile) {
         // モバイル環境での接続リトライ回数を増加
         maxRetries: 5
     };
-    
+
     // iOS環境での特別な設定
     if (isIOS) {
         console.log('🍎 iOS環境を検出、特別な設定を適用します');
         supabaseConfig.realtime.heartbeatIntervalMs = 15000; // iOSでは少し長めに
     }
-    
+
     // Android環境での特別な設定
     if (isAndroid) {
         console.log('🤖 Android環境を検出、特別な設定を適用します');
@@ -129,7 +129,28 @@ if (isMobile) {
 }
 
 // Supabaseクライアントの初期化（モバイル最適化版）
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, supabaseConfig);
+try {
+    if (!window.supabase || !window.supabase.createClient) {
+        throw new Error('Supabase SDK not loaded or invalid');
+    }
+    // ライブラリを退避
+    const SupabaseLib = window.supabase;
+    // クライアントを作成してwindow.supabaseを上書き（グローバルで参照できるように）
+    window.supabase = SupabaseLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, supabaseConfig);
+    console.log('✅ Supabase Client Initialized Successfully');
+} catch (e) {
+    console.error('❌ Supabase Client Initialization Failed:', e);
+    // フォールバック: グローバルエラーを表示するためのダミーオブジェクト
+    window.supabase = {
+        from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => ({ error: { message: 'System Error: Supabase client init failed' } }) }) }) }),
+        auth: {
+            getUser: () => ({ error: { message: 'System Error' } }),
+            signInWithPassword: () => ({ error: { message: 'System Error' } }),
+            onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => { } } } })
+        }
+    };
+    alert('システム初期化エラー: Supabaseクライアントの作成に失敗しました。ページをリロードしてください。');
+}
 
 // グローバル状態
 const appState = {
