@@ -1,0 +1,106 @@
+.app-header {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 200px;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logo-icon {
+  background-color: #ff0000;
+  color: white;
+  width: 32px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.logo-text {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  max-width: 720px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 600px;
+  background-color: var(--bg-primary);
+  border: 1px solid #303030;
+  border-radius: 20px;
+  overflow: hidden;
+  margin-left: 40px;
+}
+
+.search-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  padding: 8px 16px;
+  font-size: 16px;
+  outline: none;
+}
+
+.search-button {
+  background-color: #222222;
+  border-left: 1px solid #303030;
+  padding: 0 20px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--transition-speed);
+}
+
+.search-button:hover {
+  background-color: #303030;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 200px;
+  justify-content: flex-end;
+}
+
+.user-profile {
+  background-color: #0056b3; /* A nice default profile color */
+  border-radius: 50%;
+  padding: 0;
+}
+
+@media (max-width: 768px) {
+  .header-center {
+    display: none;
+  }
+}
