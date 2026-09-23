@@ -275,15 +275,26 @@ export function meetingEvents(meeting) {
     const id = eventKey(original);
     if (seen.has(id)) return [];
     seen.add(id);
+    if (overrides[id]?.deleted) return [];
     return [wrap(original, id)];
   });
   for (const [id, override] of Object.entries(overrides))
-    if (!seen.has(id) && override?.original)
+    if (!seen.has(id) && override?.original && !override.deleted)
       events.push(wrap(override.original, id, true));
   return events;
 }
 export const allCalendarEvents = (meetings) =>
   meetings.filter((m) => !m.isDemo).flatMap(meetingEvents);
+export const hiddenCalendarEvents = (meetings) =>
+  meetings.filter((m) => !m.isDemo).flatMap((meeting) =>
+    Object.entries(meeting.calendarOverrides || {}).flatMap(([id, value]) =>
+      value?.deleted && value.original
+        ? [{ id, meetingId: meeting.id, meetingTitle: meeting.title,
+          title: value.event?.title || value.original.title,
+          hiddenAt: value.updatedAt }]
+        : [],
+    ),
+  );
 export const occursOn = (event, date) =>
   Boolean(
     event.date && event.date <= date && (event.endDate || event.date) >= date,
@@ -302,18 +313,48 @@ export function monthDays(month) {
 }
 export function calendarChange(meeting, id, input) {
   const event = meetingEvents(meeting).find((e) => e.id === id);
-  if (!event)
-    throw Object.assign(
-      new Error("予定が見つかりません。画面を更新してください。"),
-      {
-        status: 404,
-        publicMessage: "予定が見つかりません。画面を更新してください。",
-      },
-    );
+  if (!event) throw missingEvent();
   return {
     event: CalendarEditSchema.parse(input),
     original: event.original,
     analysisVersion: fingerprint(meeting.minutes),
+    updatedAt: new Date().toISOString(),
+  };
+}
+const missingEvent = () => Object.assign(
+  new Error("予定が見つかりません。画面を更新してください。"),
+  { status: 404, publicMessage: "予定が見つかりません。画面を更新してください。" },
+);
+export function calendarHide(meeting, id) {
+  const previous = meeting.calendarOverrides?.[id];
+  if (previous?.deleted) return previous;
+  const event = meetingEvents(meeting).find((entry) => entry.id === id);
+  if (!event) throw missingEvent();
+  return {
+    ...(previous || {
+      original: event.original,
+      analysisVersion: fingerprint(meeting.minutes),
+    }),
+    deleted: true,
+    updatedAt: new Date().toISOString(),
+  };
+}
+export function calendarRestore(meeting, id) {
+  const hidden = meeting.calendarOverrides?.[id];
+  if (!hidden?.deleted || !hidden.original) throw missingEvent();
+  const { deleted: _deleted, ...previous } = hidden;
+  if (previous.event) return { ...previous, updatedAt: new Date().toISOString() };
+  const base = Array.isArray(meeting.minutes?.scheduleEvents)
+    ? meeting.minutes.scheduleEvents
+    : legacyEvents(meeting);
+  if (base.some((event) => eventKey(event) === id)) return null;
+  const original = previous.original;
+  return {
+    ...previous,
+    event: CalendarEditSchema.parse(Object.fromEntries(
+      ["title", "kind", "date", "endDate", "startTime", "endTime",
+        "status", "location", "owner"].map((key) => [key, original[key]]),
+    )),
     updatedAt: new Date().toISOString(),
   };
 }

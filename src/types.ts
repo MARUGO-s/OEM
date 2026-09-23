@@ -35,10 +35,11 @@ export interface Meeting {
   calendarOverrides?: Record<
     string,
     {
-      event: CalendarEdit;
+      event?: CalendarEdit;
       original: ScheduleEvent;
       analysisVersion: string;
       updatedAt: string;
+      deleted?: boolean;
     }
   >;
   id: string;

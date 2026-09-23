@@ -19,7 +19,7 @@ import {
   calendarEvent,
   editFields,
 } from "./fixtures/calendar.mjs";
-import { eventKey } from "../supabase/functions/_shared/calendar.mjs";
+import { allCalendarEvents, eventKey } from "../supabase/functions/_shared/calendar.mjs";
 
 test("予定と議事録本文の手動編集を永続化し、再生成でも予定の変更を保持する", async (t) => {
   const { request, store, waitForJobs, dataDir } = await setup(t, {
@@ -96,6 +96,31 @@ test("予定と議事録本文の手動編集を永続化し、再生成でも�
     200,
   );
   assert.deepEqual(store.get(m.id).calendarOverrides, {});
+});
+
+test("個別・複数予定の削除と復元は会議録を残して永続化する", async (t) => {
+  const { request, store, dataDir } = await setup(t);
+  const meeting = calendarMeeting();
+  const second = { ...calendarEvent, title: "追加の予定" };
+  meeting.minutes.scheduleEvents.push(second);
+  await store.save(meeting);
+  const route = `/meetings/${meeting.id}/calendar`;
+  const ids = [calendarEvent, second].map(eventKey);
+  for (const id of ids) {
+    const response = await request(`${route}/${id}/hide`, { method: "POST" });
+    assert.equal(response.status, 200);
+  }
+  assert.equal(allCalendarEvents(store.list()).length, 0);
+  assert.equal(store.get(meeting.id).minutes.scheduleEvents.length, 2);
+  const reopened = new MeetingStore(path.join(dataDir, "meetings"));
+  await reopened.init();
+  assert.equal(allCalendarEvents(reopened.list()).length, 0);
+  assert.equal((await request(`${route}/${ids[0]}/restore`, { method: "POST" })).status, 200);
+  assert.equal(allCalendarEvents(store.list()).length, 1);
+  assert.equal((await request(`${route}/${ids[0]}/restore`, { method: "POST" })).status, 404);
+  assert.equal((await request(`${route}/0000000000000000/hide`, { method: "POST" })).status, 404);
+  await store.save({ ...store.get(meeting.id), status: "analyzing" });
+  assert.equal((await request(`${route}/${ids[1]}/restore`, { method: "POST" })).status, 409);
 });
 
 const sampleMinutes = createDemo().minutes;

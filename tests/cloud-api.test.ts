@@ -8,7 +8,7 @@ import {
   calendarEvent,
   editFields,
 } from "./fixtures/calendar.mjs";
-import { eventKey } from "../supabase/functions/_shared/calendar.mjs";
+import { allCalendarEvents, eventKey } from "../supabase/functions/_shared/calendar.mjs";
 import {
   createToken,
   hashToken,
@@ -575,6 +575,24 @@ Deno.test(
         ).status,
         200,
       );
+      assert.deepEqual(rows.get(calendar.id).document.calendarOverrides, {});
+      const secondEvent = { ...calendarEvent, title: "もう一つの予定" };
+      rows.get(calendar.id).document.minutes.scheduleEvents.push(secondEvent);
+      const secondId = eventKey(secondEvent);
+      for (const id of [eventId, secondId]) {
+        assert.equal((await request(`${calRoute}/calendar/${id}/hide`, "valid-a", {
+          method: "POST",
+        })).status, 200);
+      }
+      assert.equal(allCalendarEvents([rows.get(calendar.id).document]).length, 0);
+      assert.equal(rows.get(calendar.id).document.minutes.scheduleEvents.length, 2);
+      assert.equal((await request(`${calRoute}/calendar/${eventId}/restore`, "valid-b", {
+        method: "POST",
+      })).status, 200);
+      assert.equal(allCalendarEvents([rows.get(calendar.id).document]).length, 1);
+      assert.equal((await request(`${calRoute}/calendar/${secondId}/restore`, "valid-b", {
+        method: "POST",
+      })).status, 200);
       assert.deepEqual(rows.get(calendar.id).document.calendarOverrides, {});
       rows.delete(calendar.id);
       assert.equal((await request("/meetings", "invalid")).status, 401);

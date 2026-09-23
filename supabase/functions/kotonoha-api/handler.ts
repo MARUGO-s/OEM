@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { calendarChange } from "../_shared/calendar.mjs";
+import {
+  calendarChange,
+  calendarHide,
+  calendarRestore,
+} from "../_shared/calendar.mjs";
 import { usageEvent } from "../_shared/usage.mjs";
 import {
   MAX_FILE_SIZE,
@@ -996,6 +1000,27 @@ export async function handler(req: Request) {
         }
         throw error;
       }
+    }
+    const calendarVisibilityMatch = route.match(
+      /^\/meetings\/([a-f0-9-]{36})\/calendar\/([a-f0-9]{16})\/(hide|restore)$/,
+    );
+    if (calendarVisibilityMatch && req.method === "POST") {
+      const id = z.uuid().parse(calendarVisibilityMatch[1]),
+        eventId = calendarVisibilityMatch[2],
+        operation = calendarVisibilityMatch[3];
+      const record = await store("get", owner, id);
+      if (["uploading", "transcribing", "analyzing"].includes(record.document.status))
+        throw fail(409, "解析・取り込み中は予定を変更できません。");
+      const value = operation === "hide"
+        ? calendarHide(record.document, eventId)
+        : calendarRestore(record.document, eventId);
+      return json(expose(await store(
+        value ? "set" : "reset",
+        owner,
+        id,
+        value ? { eventId, value } : { eventId },
+        "kotonoha_calendar",
+      )));
     }
     const calendarMatch = route.match(
       /^\/meetings\/([a-f0-9-]{36})\/calendar\/([a-f0-9]{16})$/,

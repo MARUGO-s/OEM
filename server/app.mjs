@@ -14,7 +14,11 @@ import {
   geminiRetryError,
 } from "../supabase/functions/_shared/gemini-retry.mjs";
 import { createDemo } from "./demo.mjs";
-import { calendarChange } from "../supabase/functions/_shared/calendar.mjs";
+import {
+  calendarChange,
+  calendarHide,
+  calendarRestore,
+} from "../supabase/functions/_shared/calendar.mjs";
 import { parseMinutes } from "../supabase/functions/_shared/summary.mjs";
 import {
   MAX_ATTACHMENT_SIZE,
@@ -681,6 +685,28 @@ export async function createApp({
       res.json(
         publicRecord(await store.save({ ...m, calendarOverrides: edits })),
       );
+    } finally {
+      busy.delete(id);
+    }
+  });
+  app.post("/api/meetings/:id/calendar/:eventId/:operation", async (req, res) => {
+    const { id, eventId, operation } = req.params;
+    if (!/^[a-f0-9]{16}$/.test(eventId) || !["hide", "restore"].includes(operation))
+      throw fail(400, "予定の操作が不正です。");
+    lock(id);
+    try {
+      const meeting = getMeeting(id);
+      if (working(meeting.status) || meeting.status === "uploading")
+        throw fail(409, "解析・取り込み中は予定を変更できません。");
+      const value = operation === "hide"
+        ? calendarHide(meeting, eventId)
+        : calendarRestore(meeting, eventId);
+      const edits = { ...(meeting.calendarOverrides || {}) };
+      if (value) edits[eventId] = value;
+      else delete edits[eventId];
+      if (Object.keys(edits).length > 200)
+        throw fail(400, "1会議の手動予定は200件までです。");
+      res.json(publicRecord(await store.save({ ...meeting, calendarOverrides: edits })));
     } finally {
       busy.delete(id);
     }

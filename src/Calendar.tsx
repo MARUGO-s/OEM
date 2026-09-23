@@ -15,9 +15,12 @@ import {
   Check,
   Save,
   LoaderCircle,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import {
   allCalendarEvents,
+  hiddenCalendarEvents,
   meetingEvents,
   monthDays,
   occursOn,
@@ -47,6 +50,14 @@ const sortEvents = (a: CalendarEntry, b: CalendarEntry) =>
   (a.date || "9999").localeCompare(b.date || "9999") ||
   (a.startTime || "99").localeCompare(b.startTime || "99") ||
   a.title.localeCompare(b.title, "ja");
+const selectionKey = (entry: CalendarEntry) => `${entry.meetingId}:${entry.id}`;
+type HiddenEntry = {
+  id: string;
+  meetingId: string;
+  meetingTitle: string;
+  title: string;
+  hiddenAt: string;
+};
 export function Calendar({
   meetings,
   selectedDate,
@@ -73,10 +84,27 @@ export function Calendar({
     [kind, setKind] = useState("all"),
     [status, setStatus] = useState("all"),
     [editing, setEditing] = useState<CalendarEntry | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [deletePending, setDeletePending] = useState<CalendarEntry[] | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState(0);
+  const [deleteError, setDeleteError] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState("");
+  useEffect(() => {
+    if (!deletePending) return;
+    onEditingChange(true);
+    return () => onEditingChange(false);
+  }, [deletePending, onEditingChange]);
   const today = tokyoToday(),
     month = selectedDate.slice(0, 7);
   const all = useMemo(
     () => allCalendarEvents(meetings) as CalendarEntry[],
+    [meetings],
+  );
+  const hidden = useMemo(
+    () => hiddenCalendarEvents(meetings) as HiddenEntry[],
     [meetings],
   );
   const events = useMemo(
@@ -96,7 +124,89 @@ export function Calendar({
   const inMonth = events.filter((e) => overlapsMonth(e, month)),
     undated = events.filter((e) => !e.date),
     dayEvents = events.filter((e) => occursOn(e, selectedDate));
+  const visibleEvents = (view === "list" ? inMonth : dayEvents)
+    .concat(undated)
+    .filter((entry) => {
+      const meeting = meetings.find((m) => m.id === entry.meetingId);
+      return meeting && !["uploading", "transcribing", "analyzing"].includes(meeting.status);
+    });
+  const selectedEntries = all.filter((entry) => selectedKeys.has(selectionKey(entry)));
+  const allVisibleSelected = visibleEvents.length > 0 &&
+    visibleEvents.every((entry) => selectedKeys.has(selectionKey(entry)));
   const cells = monthDays(month);
+  function canChange(entry: CalendarEntry) {
+    const meeting = meetings.find((m) => m.id === entry.meetingId);
+    return Boolean(meeting && !["uploading", "transcribing", "analyzing"].includes(meeting.status));
+  }
+  const selectableUndated = undated.filter(canChange);
+  function toggleSelected(entry: CalendarEntry) {
+    const key = selectionKey(entry);
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+  function requestDelete(entries: CalendarEntry[]) {
+    if (!entries.length) return;
+    setDeleteError("");
+    setDeleteProgress(0);
+    setDeletePending(entries);
+  }
+  async function deleteEvents() {
+    if (!deletePending?.length) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    const failures: CalendarEntry[] = [];
+    let firstError = "";
+    let succeeded = 0;
+    for (const [index, entry] of deletePending.entries()) {
+      try {
+        const updated = await api<Meeting>(
+          `/meetings/${entry.meetingId}/calendar/${entry.id}/hide`,
+          { method: "POST" },
+        );
+        onChange(updated);
+        setSelectedKeys((current) => {
+          const next = new Set(current);
+          next.delete(selectionKey(entry));
+          return next;
+        });
+        succeeded++;
+      } catch (error) {
+        failures.push(entry);
+        firstError ||= (error as Error).message;
+      }
+      setDeleteProgress(index + 1);
+    }
+    if (succeeded) notify(`${succeeded}件の予定をカレンダーから削除しました。`);
+    if (failures.length) {
+      setDeletePending(failures);
+      setDeleteError(`${failures.length}件を削除できませんでした。${firstError}`);
+      setDeleteProgress(0);
+    } else {
+      setDeletePending(null);
+      setSelectedKeys(new Set());
+    }
+    setDeleteBusy(false);
+  }
+  async function restoreEvent(entry: HiddenEntry) {
+    const key = `${entry.meetingId}:${entry.id}`;
+    setRestoreBusy(key);
+    try {
+      const updated = await api<Meeting>(
+        `/meetings/${entry.meetingId}/calendar/${entry.id}/restore`,
+        { method: "POST" },
+      );
+      onChange(updated);
+      notify("予定をカレンダーに戻しました。");
+    } catch (error) {
+      notify((error as Error).message);
+    } finally {
+      setRestoreBusy("");
+    }
+  }
   function shiftMonth(offset: number) {
     const date = new Date(month + "-01T12:00:00Z");
     date.setUTCMonth(date.getUTCMonth() + offset);
@@ -112,8 +222,20 @@ export function Calendar({
     setEditing(e);
   }
   const entryCard = (e: CalendarEntry) => (
-    <article className={`cal-entry ${e.status}`} key={e.meetingId + e.id}>
+    <article className={`cal-entry ${e.status} ${selectedKeys.has(selectionKey(e)) ? "selected-for-delete" : ""}`} key={e.meetingId + e.id}>
       <div className="cal-entry-labels">
+        {selectionMode && (
+          <label className="cal-select-entry">
+            <input
+              type="checkbox"
+              checked={selectedKeys.has(selectionKey(e))}
+              disabled={!canChange(e)}
+              onChange={() => toggleSelected(e)}
+              aria-label={`${e.title}を一括削除の対象に選択`}
+            />
+            選択
+          </label>
+        )}
         <span className={`cal-status ${e.status}`}>{statusText[e.status]}</span>
         <span>{kindText[e.kind]}</span>
         {e.manual && (
@@ -171,10 +293,20 @@ export function Calendar({
           <span>{e.meetingTitle}</span>
           <ArrowRight size={13} />
         </button>
-        <button className="button secondary small" onClick={() => editEvent(e)}>
-          <Pencil size={13} />
-          予定を編集
-        </button>
+        <div className="cal-entry-manage">
+          <button className="button secondary small" onClick={() => editEvent(e)}>
+            <Pencil size={13} />
+            予定を編集
+          </button>
+          <button
+            className="button danger small"
+            disabled={!canChange(e)}
+            onClick={() => requestDelete([e])}
+            aria-label={`${e.title}を削除`}
+          >
+            <Trash2 size={13} /> 削除
+          </button>
+        </div>
       </div>
     </article>
   );
@@ -314,6 +446,44 @@ export function Calendar({
           <option value="tentative">予定案</option>
           <option value="needs_confirmation">要確認</option>
         </select>
+      </div>
+      <div className="cal-delete-toolbar">
+        <button
+          className="button secondary small"
+          aria-pressed={selectionMode}
+          onClick={() => {
+            setSelectionMode((current) => !current);
+            setSelectedKeys(new Set());
+          }}
+        >
+          {selectionMode ? "選択を終了" : "選択して一括削除"}
+        </button>
+        {selectionMode && (
+          <>
+            <span>{selectedEntries.length}件を選択中</span>
+            <button
+              className="text-button"
+              disabled={!visibleEvents.length}
+              onClick={() => setSelectedKeys((current) => {
+                const next = new Set(current);
+                for (const entry of visibleEvents) {
+                  if (allVisibleSelected) next.delete(selectionKey(entry));
+                  else next.add(selectionKey(entry));
+                }
+                return next;
+              })}
+            >
+              {allVisibleSelected ? "表示中の選択を解除" : "表示中を全選択"}
+            </button>
+            <button
+              className="button danger small"
+              disabled={!selectedEntries.length}
+              onClick={() => requestDelete(selectedEntries)}
+            >
+              <Trash2 size={14} /> 選択した{selectedEntries.length}件を削除
+            </button>
+          </>
+        )}
       </div>
       <div className="cal-legend">
         <span>
@@ -460,11 +630,60 @@ export function Calendar({
               <AlertCircle size={19} />
               日付を確認する予定<span>{undated.length}</span>
             </h2>
+            {selectionMode && (
+              <button
+                className="button secondary small"
+                disabled={!selectableUndated.length}
+                onClick={() => setSelectedKeys((current) => {
+                  const next = new Set(current);
+                  const allSelected = selectableUndated.every((entry) => next.has(selectionKey(entry)));
+                  for (const entry of selectableUndated) {
+                    if (allSelected) next.delete(selectionKey(entry));
+                    else next.add(selectionKey(entry));
+                  }
+                  return next;
+                })}
+              >
+                {selectableUndated.every((entry) => selectedKeys.has(selectionKey(entry)))
+                  ? "日付未定の選択を解除"
+                  : `この${selectableUndated.length}件を選択`}
+              </button>
+            )}
           </div>
           <p>
             「来週まで」など、特定の日を決められない予定です。「予定を編集」から日付を設定できます。
           </p>
           <div className="cal-undated-grid">{undated.map(entryCard)}</div>
+        </section>
+      )}
+      {!!hidden.length && (
+        <section className="cal-hidden">
+          <button
+            className="text-button"
+            aria-expanded={showHidden}
+            onClick={() => setShowHidden((current) => !current)}
+          >
+            <RotateCcw size={15} /> 削除済みの予定 {hidden.length}件
+          </button>
+          {showHidden && (
+            <ul>
+              {hidden.map((entry) => (
+                <li key={`${entry.meetingId}:${entry.id}`}>
+                  <span><strong>{entry.title}</strong><small>{entry.meetingTitle}</small></span>
+                  <button
+                    className="button secondary small"
+                    disabled={Boolean(restoreBusy)}
+                    onClick={() => void restoreEvent(entry)}
+                  >
+                    {restoreBusy === `${entry.meetingId}:${entry.id}`
+                      ? <LoaderCircle size={14} className="spin" />
+                      : <RotateCcw size={14} />}
+                    元に戻す
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
       {!all.length && (
@@ -473,8 +692,34 @@ export function Calendar({
         </div>
       )}
       <p className="cal-footnote">
-        確定・予定案の判定もAIによるものです。元の発言と照合してください。以前の議事録から拾った日付は要確認として表示します。手動変更は全員に共有され、議事録の再生成後も保持します。議事録本文の編集とカレンダーの変更は別々に保存します。
+        確定・予定案の判定もAIによるものです。元の発言と照合してください。以前の議事録から拾った日付は要確認として表示します。予定の編集・削除は全員に共有され、元の会議録は変更しません。削除した予定は「削除済みの予定」から戻せます。同じ予定の非表示は再生成後も保持しますが、AIが別の内容として抽出した予定は新しい候補として現れる場合があります。
       </p>
+      {deletePending && (
+        <Modal
+          title={deletePending.length === 1 ? "この予定を削除しますか？" : `${deletePending.length}件の予定を削除しますか？`}
+          onClose={() => setDeletePending(null)}
+          locked={deleteBusy}
+        >
+          <p className="confirm-copy">
+            選んだ予定をカレンダーから除外します。元の会議録・文字起こし・資料は残り、後から「削除済みの予定」で戻せます。AIの再解析は行いません。
+          </p>
+          <ul className="cal-delete-preview">
+            {deletePending.slice(0, 5).map((entry) => (
+              <li key={selectionKey(entry)}>{entry.title}</li>
+            ))}
+            {deletePending.length > 5 && <li>ほか{deletePending.length - 5}件</li>}
+          </ul>
+          {deleteError && <p className="error-message" role="alert">{deleteError}</p>}
+          {deleteBusy && <p role="status">処理中… {deleteProgress}/{deletePending.length}件</p>}
+          <div className="modal-footer">
+            <button className="button secondary" disabled={deleteBusy} onClick={() => setDeletePending(null)}>キャンセル</button>
+            <button className="button danger" disabled={deleteBusy} onClick={() => void deleteEvents()}>
+              {deleteBusy && <LoaderCircle size={15} className="spin" />}
+              {deletePending.length === 1 ? "この予定を削除" : `${deletePending.length}件を削除`}
+            </button>
+          </div>
+        </Modal>
+      )}
       {editing && (
         <CalendarEditor
           entry={editing}

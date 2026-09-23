@@ -8,8 +8,11 @@ import {
   normalizeScheduleEvents,
   meetingEvents,
   allCalendarEvents,
+  hiddenCalendarEvents,
   eventKey,
   calendarChange,
+  calendarHide,
+  calendarRestore,
   CalendarEditSchema,
   occursOn,
   overlapsMonth,
@@ -125,6 +128,33 @@ test("手動変更は再解析・並び替え・元の予定削除後も残り�
     () => calendarChange(m, "0000000000000000", edit),
     /予定が見つかりません/,
   );
+});
+test("予定の削除は根拠を保ったまま非表示にし、再生成後も復元できる", () => {
+  const meeting = calendarMeeting();
+  const id = eventKey(event);
+  meeting.calendarOverrides = { [id]: calendarHide(meeting, id) };
+  assert.equal(meetingEvents(meeting).length, 0);
+  assert.equal(hiddenCalendarEvents([meeting])[0].title, event.title);
+  assert.equal(meeting.minutes.scheduleEvents.length, 1, "AI抽出結果は消さない");
+  meeting.minutes = { ...meeting.minutes, summary: "再生成した要約" };
+  assert.equal(meetingEvents(meeting).length, 0);
+  assert.equal(calendarRestore(meeting, id), null);
+  delete meeting.calendarOverrides[id];
+  assert.equal(meetingEvents(meeting).length, 1);
+
+  meeting.calendarOverrides = { [id]: calendarChange(meeting, id, {
+    ...editFields(event), title: "手動で直した予定",
+  }) };
+  meeting.calendarOverrides[id] = calendarHide(meeting, id);
+  assert.equal(meetingEvents(meeting).length, 0);
+  meeting.calendarOverrides[id] = calendarRestore(meeting, id);
+  assert.equal(meetingEvents(meeting)[0].title, "手動で直した予定");
+
+  meeting.calendarOverrides[id] = calendarHide(meeting, id);
+  meeting.minutes.scheduleEvents = [];
+  meeting.calendarOverrides[id] = calendarRestore(meeting, id);
+  assert.equal(meetingEvents(meeting)[0].orphan, true);
+  assert.throws(() => calendarRestore(meeting, id), /予定が見つかりません/);
 });
 test("編集値の検証と厳密なフィールド制限", () => {
   const edit = editFields(event);
