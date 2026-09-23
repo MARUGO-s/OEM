@@ -1,10 +1,31 @@
 import assert from "node:assert/strict";
 import { createDemo } from "../supabase/functions/_shared/demo.mjs";
 import { decryptApiKey } from "../supabase/functions/_shared/key-crypto.mjs";
+import {
+  createToken,
+  hashToken,
+} from "../supabase/functions/_shared/session.mjs";
 
 // No network permission is granted to these tests. Every outbound request is mocked.
 const owner = "00000000-0000-4000-8000-000000000001";
-const other = "00000000-0000-4000-8000-000000000002";
+const tokenA = createToken();
+const tokenB = createToken();
+const sessions = new Map<string, any>([
+  [
+    await hashToken(tokenA),
+    {
+      workspaceId: owner,
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+    },
+  ],
+  [
+    await hashToken(tokenB),
+    {
+      workspaceId: owner,
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+    },
+  ],
+]);
 const secret = btoa(
   String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
 );
@@ -31,19 +52,28 @@ globalThis.fetch = async (input, init: any) => {
         : input.url,
   );
   const headers = new Headers(init?.headers);
-  if (url.pathname === "/auth/v1/user") {
-    const token = headers.get("authorization");
-    if (
-      !["Bearer valid-a", "Bearer valid-b", "Bearer anonymous"].includes(
-        token || "",
+  if (url.pathname === "/rest/v1/rpc/kotonoha_auth") {
+    const { p_operation: operation, p_payload: payload } = JSON.parse(
+      init.body,
+    );
+    if (operation === "login") {
+      if (
+        payload.loginId !== "test-shared" ||
+        payload.password !== "test-password-only"
       )
-    )
-      return json({ message: "invalid token" }, 401);
-    return json({
-      id: token === "Bearer valid-b" ? other : owner,
-      is_anonymous: token === "Bearer anonymous",
-      aud: "authenticated",
-    });
+        return json({ error: "INVALID_CREDENTIALS" });
+      const session = {
+        workspaceId: owner,
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      };
+      sessions.set(payload.tokenHash, session);
+      return json(session);
+    }
+    if (operation === "logout") {
+      sessions.delete(payload.tokenHash);
+      return json({ ok: true });
+    }
+    return json(sessions.get(payload.tokenHash) || { error: "INVALID_TOKEN" });
   }
   if (url.pathname === "/rest/v1/rpc/kotonoha_store") {
     const {
@@ -134,6 +164,7 @@ const { handler } =
   await import("../supabase/functions/kotonoha-api/handler.ts");
 
 function request(route: string, token = "valid-a", init: RequestInit = {}) {
+  token = token === "valid-a" ? tokenA : token === "valid-b" ? tokenB : token;
   return handler(
     new Request(
       `https://kotonoha-test.invalid/functions/v1/kotonoha-api${route}`,
@@ -156,11 +187,35 @@ async function drain() {
 }
 
 Deno.test(
-  "Cloud HTTP: auth, ownership, encrypted settings, upload, GPT pipeline and edits",
+  "Cloud HTTP: fixed login, shared sessions, encrypted settings, upload, GPT pipeline and edits",
   async () => {
     try {
       assert.equal((await request("/meetings", "invalid")).status, 401);
       assert.equal((await request("/meetings", "anonymous")).status, 401);
+      assert.equal((await request("/meetings", createToken())).status, 401);
+      const invalidLogin = await request("/auth/login", "", {
+        method: "POST",
+        body: JSON.stringify({
+          loginId: "test-shared",
+          password: "wrong-password",
+        }),
+      });
+      assert.equal(invalidLogin.status, 401);
+      const loggedIn = await request("/auth/login", "", {
+        method: "POST",
+        body: JSON.stringify({
+          loginId: "test-shared",
+          password: "test-password-only",
+        }),
+      });
+      assert.equal(loggedIn.status, 200);
+      const loginSession = await loggedIn.json();
+      assert.ok(loginSession.token.startsWith("ktn_"));
+      assert.equal(loginSession.workspaceId, undefined);
+      assert.equal(
+        (await request("/auth/session", loginSession.token)).status,
+        200,
+      );
       assert.equal(
         (
           await handler(
@@ -197,7 +252,7 @@ Deno.test(
       );
       assert.equal(
         (await (await request("/settings", "valid-b")).json()).configured,
-        false,
+        true,
       );
       for (const model of ["gpt-6-astra", "gpt-6-sol"]) {
         await request("/settings", "valid-a", {
@@ -229,7 +284,7 @@ Deno.test(
         );
         assert.equal(
           (await request(`/meetings/${meeting.id}`, "valid-b")).status,
-          404,
+          200,
         );
         const list = await (await request("/meetings")).json();
         const done = list.find((m: any) => m.id === meeting.id);
@@ -239,7 +294,7 @@ Deno.test(
         assert.equal(done.hasAudio, model === "gpt-6-sol");
         assert.equal(
           (await (await request("/meetings", "valid-b")).json()).length,
-          0,
+          1,
         );
         const edited = await request(`/meetings/${meeting.id}`, "valid-a", {
           method: "PATCH",
@@ -247,16 +302,13 @@ Deno.test(
         });
         assert.equal((await edited.json()).markdown, "手動修正");
         assert.equal(
-          (
-            await request(`/meetings/${meeting.id}`, "valid-b", {
-              method: "DELETE",
-            })
-          ).status,
-          404,
+          (await (await request(`/meetings/${meeting.id}`, "valid-b")).json())
+            .markdown,
+          "手動修正",
         );
         assert.equal(
           (
-            await request(`/meetings/${meeting.id}`, "valid-a", {
+            await request(`/meetings/${meeting.id}`, "valid-b", {
               method: "DELETE",
             })
           ).status,
@@ -267,6 +319,17 @@ Deno.test(
         calls.filter((c) => c.route === "/v1/audio/transcriptions").length,
         1,
       );
+      assert.equal(
+        (await request("/auth/logout", loginSession.token, { method: "POST" }))
+          .status,
+        204,
+      );
+      assert.equal(
+        (await request("/meetings", loginSession.token)).status,
+        401,
+      );
+      assert.equal((await request("/meetings", "valid-a")).status, 200);
+      assert.equal((await request("/meetings", "valid-b")).status, 200);
     } finally {
       await drain();
       globalThis.fetch = realFetch;

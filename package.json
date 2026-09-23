@@ -14,7 +14,6 @@
     "node": ">=22.18.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.117.1",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",

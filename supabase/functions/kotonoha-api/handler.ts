@@ -12,6 +12,11 @@ import {
 } from "../_shared/domain.mjs";
 import { createDemo } from "../_shared/demo.mjs";
 import { encryptApiKey, decryptApiKey } from "../_shared/key-crypto.mjs";
+import {
+  createToken,
+  hashToken,
+  validTokenFormat,
+} from "../_shared/session.mjs";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 type Doc = Record<string, any>;
@@ -378,27 +383,101 @@ export async function handler(req: Request) {
   if (req.method === "OPTIONS")
     return new Response(null, { status: 204, headers: cors });
   try {
+    const pathname = new URL(req.url).pathname;
+    const route =
+      pathname.slice(
+        pathname.indexOf("/kotonoha-api") + "/kotonoha-api".length,
+      ) || "/";
+    if (route === "/auth/login" && req.method === "POST") {
+      const input = z
+        .object({
+          loginId: z.string().trim().min(1).max(100),
+          password: z
+            .string()
+            .min(1)
+            .max(72)
+            .refine((value) => new TextEncoder().encode(value).length <= 72),
+        })
+        .strict()
+        .parse(
+          JSON.parse(new TextDecoder().decode(await bodyBytes(req, 4096))),
+        );
+      const token = createToken();
+      const ip =
+        req.headers.get("cf-connecting-ip") ||
+        req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        "unknown";
+      const { data, error } = await service.rpc("kotonoha_auth", {
+        p_operation: "login",
+        p_payload: {
+          ...input,
+          tokenHash: await hashToken(token),
+          ipHash: await hashToken(`kotonoha-login:${ip}`),
+        },
+      });
+      if (error || !data || data.error === "NOT_CONFIGURED")
+        return json(
+          {
+            error:
+              "ログイン機能の設定が完了していません。管理者にご連絡ください。",
+          },
+          503,
+        );
+      if (data.error === "RATE_LIMIT")
+        return json(
+          {
+            error:
+              "ログインの試行回数が上限に達しました。15分ほど待ってから再試行してください。",
+          },
+          429,
+        );
+      if (data.error)
+        return json({ error: "IDまたはパスワードが正しくありません。" }, 401);
+      return json({ token, expiresAt: data.expiresAt });
+    }
     const token = req.headers
       .get("Authorization")
       ?.match(/^Bearer (.+)$/i)?.[1];
-    if (!token) return json({ error: "ログインが必要です。" }, 401);
-    const {
-      data: { user },
-      error: authError,
-    } = await service.auth.getUser(token);
-    if (authError || !user || user.is_anonymous)
+    if (!validTokenFormat(token))
+      return json({ error: "ログインが必要です。" }, 401);
+    const tokenHash = await hashToken(token!);
+    const { data: session, error: authError } = await service.rpc(
+      "kotonoha_auth",
+      {
+        p_operation: "session",
+        p_payload: { tokenHash },
+      },
+    );
+    if (authError)
+      return json(
+        {
+          error:
+            "ログイン情報を確認できません。しばらくしてから再試行してください。",
+        },
+        503,
+      );
+    if (!session?.workspaceId || session.error)
       return json(
         {
           error: "ログインの有効期限が切れています。再度ログインしてください。",
         },
         401,
       );
-    const owner = user.id;
-    const pathname = new URL(req.url).pathname;
-    const route =
-      pathname.slice(
-        pathname.indexOf("/kotonoha-api") + "/kotonoha-api".length,
-      ) || "/";
+    if (route === "/auth/session" && req.method === "GET")
+      return json({ expiresAt: session.expiresAt });
+    if (route === "/auth/logout" && req.method === "POST") {
+      const { error } = await service.rpc("kotonoha_auth", {
+        p_operation: "logout",
+        p_payload: { tokenHash },
+      });
+      if (error)
+        return json(
+          { error: "ログアウトできませんでした。もう一度お試しください。" },
+          503,
+        );
+      return json(null, 204);
+    }
+    const owner = session.workspaceId;
     const config = await store("settings_get", owner);
     if (route === "/settings" && req.method === "GET")
       return json(exposeSettings(config));

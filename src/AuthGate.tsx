@@ -6,60 +6,76 @@ import {
   LockKeyhole,
   ShieldCheck,
 } from "lucide-react";
-import type { Session } from "@supabase/supabase-js";
-import { isCloud, supabase } from "./cloud";
+import {
+  isCloud,
+  getSession,
+  SESSION_EVENT,
+  signIn,
+  clearSession,
+  type SharedSession,
+} from "./cloud";
+import { api } from "./api";
 
 export function AuthGate({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<SharedSession | null>(null);
   const [loading, setLoading] = useState(isCloud);
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!isCloud) return;
     let alive = true;
-    void supabase.auth
-      .getSession()
-      .then(({ data, error }) => {
-        if (alive) {
-          setSession(data.session);
-          setLoading(false);
-          if (error)
-            setError(
-              "ログイン情報を確認できませんでした。再度ログインしてください。",
-            );
-        }
-      })
-      .catch(() => {
-        if (alive) {
-          setLoading(false);
-          setError("接続状態を確認して再度ログインしてください。");
-        }
-      });
-    const { data } = supabase.auth.onAuthStateChange((_event, value) => {
-      setSession(value);
+    const sync = () => {
+      setSession(getSession());
       setLoading(false);
-    });
+    };
+    async function restore() {
+      if (!getSession()) {
+        if (alive) sync();
+        return;
+      }
+      try {
+        await api("/auth/session");
+        if (alive) sync();
+      } catch {
+        if (alive) {
+          setLoading(false);
+          setError(
+            "ログイン情報を確認できませんでした。再度ログインしてください。",
+          );
+        }
+      }
+    }
+    void restore();
+    window.addEventListener(SESSION_EVENT, sync);
+    window.addEventListener("storage", sync);
     return () => {
       alive = false;
-      data.subscription.unsubscribe();
+      window.removeEventListener(SESSION_EVENT, sync);
+      window.removeEventListener("storage", sync);
     };
   }, []);
+  useEffect(() => {
+    if (!session) return;
+    const timer = setTimeout(
+      clearSession,
+      Math.max(0, Date.parse(session.expiresAt) - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [session]);
   async function login(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-      if (error) throw error;
+      await signIn(loginId.trim(), password);
       setPassword("");
-    } catch {
+    } catch (e) {
       setError(
-        "ログインできませんでした。メールアドレスとパスワード、接続状態を確認してください。",
+        e instanceof Error
+          ? e.message
+          : "ID・パスワードと接続状態を確認してください。",
       );
     } finally {
       setBusy(false);
@@ -116,14 +132,16 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <h2>おかえりなさい。</h2>
           <p>ワークスペースにログインして、会議を整理しましょう。</p>
           <label className="field">
-            メールアドレス
+            ログインID
             <input
-              type="email"
+              type="text"
               autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={loginId}
+              onChange={(e) => setLoginId(e.target.value)}
+              autoCapitalize="none"
+              spellCheck={false}
               required
-              placeholder="you@example.com"
+              placeholder="ログインIDを入力"
             />
           </label>
           <label className="field">
@@ -152,7 +170,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <div className="login-account-note">
             <ShieldCheck size={17} />
             <p>
-              Recipe-Managementでお使いのアカウントでログインできます。会議録は専用領域に保存され、ご自身の記録だけが表示されます。アカウントがない場合は管理者にお問い合わせください。
+              共通のID・パスワードでログインします。ログインした全員が、同じ会議・音声・議事録を閲覧・編集できます。共用端末では利用後にログアウトしてください。
             </p>
           </div>
         </form>

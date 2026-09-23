@@ -1,6 +1,7 @@
 import {
   isCloud,
-  supabase,
+  getSession,
+  clearSession,
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY,
 } from "./cloud";
@@ -11,10 +12,10 @@ export async function api<T>(
 ): Promise<T> {
   let token = "";
   if (isCloud) {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session)
+    const session = getSession();
+    if (!session)
       throw new Error("ログインが必要です。再度ログインしてください。");
-    token = data.session.access_token;
+    token = session.token;
   }
   const base = isCloud ? `${SUPABASE_URL}/functions/v1/kotonoha-api` : "/api";
   const response = await fetch(`${base}${path}`, {
@@ -31,6 +32,7 @@ export async function api<T>(
     },
   });
   if (response.status === 204) return undefined as T;
+  if (isCloud && response.status === 401) clearSession();
   let data;
   try {
     data = await response.json();

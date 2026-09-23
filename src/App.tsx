@@ -26,7 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./api";
-import { isCloud, supabase } from "./cloud";
+import { isCloud, signOut } from "./cloud";
 import {
   formatDate,
   isWorking,
@@ -87,27 +87,29 @@ export default function App() {
   }, [refresh]);
   const processing = meetings.some(isWorking);
   useEffect(() => {
-    if (!processing) return;
+    if ((!processing && !isCloud) || editing) return;
     let stop = false;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       try {
         const records = await api<Meeting[]>("/meetings");
+        const config = isCloud ? await api<Settings>("/settings") : null;
         if (!stop) {
           setMeetings(records);
+          if (config) setSettings(config);
           setError("");
         }
       } catch (e) {
         if (!stop) setError((e as Error).message);
       }
-      if (!stop) timer = setTimeout(poll, 2500);
+      if (!stop) timer = setTimeout(poll, processing ? 2500 : 10000);
     }
-    timer = setTimeout(poll, 2500);
+    timer = setTimeout(poll, processing ? 2500 : 10000);
     return () => {
       stop = true;
       clearTimeout(timer);
     };
-  }, [processing]);
+  }, [processing, editing]);
   function updateMeeting(next: Meeting) {
     setMeetings((prev) =>
       prev.some((m) => m.id === next.id)
@@ -191,7 +193,8 @@ export default function App() {
         <div className="workspace-switch">
           <span className="workspace-avatar">K</span>
           <span>
-            マイワークスペース<small>パーソナル</small>
+            {isCloud ? "共有ワークスペース" : "マイワークスペース"}
+            <small>{isCloud ? "チーム共通" : "パーソナル"}</small>
           </span>
           <span className="local-pill">{isCloud ? "CLOUD" : "LOCAL"}</span>
         </div>
@@ -257,7 +260,7 @@ export default function App() {
             <div>
               <strong>{isCloud ? "専用クラウドに保存" : "このPCに保存"}</strong>
               <small>
-                {isCloud ? "ご自身の記録だけを表示" : "会議の記録を、手元に。"}
+                {isCloud ? "全員で同じ記録を共有" : "会議の記録を、手元に。"}
               </small>
             </div>
           </div>
@@ -275,11 +278,11 @@ export default function App() {
             <button
               className="settings-link"
               onClick={async () => {
-                const { error } = await supabase.auth.signOut({
-                  scope: "local",
-                });
-                if (error)
+                try {
+                  await signOut();
+                } catch {
                   notify("ログアウトできませんでした。再度お試しください。");
+                }
               }}
             >
               ログアウト
@@ -826,7 +829,7 @@ function Help({
           <h3>データの保存について</h3>
           <p>
             {isCloud
-              ? "会議と音声はSupabaseの会議録専用領域に保存します。ログインした本人の記録のみ表示されます。OpenAI APIキーは利用者別に暗号化保存します。AI解析時は音声とテキストをOpenAIに送信し、議事録生成には結果を一時保存するバックグラウンドAPIを使います。削除は論理削除で、復元・完全消去は管理者にご依頼ください。"
+              ? "会議と音声はSupabaseの会議録専用領域に保存し、ログインした全員で共有します。追加・編集・削除も共通です。他の人の変更は約10秒ごとに反映します（編集中を除く）。OpenAI APIキーはワークスペース共通で暗号化保存し、画面には再表示しません。AI解析時は音声とテキストをOpenAIに送信し、結果を一時保存するバックグラウンドAPIを使います。削除は論理削除で、復元・完全消去は管理者にご依頼ください。"
               : "会議と音声はアプリの .data フォルダに保存されます。Dropboxの設定によってはクラウドにも同期されます。AI解析時は音声とテキストをOpenAIに送信します。削除した会議は .data/trash に移動します。"}
           </p>
         </div>

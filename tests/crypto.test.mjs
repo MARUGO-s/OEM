@@ -6,7 +6,7 @@ import {
   decryptApiKey,
 } from "../supabase/functions/_shared/key-crypto.mjs";
 
-test("クラウドAPIキーを暗号化し、本人だけ復号できる", async () => {
+test("クラウドAPIキーを暗号化し、指定のワークスペースにだけ復号できる", async () => {
   const secret = randomBytes(32).toString("base64");
   const key = "sk-fake-test-key-never-call-api";
   const encrypted = await encryptApiKey(key, "owner-a", secret);
