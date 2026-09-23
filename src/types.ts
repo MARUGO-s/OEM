@@ -152,6 +152,7 @@ export type CalendarEntry = ScheduleEvent & {
 export const isWorking = (m: Meeting) =>
   ["transcribing", "analyzing"].includes(m.status);
 export const modelName = (id?: string) =>
+  id === "gpt-6-luna" ? "GPT-6 Luna" :
   id === "gpt-6-sol" ? "GPT-6 Sol" : "GPT-6 Astra";
 export const transcriptionModelName = (id?: string) =>
   id === "gemini-3.5-transcribe" ? "Gemini 3.5 Transcribe" : "GPT Transcribe";

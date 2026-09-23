@@ -55,7 +55,7 @@ import {
   transcriptFromSegments,
 } from "./domain.mjs";
 
-const models = ["gpt-6-astra", "gpt-6-sol"];
+const models = ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"];
 const transcriptionModels = ["gpt-transcribe", "gemini-3.5-transcribe"];
 const settingsSchema = z.object({
   apiKey: z.string().trim().min(20).max(500).optional(),
@@ -113,7 +113,7 @@ export async function createApp({
     if (error.code !== "ENOENT") throw error;
   }
   if (!models.includes(model))
-    throw new Error("OPENAI_MINUTES_MODEL must be gpt-6-astra or gpt-6-sol");
+    throw new Error(`OPENAI_MINUTES_MODEL must be one of ${models.join(", ")}`);
   if (!transcriptionModels.includes(transcriptionModel))
     throw new Error("TRANSCRIPTION_MODEL is not supported");
   let currentKey = apiKey;

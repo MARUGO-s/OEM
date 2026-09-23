@@ -82,7 +82,7 @@ const encryptionSecret = Deno.env.get("KOTONOHA_KEY_ENCRYPTION_SECRET") || "";
 const OPENAI_TRANSCRIPTION_MODEL = "gpt-transcribe";
 const settingsSchema = z
   .object({
-    model: z.enum(["gpt-6-astra", "gpt-6-sol"]),
+    model: z.enum(["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"]),
     transcriptionModel: z
       .enum([OPENAI_TRANSCRIPTION_MODEL, GEMINI_TRANSCRIPTION_MODEL])
       .default(OPENAI_TRANSCRIPTION_MODEL),

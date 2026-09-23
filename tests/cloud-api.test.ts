@@ -958,7 +958,7 @@ Deno.test(
       );
       geminiDailyLimit = false;
       clockOffset = 0;
-      for (const model of ["gpt-6-astra", "gpt-6-sol"]) {
+      for (const model of ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"]) {
         await request("/settings", "valid-a", {
           method: "PUT",
           body: JSON.stringify({

@@ -862,12 +862,12 @@ test("外部サイトからの操作とDNS rebindingを拒否する", async (t) 
   );
 });
 
-test("実際のSDKリクエストはGPT Transcribeと指定のAstra/Solを使用する", async (t) => {
+test("実際のSDKリクエストはGPT Transcribeと指定のAstra/Sol/Lunaを使用する", async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), "kotonoha-wire-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const file = path.join(directory, "meeting.wav");
   await writeFile(file, new Uint8Array(44));
-  for (const model of ["gpt-6-astra", "gpt-6-sol"]) {
+  for (const model of ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"]) {
     const calls = [];
     const ai = createAI(key, model, {
       maxRetries: 0,

@@ -7,14 +7,14 @@
 ## 使い始める
 
 1. 共通ID `marugo` と管理者から受け取ったパスワードでログインします。全員が同じ会議・音声・議事録を閲覧・編集します。既存Supabaseアカウントは使いません。
-2. 左メニュー「接続設定」に、ワークスペース共通のOpenAI APIキーを入力します。文字起こしは `gpt-transcribe` または `gemini-3.5-transcribe` から選択でき、Geminiを選ぶ場合はGemini APIキーも入力します。議事録は `gpt-6-astra` または `gpt-6-sol` を使います。対象モデルの権限・利用枠が必要です。設定保存は疎通確認を意味しません。
+2. 左メニュー「接続設定」に、ワークスペース共通のOpenAI APIキーを入力します。文字起こしは `gpt-transcribe` または `gemini-3.5-transcribe` から選択でき、Geminiを選ぶ場合はGemini APIキーも入力します。議事録は `gpt-6-astra`・`gpt-6-sol`・`gpt-6-luna` から選びます。対象モデルの権限・利用枠が必要です。設定保存は疎通確認を意味しません。
 3. 録音ファイル、または文字起こし済みのトークを取り込みます。途切れて複数ファイルになった録音は、まとめて選び、上下ボタンで録音順に並べてください。ファイルの追加・解除もできます。会議名、開催日、参加者、議事録の詳しさを指定できます。
 4. 「議事録」「文字起こし」「アクション」で確認・編集します。文字起こし修正後の再生成、音声再生、アクションの完了チェックもできます。
 5. Markdown・テキスト・JSONで書き出せます。印刷画面からPDFにも保存できます。
 
 左メニューの「API使用料」では、対象月のドル円レートを入力・保存すると、解析1回ごとの概算料金と月合計を円で確認できます。レートはそのブラウザーに月ごとに保存され、請求時の実際の為替を自動取得するものではありません。解析の内訳を開くと、API呼び出しごとの日時、モデル、入力・出力トークン、音声時間、料金を確認できます。録音を分割した場合は同じ解析にまとめ、議事録の再生成は別の解析として表示します。解析IDを記録する前の旧履歴は会議と処理順から推定してまとめます。会議を削除しても利用履歴は残ります。記録開始以前の利用は遡及できません。
 
-料金は実行時の単価で保存します。GPT Transcribeは1分$0.0045、Gemini 3.5 Transcribeは入力100万トークン$2・出力$12、GPT-6 Astraは入力$10・出力$50、GPT-6 Solは入力$2・出力$10（2026-09-24の標準料金）。応答に使用量がない音声は録音時間を使った推定として表示し、時間も不明なら料金は算出不可とします。無料枠、税、為替、APIプロバイダー側の調整は反映されません。請求額は[OpenAI](https://developers.openai.com/api/docs/pricing)と[Google](https://ai.google.dev/gemini-api/docs/pricing)の請求画面で確認してください。
+料金は実行時の単価で保存します。GPT Transcribeは1分$0.0045、Gemini 3.5 Transcribeは入力100万トークン$2・出力$12、GPT-6 Astraは入力$10・出力$50、GPT-6 Solは入力$2・出力$10、GPT-6 Lunaは入力$0.10・出力$0.50（2026-09-24の標準料金）。応答に使用量がない音声は録音時間を使った推定として表示し、時間も不明なら料金は算出不可とします。無料枠、税、為替、APIプロバイダー側の調整は反映されません。請求額は[OpenAI](https://developers.openai.com/api/docs/pricing)と[Google](https://ai.google.dev/gemini-api/docs/pricing)の請求画面で確認してください。
 
 ログイン後の「サンプルを開く」はOpenAIキー不要です。架空の固定データであり、AI処理をしたふりはしません。
 
@@ -98,7 +98,7 @@ deno check --config supabase/functions/kotonoha-api/deno.json supabase/functions
 deno test --allow-env --config supabase/functions/kotonoha-api/deno.json tests/cloud-api.test.ts
 ```
 
-Nodeテストはアップロード・保存・再試行・編集・削除・アクセス制限・APIモデル指定・キー非永続化を確認します。EdgeテストはHTTP通信を模擬し、共通ログイン、OpenAI/Geminiキーの暗号化、GPT/Gemini文字起こし、Astra/Sol生成、結果取得、音声の取り込みを確認します。実課金リクエストは実行しません。
+Nodeテストはアップロード・保存・再試行・編集・削除・アクセス制限・APIモデル指定・キー非永続化を確認します。EdgeテストはHTTP通信を模擬し、共通ログイン、OpenAI/Geminiキーの暗号化、GPT/Gemini文字起こし、Astra/Sol/Luna生成、結果取得、音声の取り込みを確認します。実課金リクエストは実行しません。
 
 Geminiの文字起こしには [Interactions APIの文字起こし仕様](https://ai.google.dev/gemini-api/docs/transcribe) を使用します。RESTの `steps[].content` にある `model_output` のテキストを取得し、未完了・応答形式の不一致・空の結果を区別します。応答が読めないだけで「発話なし」とは判定しません。`store: false` を指定し、処理後にはGoogleへ送信した一時音声の削除を要求します。これらは `tests/gemini-transcribe.test.mjs` で検証します。
 
@@ -115,4 +115,4 @@ Geminiの文字起こしには [Interactions APIの文字起こし仕様](https:
 - [GPT Transcribe](https://developers.openai.com/api/docs/models/gpt-transcribe)
 - [Gemini audio transcription](https://ai.google.dev/gemini-api/docs/transcribe)
 - `gemini-1.5-flash` は2025年9月29日に提供終了したため、現行の音声文字起こし専用モデル `gemini-3.5-transcribe` を使用します。
-- [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra) / [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol)
+- [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra) / [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol) / [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna)

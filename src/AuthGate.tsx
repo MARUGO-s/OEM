@@ -121,7 +121,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           </div>
         </div>
         <span className="login-models">
-          GPT-4o / Gemini Transcribe × GPT-6 Astra / Sol
+          GPT Transcribe / Gemini × GPT-6 Astra / Sol / Luna
         </span>
       </section>
       <section className="login-form-panel">

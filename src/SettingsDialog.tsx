@@ -169,6 +169,12 @@ export function SettingsDialog({
               detail: "日々の会議を、効率よく整理する",
               Icon: Zap,
             },
+            {
+              id: "gpt-6-luna",
+              title: "GPT-6 Luna",
+              detail: "費用を抑えて、会議を手早く整理する",
+              Icon: Zap,
+            },
           ].map(({ id, title, detail, Icon }) => (
             <label key={id} className={model === id ? "chosen" : ""}>
               <input

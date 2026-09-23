@@ -20,6 +20,8 @@ begin
     jsonb_build_object('id', event_id, 'kind', 'minutes', 'model', 'gpt-6-sol', 'costUsd', 0.0125));
   perform public.kotonoha_usage('record', owner_b, null,
     jsonb_build_object('id', another_id, 'kind', 'transcription', 'model', 'gpt-transcribe', 'costUsd', 0.0045));
+  perform public.kotonoha_usage('record', owner_b, null,
+    jsonb_build_object('id', gen_random_uuid(), 'kind', 'minutes', 'model', 'gpt-6-luna', 'costUsd', 0.0002));
   result := public.kotonoha_usage('list', owner_a, null,
     jsonb_build_object('month', month_jst, 'page', 0));
   if (result->>'eventCount')::integer <> 1 or
@@ -29,8 +31,8 @@ begin
   end if;
   result := public.kotonoha_usage('list', owner_b, null,
     jsonb_build_object('month', month_jst, 'page', 0));
-  if (result->>'eventCount')::integer <> 1 or
-     (result->>'totalUsd')::numeric <> 0.0045 then
+  if (result->>'eventCount')::integer <> 2 or
+     (result->>'totalUsd')::numeric <> 0.0047 then
     raise exception 'Workspace isolation failed';
   end if;
   execute 'reset role';

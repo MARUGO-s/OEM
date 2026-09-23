@@ -16,6 +16,11 @@ test("API応答のトークン・キャッシュ・音声時間で料金を計�
   assert.equal(minutes.costUsd, (850 * 2 + 100 * 0.2 + 50 * 2.5 + 200 * 10) / 1_000_000);
   assert.equal(minutes.inputTokens, 1000);
   assert.equal(minutes.reasoningTokens, 40);
+  const luna = summaryUsage("gpt-6-luna", {
+    usage: { input_tokens: 1000, output_tokens: 200,
+      input_tokens_details: { cached_tokens: 100, cache_write_tokens: 50 } },
+  });
+  assert.equal(luna.costUsd, (850 * 0.1 + 100 * 0.01 + 50 * 0.125 + 200 * 0.5) / 1_000_000);
   assert.equal(transcriptionUsage("gpt-transcribe", { usage: { seconds: 60 } }).costUsd, 0.0045);
   assert.equal(transcriptionUsage("gpt-transcribe", {}, 60).estimated, true);
   assert.equal(transcriptionUsage("gpt-transcribe", {}).costUsd, null);

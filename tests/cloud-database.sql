@@ -17,6 +17,10 @@ begin
   assert doc->>'encryptedKey' = 'openai-envelope', 'OpenAI key must survive model changes';
   assert doc->>'encryptedGeminiKey' = 'gemini-envelope', 'Gemini key must survive model changes';
   assert doc->>'transcriptionModel' = 'gpt-transcribe', 'transcription model changes must persist';
+  perform public.kotonoha_settings('put', a, null,
+    '{"model":"gpt-6-luna","transcriptionModel":"gpt-transcribe"}');
+  doc := public.kotonoha_settings('get', a);
+  assert doc->>'model' = 'gpt-6-luna', 'Luna model must persist';
 
   perform public.kotonoha_store('settings_put', a, null, '{"model":"gpt-6-astra","encryptedKey":"test-envelope"}');
   perform public.kotonoha_store('settings_put', a, null, '{"model":"gpt-6-sol"}');

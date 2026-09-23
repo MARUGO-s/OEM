@@ -4,6 +4,7 @@ export const USAGE_PRICING_DATE = "2026-09-24";
 const TEXT_RATES = {
   "gpt-6-astra": { input: 10, cached: 1, write: 12.5, output: 50 },
   "gpt-6-sol": { input: 2, cached: 0.2, write: 2.5, output: 10 },
+  "gpt-6-luna": { input: 0.1, cached: 0.01, write: 0.125, output: 0.5 },
 };
 
 const count = (value) =>
