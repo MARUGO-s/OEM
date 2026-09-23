@@ -47,6 +47,47 @@ test("100,000,000バイトの単一WAVを分割し、全PCMバイトを順序通
   );
   assert.ok(Math.abs(duration - (file.size - 44) / 176400) < 0.001);
 });
+test("65分・62.4MBのWAVを7分割し、時間とPCMの欠落・重複がない", async () => {
+  const bytes = new Uint8Array(await waveFile(3900 * 16000 + 44).arrayBuffer());
+  const header = new DataView(bytes.buffer);
+  header.setUint16(22, 1, true); // mono
+  header.setUint32(24, 8000, true);
+  header.setUint32(28, 16000, true);
+  header.setUint16(32, 2, true);
+  const parts = await splitRecordings([
+    new File([bytes], "65-minutes.wav", { type: "audio/wav" }),
+  ]);
+  assert.equal(parts.length, 7);
+  let duration = 0,
+    total = 0;
+  const hash = createHash("sha256");
+  for (const part of parts) {
+    assert.ok(part.blob.size <= 20_000_000);
+    const input = new Input({
+      formats: ALL_FORMATS,
+      source: new BlobSource(part.blob),
+    });
+    try {
+      const seconds = await input.computeDuration();
+      assert.ok(seconds <= 601);
+      duration += seconds;
+      for await (const packet of new EncodedPacketSink(
+        await input.getPrimaryAudioTrack(),
+      ).packets()) {
+        hash.update(packet.data);
+        total += packet.data.length;
+      }
+    } finally {
+      input.dispose();
+    }
+  }
+  assert.equal(total, bytes.length - 44);
+  assert.ok(Math.abs(duration - 3900) < 0.001);
+  assert.equal(
+    hash.digest("hex"),
+    createHash("sha256").update(bytes.subarray(44)).digest("hex"),
+  );
+});
 test("AACはフレームの欠落・重複なしで時間境界分割し、録音の順序を保つ", async () => {
   const files = [
     new File([aacFixture, aacFixture], "first.aac"),

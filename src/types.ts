@@ -70,6 +70,11 @@ export interface Meeting {
   minutesStale: boolean;
   minutesModel?: string;
   transcriptionModel?: string;
+  transcriptionWait?: {
+    until: string;
+    reason: "spacing" | "rate_limit";
+    attempt: number;
+  } | null;
 }
 export interface Settings {
   configured: boolean;
@@ -123,9 +128,7 @@ export const isWorking = (m: Meeting) =>
 export const modelName = (id?: string) =>
   id === "gpt-6-sol" ? "GPT-6 Sol" : "GPT-6 Astra";
 export const transcriptionModelName = (id?: string) =>
-  id === "gemini-3.5-transcribe"
-    ? "Gemini 3.5 Transcribe"
-    : "GPT Transcribe";
+  id === "gemini-3.5-transcribe" ? "Gemini 3.5 Transcribe" : "GPT Transcribe";
 export const today = () => new Intl.DateTimeFormat("sv-SE").format(new Date());
 export const formatDate = (date: string) =>
   new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric" }).format(

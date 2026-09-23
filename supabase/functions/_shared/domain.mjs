@@ -155,6 +155,12 @@ export function minutesToMarkdown(meeting, minutes) {
 }
 
 export function safeError(error) {
+  if (error.code === "GEMINI_QUOTA_EXHAUSTED") {
+    return "Geminiの日次上限、または利用できる枠の不足を検出しました。Google AI Studioで利用枠・請求設定を確認し、利用可能になってから再試行してください。完了した文字起こしは保存されています。";
+  }
+  if (error.code === "GEMINI_RETRIES_EXHAUSTED") {
+    return "Geminiの利用制限が続き、自動再試行5回でも完了しませんでした。しばらく待つか利用枠を確認して再試行してください。完了した文字起こしは保存されています。";
+  }
   if (error.code === "GEMINI_UPLOAD_START_NETWORK") {
     return "Gemini APIキーの確認通信を開始できませんでした。Google APIへのネットワーク接続を確認して再試行してください。";
   }

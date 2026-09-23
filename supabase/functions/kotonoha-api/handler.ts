@@ -42,6 +42,7 @@ import {
   GEMINI_TRANSCRIPTION_MODEL,
   transcribeWithGemini,
 } from "../_shared/gemini-transcribe.mjs";
+import { geminiRetryPlan, geminiRetryError } from "../_shared/gemini-retry.mjs";
 import {
   createToken,
   hashToken,
@@ -402,11 +403,44 @@ async function processMeeting(
   keys: { openai: string; gemini?: string },
 ) {
   let record = initial;
+  const gateRunId = initial.document.runId;
+  const gemini =
+    record.document.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL;
+  let heldGeminiSlot = false;
+  let cooldown: Doc = {};
+  const gate = (operation: string, extra: Doc = {}) =>
+    store(
+      operation,
+      owner,
+      record.document.id,
+      { runId: gateRunId, ...extra },
+      "kotonoha_gemini_gate",
+    );
   try {
     if (
       needsTranscription(record.document, record.audioPath) ||
       !record.document.transcript
     ) {
+      if (gemini) {
+        const slot = await gate("reserve");
+        if (!slot) return; // Superseded job: do not send an obsolete request.
+        if (!slot.allowed) {
+          await jobUpdate(owner, record, {
+            partReady: true,
+            transcriptionWait: {
+              until: slot.until,
+              reason: slot.reason,
+              attempt: record.document.geminiRetryCount || 0,
+            },
+          });
+          return;
+        }
+        heldGeminiSlot = true;
+        record = await jobUpdate(owner, record, {
+          transcriptionWait: null,
+          diagnosticCode: null,
+        });
+      }
       const transcript = await transcribeRecordings(
         recordingsFor(record.document, record.audioPath),
         async (part: Doc, index: number) => {
@@ -443,11 +477,15 @@ async function processMeeting(
           return result.text;
         },
         async (audioParts: Doc[]) => {
-          record = await jobUpdate(owner, record, { audioParts });
+          record = await jobUpdate(owner, record, {
+            audioParts,
+            geminiRetryCount: 0,
+            transcriptionWait: null,
+          });
         },
-        record.document.chunked ? 1 : Infinity,
+        record.document.chunked || gemini ? 1 : Infinity,
       );
-      if (record.document.chunked) {
+      if (record.document.chunked || gemini) {
         await jobUpdate(owner, record, {
           partReady: true,
           ...(transcript !== null
@@ -466,6 +504,29 @@ async function processMeeting(
     }
     await startSummary(owner, record, keys.openai);
   } catch (error) {
+    const cause = (error as any).cause || error;
+    const retry = heldGeminiSlot
+      ? geminiRetryPlan(cause, record.document.geminiRetryCount || 0)
+      : null;
+    if (retry && !retry.stop) {
+      cooldown = { delayMs: retry.delayMs, reason: "rate_limit" };
+      const slot = await gate("finish", cooldown);
+      heldGeminiSlot = false;
+      await jobUpdate(owner, record, {
+        status: "transcribing",
+        error: null,
+        partReady: true,
+        diagnosticCode: "GEMINI_RATE_LIMIT_WAIT",
+        geminiRetryCount: retry.attempt,
+        transcriptionWait: {
+          until: slot?.until || retry.until,
+          reason: "rate_limit",
+          attempt: retry.attempt,
+        },
+      });
+      return;
+    }
+    if (retry?.stop) error = geminiRetryError(retry.stop);
     const message =
       (error as Error).name === "TimeoutError"
         ? "音声の処理が時間内に完了しませんでした。長い録音は分割して取り込んでください。"
@@ -473,16 +534,21 @@ async function processMeeting(
     await jobUpdate(owner, record, {
       status: "error",
       error: message,
-      diagnosticCode: String((error as any).diagnosticCode || "UNKNOWN").slice(
-        0,
-        100,
-      ),
+      transcriptionWait: null,
+      diagnosticCode: String(
+        (error as any).diagnosticCode || (error as any).code || "UNKNOWN",
+      ).slice(0, 100),
     });
     console.error(
       "kotonoha job failed",
       (error as Error).name,
       (error as any).status || "",
     );
+  } finally {
+    if (heldGeminiSlot)
+      await gate("finish", cooldown).catch(() =>
+        console.error("kotonoha Gemini gate release failed"),
+      );
   }
 }
 async function reconcile(
@@ -491,7 +557,15 @@ async function reconcile(
   keys: { openai: string; gemini?: string } | null,
 ): Promise<RecordRow> {
   if (!working(record.document)) return record;
-  if (record.document.chunked && record.document.partReady && keys) {
+  // Durable waits must be checked before lease expiry: no Edge Function sleeps.
+  if (Date.parse(record.document.transcriptionWait?.until || "") > Date.now())
+    return record;
+  if (
+    (record.document.chunked ||
+      record.document.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL) &&
+    record.document.partReady &&
+    keys
+  ) {
     const next = await store(
       "next",
       owner,
@@ -1139,6 +1213,9 @@ export async function handler(req: Request) {
         error: null,
         minutesModel: config.model,
         transcriptionModel: retryTranscriptionModel,
+        transcriptionWait: null,
+        geminiRetryCount: 0,
+        diagnosticCode: null,
         runId: crypto.randomUUID(),
         partReady: false,
       });

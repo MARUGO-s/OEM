@@ -283,14 +283,17 @@ export async function transcribeRecordings(
   const failed = results.findIndex((result) => result.status === "rejected");
   if (failed !== -1) {
     const error = results[failed].reason;
-    throw Object.assign(new Error("Recording transcription failed"), {
-      diagnosticCode:
-        error?.code ||
-        (error?.status ? `HTTP_${error.status}` : error?.name || "UNKNOWN"),
-      publicMessage: `録音${failed + 1}の文字起こしに失敗しました。${safeError(
-        error,
-      )} 完了した録音は再処理せず、未完了分から再試行できます。`,
-    });
+    throw Object.assign(
+      new Error("Recording transcription failed", { cause: error }),
+      {
+        diagnosticCode:
+          error?.code ||
+          (error?.status ? `HTTP_${error.status}` : error?.name || "UNKNOWN"),
+        publicMessage: `録音${failed + 1}の文字起こしに失敗しました。${safeError(
+          error,
+        )} 完了した録音は再処理せず、未完了分から再試行できます。`,
+      },
+    );
   }
   if (next.some((part) => !part.transcript)) return null;
   const transcript = next

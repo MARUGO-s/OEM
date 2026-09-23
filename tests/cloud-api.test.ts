@@ -46,6 +46,12 @@ const calls: { route: string; body: any }[] = [];
 const audioObjects = new Map<string, Blob>();
 const responses = new Map<string, any>();
 let failSecondRecording = false;
+let geminiFailures = 0;
+let geminiDailyLimit = false;
+let clockOffset = 0;
+const realNow = Date.now;
+Date.now = () => realNow() + clockOffset;
+const geminiGates = new Map<string, any>();
 const realFetch = globalThis.fetch;
 const json = (value: unknown, status = 200) => Response.json(value, { status });
 
@@ -94,6 +100,7 @@ globalThis.fetch = async (input, init: any) => {
       "/rest/v1/rpc/kotonoha_audio_upload",
       "/rest/v1/rpc/kotonoha_attachments",
       "/rest/v1/rpc/kotonoha_calendar",
+      "/rest/v1/rpc/kotonoha_gemini_gate",
     ].includes(url.pathname)
   ) {
     const {
@@ -130,6 +137,42 @@ globalThis.fetch = async (input, init: any) => {
     const row = rows.get(id);
     if (!row || row.owner !== user)
       return json({ message: "NOT_FOUND", code: "P0002" }, 404);
+    if (url.pathname.endsWith("kotonoha_gemini_gate")) {
+      const gate = geminiGates.get(user) || {
+        next: 0,
+        active: null,
+        reason: "spacing",
+      };
+      geminiGates.set(user, gate);
+      if (op === "reserve") {
+        if (
+          row.document.runId !== payload.runId ||
+          row.document.status !== "transcribing"
+        )
+          return json(null);
+        if (gate.active || gate.next > Date.now())
+          return json({
+            allowed: false,
+            until: new Date(
+              Math.max(gate.next, Date.now() + (gate.active ? 10000 : 0)),
+            ).toISOString(),
+            reason: gate.reason,
+          });
+        gate.active = payload.runId;
+        return json({ allowed: true });
+      }
+      if (op === "finish") {
+        if (gate.active !== payload.runId) return json(null);
+        gate.active = null;
+        gate.next = Date.now() + Math.max(30000, payload.delayMs || 0);
+        gate.reason = payload.reason || "spacing";
+        return json({
+          until: new Date(gate.next).toISOString(),
+          reason: gate.reason,
+        });
+      }
+      assert.fail("Unexpected Gemini gate operation");
+    }
     if (url.pathname.endsWith("kotonoha_calendar")) {
       if (
         ["uploading", "transcribing", "analyzing"].includes(row.document.status)
@@ -249,6 +292,30 @@ globalThis.fetch = async (input, init: any) => {
       "https://generativelanguage.googleapis.com/v1beta/files/test-audio",
     );
     calls.push({ route: url.pathname, body });
+    if (geminiFailures > 0) {
+      geminiFailures--;
+      return json(
+        {
+          error: {
+            status: "RESOURCE_EXHAUSTED",
+            details: geminiDailyLimit
+              ? [
+                  {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    violations: [{ quotaId: "TranscribeRequestsPerDay" }],
+                  },
+                ]
+              : [
+                  {
+                    "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                    retryDelay: "90s",
+                  },
+                ],
+          },
+        },
+        429,
+      );
+    }
     return json({
       status: "completed",
       steps: [
@@ -588,6 +655,7 @@ Deno.test(
       await drain();
       await request("/meetings");
       await drain();
+      await request("/meetings");
       const geminiDone = await (
         await request(`/meetings/${geminiMeeting.id}`)
       ).json();
@@ -608,6 +676,215 @@ Deno.test(
         ).status,
         204,
       );
+      // Seven chunks represent 65 minutes. Audio inference is mocked; ordering,
+      // durable cooldowns, browser reload and quota limits exercise the real handler.
+      const geminiCount = () =>
+        calls.filter((c) => c.route === "/v1beta/interactions").length;
+      async function createGeminiUpload(count: number) {
+        const response = await request("/uploads", "valid-a", {
+          method: "POST",
+          body: JSON.stringify({
+            metadata: { title: "Gemini再開テスト", date: "2026-09-24" },
+            sources: [{ name: "65-minutes.wav", size: 62_400_044 }],
+            parts: Array.from({ length: count }, (_, i) => ({
+              name: `recording-1-${i + 1}.wav`,
+              size: 44,
+              sourceIndex: 0,
+              partNumber: i + 1,
+              duration: i === 6 ? 300 : 600,
+            })),
+          }),
+        });
+        assert.equal(response.status, 201, await response.clone().text());
+        const draft = await response.json();
+        for (let i = 0; i < count; i++)
+          assert.equal(
+            (
+              await request(
+                `/meetings/${draft.id}/parts?index=${i}`,
+                "valid-b",
+                {
+                  method: "POST",
+                  body: new Blob([new Uint8Array(44)], { type: "audio/wav" }),
+                  headers: { "Content-Type": "audio/wav" },
+                },
+              )
+            ).status,
+            200,
+          );
+        assert.equal(
+          (
+            await request(`/meetings/${draft.id}/complete`, "valid-a", {
+              method: "POST",
+            })
+          ).status,
+          202,
+        );
+        await drain();
+        return draft.id;
+      }
+      async function pollTogether() {
+        await Promise.all([
+          request("/meetings", "valid-a"),
+          request("/meetings", "valid-b"),
+        ]);
+        await drain();
+      }
+      function advanceWait(id: string) {
+        const until = rows.get(id).document.transcriptionWait?.until;
+        assert.ok(until, "expected durable wait");
+        clockOffset += Math.max(0, Date.parse(until) - Date.now()) + 1;
+      }
+      const longStart = geminiCount();
+      const longId = await createGeminiUpload(7);
+      // Previous meeting left the shared gate in its 30 second cooldown.
+      assert.equal(
+        rows.get(longId).document.transcriptionWait.reason,
+        "spacing",
+      );
+      await pollTogether();
+      assert.equal(geminiCount(), longStart, "no requests before cooldown");
+      advanceWait(longId);
+      await pollTogether();
+      assert.equal(geminiCount(), longStart + 1);
+      assert.equal(
+        rows.get(longId).document.audioParts[0].transcript,
+        "Geminiで文字起こししました。",
+      );
+      await pollTogether(); // persist the next spacing wait
+      advanceWait(longId);
+      geminiFailures = 1;
+      await pollTogether();
+      const rateWait = rows.get(longId).document.transcriptionWait;
+      assert.equal(rateWait.reason, "rate_limit");
+      assert.equal(rateWait.attempt, 1);
+      assert.ok(
+        Date.parse(rateWait.until) - Date.now() > 89_000,
+        "honor Google's 90s RetryInfo",
+      );
+      assert.equal(
+        rows.get(longId).document.audioParts.filter((p: any) => p.transcript)
+          .length,
+        1,
+      );
+      // A new session/page read does not re-send a paid request while waiting.
+      const beforeReload = geminiCount();
+      await request(`/meetings/${longId}`, "valid-b");
+      await pollTogether();
+      assert.equal(geminiCount(), beforeReload);
+      assert.equal(
+        (
+          await request(`/meetings/${longId}/retry`, "valid-a", {
+            method: "POST",
+          })
+        ).status,
+        409,
+      );
+      advanceWait(longId);
+      await pollTogether();
+      assert.equal(rows.get(longId).document.geminiRetryCount, 0);
+      for (
+        let guard = 0;
+        guard < 30 && rows.get(longId).document.status !== "done";
+        guard++
+      ) {
+        if (rows.get(longId).document.transcriptionWait) advanceWait(longId);
+        await pollTogether();
+      }
+      assert.equal(rows.get(longId).document.status, "done");
+      assert.equal(
+        rows.get(longId).document.audioParts.filter((p: any) => p.transcript)
+          .length,
+        7,
+      );
+      assert.equal(
+        geminiCount() - longStart,
+        8,
+        "7 chunks plus only the failed chunk once more",
+      );
+      assert.equal(
+        (await request(`/meetings/${longId}`, "valid-a", { method: "DELETE" }))
+          .status,
+        204,
+      );
+
+      // Two meetings share one workspace throttle, including the failure cooldown.
+      const parallelStart = geminiCount();
+      const parallelA = await createGeminiUpload(1);
+      const parallelB = await createGeminiUpload(1);
+      advanceWait(parallelA);
+      await pollTogether();
+      assert.equal(geminiCount(), parallelStart + 1);
+      assert.equal(
+        rows.get(parallelB).document.transcriptionWait.reason,
+        "spacing",
+      );
+      await pollTogether();
+      advanceWait(parallelB);
+      await pollTogether();
+      await pollTogether();
+      await pollTogether();
+      for (const id of [parallelA, parallelB]) {
+        assert.equal(rows.get(id).document.status, "done");
+        assert.equal(
+          (await request(`/meetings/${id}`, "valid-a", { method: "DELETE" }))
+            .status,
+          204,
+        );
+      }
+      assert.equal(geminiCount(), parallelStart + 2);
+
+      const exhaustedStart = geminiCount();
+      geminiFailures = 6;
+      const exhaustedId = await createGeminiUpload(1);
+      for (let i = 0; i < 6; i++) {
+        advanceWait(exhaustedId);
+        await pollTogether();
+        if (i < 5) {
+          const m = rows.get(exhaustedId).document;
+          assert.equal(m.status, "transcribing");
+          assert.equal(m.transcriptionWait.attempt, i + 1);
+          // Late retries exceed the usual 4-minute lease but must not time out.
+          if (i === 4) {
+            clockOffset += 240_001;
+            await pollTogether();
+            assert.equal(rows.get(exhaustedId).document.status, "transcribing");
+          }
+        }
+      }
+      assert.equal(rows.get(exhaustedId).document.status, "error");
+      assert.equal(
+        rows.get(exhaustedId).document.diagnosticCode,
+        "GEMINI_RETRIES_EXHAUSTED",
+      );
+      await pollTogether();
+      assert.equal(geminiCount() - exhaustedStart, 6);
+      assert.equal(
+        (
+          await request(`/meetings/${exhaustedId}`, "valid-a", {
+            method: "DELETE",
+          })
+        ).status,
+        204,
+      );
+      geminiFailures = 1;
+      geminiDailyLimit = true;
+      const dailyId = await createGeminiUpload(1);
+      advanceWait(dailyId);
+      await pollTogether();
+      assert.equal(rows.get(dailyId).document.status, "error");
+      assert.equal(
+        rows.get(dailyId).document.diagnosticCode,
+        "GEMINI_QUOTA_EXHAUSTED",
+      );
+      assert.equal(rows.get(dailyId).document.transcriptionWait, null);
+      assert.equal(
+        (await request(`/meetings/${dailyId}`, "valid-a", { method: "DELETE" }))
+          .status,
+        204,
+      );
+      geminiDailyLimit = false;
+      clockOffset = 0;
       for (const model of ["gpt-6-astra", "gpt-6-sol"]) {
         await request("/settings", "valid-a", {
           method: "PUT",
@@ -1125,6 +1402,7 @@ Deno.test(
     } finally {
       await drain();
       globalThis.fetch = realFetch;
+      Date.now = realNow;
     }
   },
 );

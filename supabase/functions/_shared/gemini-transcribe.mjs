@@ -1,3 +1,4 @@
+import { geminiRateLimit } from "./gemini-retry.mjs";
 export const GEMINI_TRANSCRIPTION_MODEL = "gemini-3.5-transcribe";
 
 function mimeFor(fileName, type) {
@@ -21,8 +22,10 @@ function mimeFor(fileName, type) {
 async function google(response) {
   if (response.ok) return response;
   let providerCode = "";
+  let rateLimit = geminiRateLimit(response, null);
   try {
     const payload = await response.clone().json();
+    rateLimit = geminiRateLimit(response, payload);
     providerCode = String(payload?.error?.status || "");
     if (
       payload?.error?.details?.some?.(
@@ -37,6 +40,7 @@ async function google(response) {
     status: providerCode === "API_KEY_INVALID" ? 401 : response.status,
     provider: "gemini",
     providerCode,
+    ...rateLimit,
   });
 }
 

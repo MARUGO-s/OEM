@@ -165,6 +165,18 @@ export function MeetingDetail({
   const audio = useRef<HTMLAudioElement>(null);
   const [audioSource, setAudioSource] = useState("");
   const [audioPart, setAudioPart] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const wait = m.status === "transcribing" ? m.transcriptionWait : null;
+  const waitSeconds = wait
+    ? Math.max(0, Math.ceil((Date.parse(wait.until) - now) / 1000))
+    : 0;
+  const waitLabel = `${waitSeconds >= 60 ? `${Math.floor(waitSeconds / 60)}分` : ""}${waitSeconds % 60}秒`;
+  useEffect(() => {
+    if (!wait) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [wait?.until]);
   const recordings = m.recordings?.length
     ? m.recordings
     : [{ fileName: m.fileName || "録音", transcribed: Boolean(m.transcript) }];
@@ -354,16 +366,22 @@ export function MeetingDetail({
           <LoaderCircle className="spin" size={23} />
           <div>
             <strong>
-              {m.status === "transcribing"
-                ? `録音を文字起こししています${recordings.length > 1 ? `（${recordings.filter((part) => part.transcribed).length}/${recordings.length} 完了）` : ""}`
-                : m.attachments?.length
-                  ? "会話と添付資料を照合して議事録を作成しています"
-                  : "会話を解析して議事録を作成しています"}
+              {wait
+                ? wait.reason === "rate_limit"
+                  ? "Geminiの利用制限により待機しています"
+                  : "次の録音を送信するまで待機しています"
+                : m.status === "transcribing"
+                  ? `録音を文字起こししています${recordings.length > 1 ? `（${recordings.filter((part) => part.transcribed).length}/${recordings.length} 完了）` : ""}`
+                  : m.attachments?.length
+                    ? "会話と添付資料を照合して議事録を作成しています"
+                    : "会話を解析して議事録を作成しています"}
             </strong>
             <p>
-              {m.status === "transcribing"
-                ? `${transcriptionModelName(m.transcriptionModel)}が音声を読み取っています。`
-                : `${modelName(m.minutesModel)}が議題・決定事項・アクションを整理しています。`}{" "}
+              {wait
+                ? `${waitSeconds > 0 ? `自動再開まで約${waitLabel}。` : "順番を確認し、自動再開しています。"} ${recordings.filter((part) => part.transcribed).length}/${recordings.length} 完了。${wait.reason === "rate_limit" && wait.attempt ? ` 自動再試行 ${wait.attempt}/5。` : ""}`
+                : m.status === "transcribing"
+                  ? `${transcriptionModelName(m.transcriptionModel)}が音声を読み取っています。`
+                  : `${modelName(m.minutesModel)}が議題・決定事項・アクションを整理しています。`}{" "}
               完了分は保存されます。アプリを閉じた場合、残りの処理は次回開いたときに再開します。
             </p>
           </div>

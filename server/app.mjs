@@ -6,6 +6,11 @@ import path from "node:path";
 import { z } from "zod";
 import { MeetingStore } from "./store.mjs";
 import { createAI } from "./ai.mjs";
+import {
+  createLocalGeminiGate,
+  geminiRetryPlan,
+  geminiRetryError,
+} from "../supabase/functions/_shared/gemini-retry.mjs";
 import { createDemo } from "./demo.mjs";
 import { calendarChange } from "../supabase/functions/_shared/calendar.mjs";
 import { parseMinutes } from "../supabase/functions/_shared/summary.mjs";
@@ -108,6 +113,7 @@ export async function createApp({
   let currentTranscriptionModel = transcriptionModel;
   const busy = new Set();
   const jobs = new Set();
+  const acquireGemini = createLocalGeminiGate();
   let settingsBusy = false;
 
   app.disable("x-powered-by");
@@ -203,18 +209,60 @@ export async function createApp({
         },
       );
       let meeting = getMeeting(id);
+      const gemini = transcriptionModelForJob === "gemini-3.5-transcribe";
+      async function transcribePart(part) {
+        if (!gemini)
+          return (await ai.transcribe(path.join(uploadsDir, part.audioFile)))
+            .transcript;
+        for (;;) {
+          const release = await acquireGemini(async (until, reason) => {
+            meeting = await store.save({
+              ...meeting,
+              transcriptionWait: {
+                until,
+                reason,
+                attempt: meeting.geminiRetryCount || 0,
+              },
+            });
+          });
+          let delayMs, reason;
+          try {
+            meeting = await store.save({ ...meeting, transcriptionWait: null });
+            const result = await ai.transcribe(
+              path.join(uploadsDir, part.audioFile),
+            );
+            meeting = await store.save({ ...meeting, geminiRetryCount: 0 });
+            return result.transcript;
+          } catch (error) {
+            const retry = geminiRetryPlan(error, meeting.geminiRetryCount || 0);
+            if (!retry) throw error;
+            if (retry.stop) throw geminiRetryError(retry.stop);
+            delayMs = retry.delayMs;
+            reason = "rate_limit";
+            meeting = await store.save({
+              ...meeting,
+              geminiRetryCount: retry.attempt,
+              transcriptionWait: {
+                until: retry.until,
+                reason,
+                attempt: retry.attempt,
+              },
+            });
+          } finally {
+            release(delayMs, reason);
+          }
+        }
+      }
       if (needsTranscription(meeting) || !meeting.transcript) {
         let transcript;
         do {
           transcript = await transcribeRecordings(
             recordingsFor(meeting),
-            async (part) =>
-              (await ai.transcribe(path.join(uploadsDir, part.audioFile)))
-                .transcript,
+            transcribePart,
             async (audioParts) => {
               meeting = await store.save({ ...meeting, audioParts });
             },
-            meeting.chunked ? 1 : Infinity,
+            meeting.chunked || gemini ? 1 : Infinity,
           );
         } while (transcript === null);
         meeting = await store.save({
@@ -257,6 +305,7 @@ export async function createApp({
           ...latest,
           status: "error",
           error: error.publicMessage || safeError(error),
+          transcriptionWait: null,
         });
       console.error(
         "Meeting processing failed:",
@@ -553,6 +602,8 @@ export async function createApp({
         ...meeting,
         status: needsTranscription(meeting) ? "transcribing" : "analyzing",
         error: null,
+        geminiRetryCount: 0,
+        transcriptionWait: null,
         minutesModel: currentModel,
         ...(needsTranscription(meeting)
           ? { transcriptionModel: currentTranscriptionModel }
