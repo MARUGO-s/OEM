@@ -2932,6 +2932,12 @@ button {
 .attachment-heading > strong {
   font-size: 12px;
 }
+.attachment-heading .optional {
+  position: static;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 400;
+}
 .attachment-notice {
   line-height: 1.9;
   margin-bottom: 0;
