@@ -14,6 +14,7 @@ import { aacFixture } from "./fixtures/aac.mjs";
 import { splitRecordings } from "../src/split-recordings.mjs";
 import { randomUUID } from "node:crypto";
 import { documentFixtures, reviewFixture } from "./fixtures/documents.mjs";
+import { attachmentDigest } from "../supabase/functions/_shared/attachments.mjs";
 import {
   calendarMeeting,
   calendarEvent,
@@ -128,11 +129,12 @@ const key = "sk-test-only-not-a-real-api-key";
 
 test("資料を全件保存後に解析し、原本ダウンロード・再生成・関連解除・復元用保持ができる", async (t) => {
   const fixtures = documentFixtures(),
-    attachmentPlan = fixtures.map((f) => ({
+    attachmentPlan = await Promise.all(fixtures.map(async (f) => ({
       id: randomUUID(),
       name: f.name,
       size: f.size,
-    }));
+      sha256: await attachmentDigest(await f.arrayBuffer()),
+    })));
   let release;
   const gate = new Promise((resolve) => {
     release = resolve;
@@ -187,10 +189,13 @@ test("資料を全件保存後に解析し、原本ダウンロード・再生�
       409,
     );
     assert.equal((await upload(fixtures[0], randomUUID())).status, 400);
+    const sameContentDifferentName = new File(
+      [await fixtures[0].arrayBuffer()], "別名.pdf", { type: "application/pdf" });
     for (const [i, file] of fixtures.entries()) {
-      const result = await upload(file, attachmentPlan[i].id);
+      const result = await upload(i === 0 ? sameContentDifferentName : file, attachmentPlan[i].id);
       assert.equal(result.status, 201, await result.clone().text());
       const body = await result.json();
+      assert.equal(body.attachments[i].name, file.name);
       assert.equal(body.attachments[i].localFile, undefined);
       assert.equal(body.attachmentPlan, undefined);
     }

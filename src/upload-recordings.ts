@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { attachmentDigest } from "../supabase/functions/_shared/attachments.mjs";
 import type { Meeting } from "./types";
 type Part = {
   blob: Blob;
@@ -47,17 +48,20 @@ export async function uploadRecordings(
   const metadata = Object.fromEntries(
     ["title", "date", "participants", "template"].map((k) => [k, data.get(k)]),
   );
+  if (attachments.length) progress("添付資料の内容を確認しています…");
+  const attachmentPlan = await Promise.all(attachments.map(async ({ file, id }) => ({
+    id,
+    name: file.name,
+    size: file.size,
+    sha256: await attachmentDigest(await file.arrayBuffer()),
+  })));
   const meeting = await api<Meeting>("/uploads", {
     method: "POST",
     body: JSON.stringify({
       metadata,
       sources: files.map((f) => ({ name: f.name, size: f.size })),
       transcript: data.get("transcript") || "",
-      attachments: attachments.map(({ file, id }) => ({
-        id,
-        name: file.name,
-        size: file.size,
-      })),
+      attachments: attachmentPlan,
       parts: parts.map(({ blob, name, sourceIndex, partNumber, duration }) => ({
         name,
         size: blob.size,

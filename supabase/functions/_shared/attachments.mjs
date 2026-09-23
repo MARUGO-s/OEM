@@ -20,6 +20,11 @@ export const attachmentExtension = (name) =>
   `.${name.split(".").pop().toLowerCase()}`;
 const fail = (message) =>
   Object.assign(new Error(message), { status: 400, publicMessage: message });
+export async function attachmentDigest(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0")).join("");
+}
 export function validateAttachments(files) {
   if (files.length > MAX_ATTACHMENTS)
     throw fail("添付資料は1会議につき5ファイルまでです。");
@@ -50,6 +55,7 @@ export const AttachmentPlanSchema = z
         id: z.uuid(),
         name: z.string().min(1).max(250),
         size: z.number().int().positive().max(MAX_ATTACHMENT_SIZE),
+        sha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
       })
       .strict(),
   )
@@ -64,7 +70,8 @@ export const AttachmentPlanSchema = z
     if (new Set(files.map((f) => f.id)).size !== files.length)
       ctx.addIssue({ code: "custom", message: "資料IDが重複しています。" });
   });
-export function checkAttachmentAdd(document, attachment) {
+/** @param {string | null} [digest] */
+export function checkAttachmentAdd(document, attachment, digest = null) {
   if (["transcribing", "analyzing"].includes(document.status))
     throw Object.assign(
       fail("解析中は資料を変更できません。完了後に追加してください。"),
@@ -82,14 +89,16 @@ export function checkAttachmentAdd(document, attachment) {
     const expected = document.attachmentPlan?.find(
       (f) => f.id === attachment.id,
     );
-    if (
-      !expected ||
-      expected.name !== attachment.name ||
-      expected.size !== attachment.size
-    )
+    if (!expected || expected.size !== attachment.size ||
+      (!expected.sha256 && expected.name.normalize("NFC") !== attachment.name.normalize("NFC")))
       throw fail("選択時の添付資料と一致しません。");
+    if (expected.sha256 && expected.sha256 !== digest)
+      throw fail("添付資料の内容が選択時と一致しません。もう一度選び直してください。");
+    validateAttachments([...(document.attachments || []), { ...attachment, name: expected.name }]);
+    return expected.name;
   }
   validateAttachments([...(document.attachments || []), attachment]);
+  return attachment.name;
 }
 export function publicAttachments(document) {
   return (document.attachments || []).map(

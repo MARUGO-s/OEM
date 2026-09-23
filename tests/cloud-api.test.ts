@@ -3,6 +3,7 @@ import { createDemo } from "../supabase/functions/_shared/demo.mjs";
 import { decryptApiKey } from "../supabase/functions/_shared/key-crypto.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
 import { documentFixtures, reviewFixture } from "./fixtures/documents.mjs";
+import { attachmentDigest } from "../supabase/functions/_shared/attachments.mjs";
 import {
   calendarMeeting,
   calendarEvent,
@@ -1308,11 +1309,12 @@ Deno.test(
       assert.equal((await createUpload()).status, 400);
       // Real PDF/DOCX/XLSX fixtures, shared access, private signed native file inputs.
       const documents = documentFixtures();
-      const attachments = documents.map((f: any) => ({
+      const attachments = await Promise.all(documents.map(async (f: File) => ({
         id: crypto.randomUUID(),
         name: f.name,
         size: f.size,
-      }));
+        sha256: await attachmentDigest(await f.arrayBuffer()),
+      })));
       const docCreate = await request("/uploads", "valid-a", {
         method: "POST",
         body: JSON.stringify({
@@ -1364,8 +1366,10 @@ Deno.test(
         401,
       );
       const aiBefore = calls.length;
+      const sameContentDifferentName = new File(
+        [await documents[0].arrayBuffer()], "別名.pdf", { type: "application/pdf" });
       for (const [index, file] of documents.entries()) {
-        const result = await uploadDocument(file, attachments[index].id);
+        const result = await uploadDocument(index === 0 ? sameContentDifferentName : file, attachments[index].id);
         assert.equal(result.status, 201, await result.clone().text());
         const saved = await result.json();
         assert.equal(saved.attachments[index].storagePath, undefined);

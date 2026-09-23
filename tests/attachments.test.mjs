@@ -7,6 +7,7 @@ import {
   AttachmentPlanSchema,
   publicAttachments,
   checkAttachmentAdd,
+  attachmentDigest,
 } from "../supabase/functions/_shared/attachments.mjs";
 import {
   parseMinutes,
@@ -53,6 +54,21 @@ test("資料の形式・各10MB・合計25MB・5件とmanifestの重複を検証
   assert.throws(() =>
     checkAttachmentAdd({ status: "uploading", attachmentPlan: [] }, f),
   );
+  const bytes = new TextEncoder().encode("same document");
+  const digest = await attachmentDigest(bytes);
+  const planned = { ...f, name: "狩野ファーム_八幡平ひつじ.pdf", size: bytes.length, sha256: digest };
+  assert.equal(checkAttachmentAdd(
+    { status: "uploading", attachmentPlan: [planned] },
+    { ...f, name: "別名.pdf", size: bytes.length }, digest,
+  ), planned.name);
+  assert.throws(() => checkAttachmentAdd(
+    { status: "uploading", attachmentPlan: [planned] },
+    { ...f, name: "別名.pdf", size: bytes.length }, "0".repeat(64),
+  ), /内容が選択時と一致しません/);
+  assert.equal(checkAttachmentAdd(
+    { status: "uploading", attachmentPlan: [{ id: f.id, name: planned.name, size: bytes.length }] },
+    { ...f, name: planned.name.normalize("NFC"), size: bytes.length },
+  ), planned.name);
   assert.equal(
     publicAttachments({
       attachments: [{ ...f, storagePath: "secret", localFile: "secret" }],

@@ -18,6 +18,7 @@ import {
 import { createDemo } from "../_shared/demo.mjs";
 import {
   attachmentExtension,
+  attachmentDigest,
   attachmentTypes,
   checkAttachmentAdd,
   MAX_ATTACHMENT_SIZE,
@@ -1088,20 +1089,28 @@ export async function handler(req: Request) {
           throw fail(400, "資料を1ファイルずつ送信してください。");
         }
         const id = z.uuid().parse(form.get("id"));
-        const attachment = {
+        const digest = record.document.status === "uploading" &&
+            record.document.attachmentPlan?.some((entry: Doc) => entry.id === id && entry.sha256)
+          ? await attachmentDigest(await file.arrayBuffer())
+          : null;
+        const submitted = {
           id,
           name: file.name,
           size: file.size,
-          type: attachmentTypes[attachmentExtension(file.name)],
           uploadedAt: new Date().toISOString(),
         };
-        checkAttachmentAdd(record.document, attachment);
+        const name = checkAttachmentAdd(record.document, submitted, digest);
+        const attachment = {
+          ...submitted,
+          name,
+          type: attachmentTypes[attachmentExtension(name)],
+        };
         validateAttachmentBytes(
-          file.name,
+          name,
           new Uint8Array(await file.slice(0, 1024).arrayBuffer()),
         );
         const storagePath = `${owner}/${meetingId}/${id}-${crypto.randomUUID()}${attachmentExtension(
-          file.name,
+          name,
         )}`;
         const { error } = await service.storage
           .from(DOCUMENT_BUCKET)

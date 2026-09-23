@@ -22,6 +22,7 @@ import {
 import { parseMinutes } from "../supabase/functions/_shared/summary.mjs";
 import {
   MAX_ATTACHMENT_SIZE,
+  attachmentDigest,
   attachmentTypes,
   attachmentExtension,
   checkAttachmentAdd,
@@ -771,7 +772,16 @@ export async function createApp({
         const meeting = getMeeting(meetingId),
           file = req.file;
         if (!file) throw fail(400, "添付資料を選択してください。");
-        const name = Buffer.from(file.originalname, "latin1").toString("utf8");
+        const receivedName = Buffer.from(file.originalname, "latin1").toString("utf8");
+        const digest = meeting.status === "uploading" &&
+            meeting.attachmentPlan?.some((entry) => entry.id === req.body.id && entry.sha256)
+          ? await attachmentDigest(file.buffer)
+          : null;
+        const name = checkAttachmentAdd(meeting, {
+          id: z.uuid().parse(req.body.id),
+          name: receivedName,
+          size: file.size,
+        }, digest);
         const attachment = {
           id: z.uuid().parse(req.body.id),
           name,
@@ -779,7 +789,6 @@ export async function createApp({
           type: attachmentTypes[attachmentExtension(name)],
           uploadedAt: new Date().toISOString(),
         };
-        checkAttachmentAdd(meeting, attachment);
         validateAttachmentBytes(name, file.buffer);
         const localFile = `${randomUUID()}${attachmentExtension(name)}`;
         destination = path.join(attachmentsDir, localFile);
