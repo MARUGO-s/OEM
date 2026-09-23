@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, RefreshCw, ReceiptText } from "lucide-react";
 import { api } from "./api";
-import { modelName, transcriptionModelName, type UsageMonth } from "./types";
+import { modelName, transcriptionModelName, type Meeting, type UsageMonth } from "./types";
 
 const monthNow = () => new Intl.DateTimeFormat("sv-SE", {
   timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit",
@@ -13,13 +13,14 @@ const when = (value: string) => new Intl.DateTimeFormat("ja-JP", {
   hour: "2-digit", minute: "2-digit",
 }).format(new Date(value));
 
-export function UsagePage() {
+export function UsagePage({ meetings }: { meetings: Meeting[] }) {
   const [month, setMonth] = useState(monthNow);
   const [page, setPage] = useState(0);
   const [revision, setRevision] = useState(0);
   const [data, setData] = useState<UsageMonth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const meetingNames = new Map(meetings.map((meeting) => [meeting.id, meeting.title]));
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -79,7 +80,7 @@ export function UsagePage() {
                   <tbody>{data.events.map((event) => (
                     <tr key={event.id}>
                       <td>{when(event.createdAt)}</td>
-                      <td><strong>{event.meetingTitle}</strong><small>{event.kind === "minutes" ? "会話解析・議事録" : "文字起こし"}</small></td>
+                      <td><strong>{meetingNames.get(event.meetingId) || event.meetingTitle}</strong><small>{event.kind === "minutes" ? "会話解析・議事録" : "文字起こし"}</small></td>
                       <td>{event.kind === "minutes" ? modelName(event.model) : transcriptionModelName(event.model)}<small>{event.provider}</small></td>
                       <td>
                         <span>入力 {integer(event.inputTokens)} token</span>

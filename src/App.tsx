@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowDownToLine,
   ArrowRight,
@@ -17,6 +17,7 @@ import {
   LoaderCircle,
   Menu,
   MessageSquareText,
+  Pencil,
   Plus,
   ReceiptText,
   Search,
@@ -42,6 +43,7 @@ import { SettingsDialog } from "./SettingsDialog";
 import { ActionList, MeetingDetail } from "./MeetingDetail";
 import { Calendar } from "./Calendar";
 import { UsagePage } from "./UsagePage";
+import { Modal } from "./Modal";
 import { tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
 
 type Page = "meetings" | "calendar" | "actions" | "usage" | "help";
@@ -61,6 +63,16 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [demoLoading, setDemoLoading] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState("");
+  const renameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!renameTarget) return;
+    const frame = requestAnimationFrame(() => renameInput.current?.select());
+    return () => cancelAnimationFrame(frame);
+  }, [renameTarget]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -93,7 +105,7 @@ export default function App() {
   }, [refresh]);
   const processing = meetings.some(isWorking);
   useEffect(() => {
-    if ((!processing && !isCloud) || editing) return;
+    if ((!processing && !isCloud) || editing || renameTarget) return;
     let stop = false;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -115,13 +127,39 @@ export default function App() {
       stop = true;
       clearTimeout(timer);
     };
-  }, [processing, editing]);
+  }, [processing, editing, renameTarget]);
   function updateMeeting(next: Meeting) {
     setMeetings((prev) =>
       prev.some((m) => m.id === next.id)
         ? prev.map((m) => (m.id === next.id ? next : m))
         : [next, ...prev],
     );
+  }
+  function openRename(meeting: Meeting) {
+    setRenameTarget(meeting.id);
+    setRenameDraft(meeting.title);
+    setRenameError("");
+    setSidebarOpen(false);
+  }
+  async function saveRename(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = renameDraft.trim();
+    if (!renameTarget || !title || title.length > 160) return;
+    setRenameBusy(true);
+    setRenameError("");
+    try {
+      const updated = await api<Meeting>(`/meetings/${renameTarget}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      });
+      updateMeeting(updated);
+      setRenameTarget(null);
+      notify("会議名を変更しました。共有画面にも反映されます。");
+    } catch (e) {
+      setRenameError((e as Error).message);
+    } finally {
+      setRenameBusy(false);
+    }
   }
   function go(next: Page) {
     setPage(next);
@@ -253,15 +291,22 @@ export default function App() {
         <div className="sidebar-recents">
           <span className="nav-label">最近の会議</span>
           {meetings.slice(0, 5).map((m) => (
-            <button
-              key={m.id}
-              className={selected === m.id ? "selected" : ""}
-              onClick={() => openMeeting(m.id)}
-            >
-              <FileText size={15} />
-              <span>{m.title}</span>
-              {isWorking(m) && <span className="status-dot pulse" />}
-            </button>
+            <div key={m.id} className={`recent-row ${selected === m.id ? "selected" : ""}`}>
+              <button className="recent-open" onClick={() => openMeeting(m.id)}>
+                <FileText size={15} />
+                <span>{m.title}</span>
+                {isWorking(m) && <span className="status-dot pulse" />}
+              </button>
+              <button
+                className="recent-rename"
+                aria-label={`${m.title}の名前を変更`}
+                title="名前を変更"
+                disabled={isWorking(m)}
+                onClick={() => openRename(m)}
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
           ))}
           {!meetings.length && (
             <p>
@@ -365,6 +410,7 @@ export default function App() {
                 if (date) setCalendarDate(date);
                 go("calendar");
               }}
+              onRename={openRename}
               onChange={updateMeeting}
               onDelete={(id) => {
                 setMeetings((prev) => prev.filter((m) => m.id !== id));
@@ -767,7 +813,7 @@ export default function App() {
               )}
             </>
           ) : page === "usage" ? (
-            <UsagePage />
+            <UsagePage meetings={meetings} />
           ) : (
             <Help
               onNew={() => setNewOpen(true)}
@@ -794,6 +840,35 @@ export default function App() {
             notify("AIの接続設定を保存しました");
           }}
         />
+      )}
+      {renameTarget && (
+        <Modal
+          title="会議名を変更"
+          subtitle="一覧・会議詳細・書き出し時の名前に反映されます。"
+          onClose={() => setRenameTarget(null)}
+          locked={renameBusy}
+        >
+          <form onSubmit={saveRename}>
+            <label className="field">
+              会議名
+              <input
+                ref={renameInput}
+                required
+                maxLength={160}
+                value={renameDraft}
+                onChange={(event) => {
+                  setRenameDraft(event.target.value);
+                  setRenameError("");
+                }}
+              />
+            </label>
+            {renameError && <p className="error-message" role="alert">{renameError}</p>}
+            <div className="modal-footer">
+              <button type="button" className="button secondary" disabled={renameBusy} onClick={() => setRenameTarget(null)}>キャンセル</button>
+              <button type="submit" className="button primary" disabled={renameBusy || !renameDraft.trim()}>保存する</button>
+            </div>
+          </form>
+        </Modal>
       )}
       {toast && (
         <div className="toast" role="status">
@@ -860,7 +935,7 @@ function Help({
           },
           {
             title: "内容を確認して、編集・書き出し",
-            text: "議事録タブの「議事録を編集」から本文を自由に修正し、「保存」で全員に共有できます。本文・カレンダー・AI抽出の要点やアクションは別々に管理され、本文の修正は他の欄に自動反映しません。同じ本文を同時に編集した場合は最後の保存が優先されます。「文字起こし」で音声を再生しながら確認・修正し、議事録を再生成することもできます。再生成は編集済み本文を上書きするため確認してください。「書き出す」からMarkdown・テキスト・JSONを保存でき、印刷からPDFにもできます。",
+            text: "会議名は詳細タイトル横の「名前を変更」、または左メニュー「最近の会議」の鉛筆ボタンから変更できます。議事録タブの「議事録を編集」から本文を自由に修正し、「保存」で全員に共有できます。本文・カレンダー・AI抽出の要点やアクションは別々に管理され、本文の修正は他の欄に自動反映しません。同じ本文を同時に編集した場合は最後の保存が優先されます。「文字起こし」で音声を再生しながら確認・修正し、議事録を再生成することもできます。再生成は編集済み本文を上書きするため確認してください。「書き出す」からMarkdown・テキスト・JSONを保存でき、印刷からPDFにもできます。",
           },
         ].map((step, i) => (
           <section key={step.title}>

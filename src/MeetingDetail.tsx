@@ -140,6 +140,7 @@ export function MeetingDetail({
   onBack,
   backLabel,
   onCalendar,
+  onRename,
   onChange,
   onDelete,
   notify,
@@ -149,6 +150,7 @@ export function MeetingDetail({
   onBack: () => void;
   backLabel: string;
   onCalendar: (date?: string) => void;
+  onRename: (meeting: Meeting) => void;
   onChange: (m: Meeting) => void;
   onDelete: (id: string) => void;
   notify: (s: string) => void;
@@ -332,7 +334,17 @@ export function MeetingDetail({
           </span>
           <span>MEETING NOTES</span>
         </div>
-        <h1>{m.title}</h1>
+        <div className="meeting-title-row">
+          <h1>{m.title}</h1>
+          <button
+            className="button secondary small"
+            disabled={processing || busy || editing || attachmentsBusy}
+            onClick={() => onRename(m)}
+            aria-label="会議名を変更"
+          >
+            <Pencil size={14} /> 名前を変更
+          </button>
+        </div>
         <div className="meeting-meta">
           <span>
             <CalendarDays size={15} />

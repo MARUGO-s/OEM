@@ -976,6 +976,23 @@ Deno.test(
           (await (await request("/meetings", "valid-b")).json()).length,
           1,
         );
+        const renamed = await request(`/meetings/${meeting.id}`, "valid-a", {
+          method: "PATCH",
+          body: JSON.stringify({ title: "変更後の会議" }),
+        });
+        const renamedMeeting = await renamed.json();
+        assert.equal(renamedMeeting.title, "変更後の会議");
+        assert.ok(renamedMeeting.markdown.startsWith("# 変更後の会議\n"));
+        assert.equal(
+          (await (await request(`/meetings/${meeting.id}`, "valid-b")).json()).title,
+          "変更後の会議",
+        );
+        assert.equal(
+          (await request(`/meetings/${meeting.id}`, "valid-b", {
+            method: "PATCH", body: JSON.stringify({ title: " " }),
+          })).status,
+          400,
+        );
         const edited = await request(`/meetings/${meeting.id}`, "valid-a", {
           method: "PATCH",
           body: JSON.stringify({ markdown: "手動修正" }),
@@ -986,6 +1003,12 @@ Deno.test(
             .markdown,
           "手動修正",
         );
+        const afterSecondRename = await (
+          await request(`/meetings/${meeting.id}`, "valid-a", {
+            method: "PATCH", body: JSON.stringify({ title: "さらに変更" }),
+          })
+        ).json();
+        assert.equal(afterSecondRename.markdown, "手動修正");
         assert.equal(
           (
             await request(`/meetings/${meeting.id}`, "valid-b", {

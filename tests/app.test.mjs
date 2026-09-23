@@ -643,6 +643,18 @@ test("テキスト取り込み、議事録編集、アクション完了、文�
     await request("/meetings", { method: "POST", body: payload() })
   ).json();
   await waitForJobs();
+  const renamed = await (
+    await request(`/meetings/${created.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: "  変更後の会議名  " }),
+    })
+  ).json();
+  assert.equal(renamed.title, "変更後の会議名");
+  assert.ok(renamed.markdown.startsWith("# 変更後の会議名\n"));
+  assert.equal((await (await request("/meetings")).json())[0].title, "変更後の会議名");
+  assert.equal((await request(`/meetings/${created.id}`, {
+    method: "PATCH", body: JSON.stringify({ title: "   " }),
+  })).status, 400);
   const edited = await (
     await request(`/meetings/${created.id}`, {
       method: "PATCH",
@@ -651,6 +663,14 @@ test("テキスト取り込み、議事録編集、アクション完了、文�
   ).json();
   assert.equal(edited.markdown, "# 編集済み");
   assert.deepEqual(edited.completedActions, [0]);
+  const renamedAgain = await (
+    await request(`/meetings/${created.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: "再変更" }),
+    })
+  ).json();
+  assert.equal(renamedAgain.title, "再変更");
+  assert.equal(renamedAgain.markdown, "# 編集済み", "手書きの見出しは変更しない");
   const corrected = await (
     await request(`/meetings/${created.id}`, {
       method: "PATCH",

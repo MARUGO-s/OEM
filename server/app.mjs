@@ -44,6 +44,7 @@ import {
   MAX_TEXT_LENGTH,
   MetadataSchema,
   PatchSchema,
+  renameMarkdownHeading,
   audioExtensions,
   minutesToMarkdown,
   safeError,
@@ -690,6 +691,12 @@ export async function createApp({
     lock(meeting.id);
     try {
       let next = { ...meeting, ...patch };
+      if (patch.title !== undefined && patch.markdown === undefined)
+        next.markdown = renameMarkdownHeading(
+          meeting.markdown,
+          meeting.title,
+          patch.title,
+        );
       if (
         patch.completedActions?.some(
           (i) => i >= (meeting.minutes?.actions.length || 0),

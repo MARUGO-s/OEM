@@ -45,6 +45,12 @@ export const PatchSchema = z
   })
   .strict();
 
+export function renameMarkdownHeading(markdown, previousTitle, nextTitle) {
+  const heading = /^# ([^\r\n]+)(\r?\n|$)/.exec(markdown);
+  if (!heading || heading[1] !== previousTitle) return markdown;
+  return `# ${nextTitle}${markdown.slice(heading[0].length - heading[2].length)}`;
+}
+
 export function timecode(seconds) {
   if (!Number.isFinite(seconds)) return "";
   const value = Math.max(0, Math.floor(seconds));

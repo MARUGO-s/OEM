@@ -8,6 +8,7 @@ import {
   MetadataSchema,
   minutesToMarkdown,
   PatchSchema,
+  renameMarkdownHeading,
   safeError,
 } from "../_shared/domain.mjs";
 import { createDemo } from "../_shared/demo.mjs";
@@ -1269,6 +1270,13 @@ export async function handler(req: Request) {
     if (!match[2] && req.method === "GET") return json(expose(record));
     if (!match[2] && req.method === "PATCH") {
       const patch: Doc = PatchSchema.parse(await jsonBody(req));
+      if (patch.title !== undefined && patch.markdown === undefined) {
+        patch.markdown = renameMarkdownHeading(
+          record.document.markdown,
+          record.document.title,
+          patch.title,
+        );
+      }
       if (
         patch.completedActions?.some(
           (i: number) => i >= (record.document.minutes?.actions.length || 0),

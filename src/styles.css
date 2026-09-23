@@ -477,26 +477,48 @@ button {
   letter-spacing: 0.2px;
   margin-bottom: 13px;
 }
-.sidebar-recents button {
-  width: 100%;
+.sidebar-recents .recent-row {
   display: flex;
   align-items: center;
+  border-radius: 6px;
+}
+.sidebar-recents .recent-open {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
   gap: 9px;
   padding: 10px 12px;
   text-align: left;
   font-size: 10px;
   color: #9699a6;
-  border-radius: 6px;
 }
-.sidebar-recents button span:not(.status-dot) {
+.sidebar-recents .recent-open span:not(.status-dot) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sidebar-recents button:hover,
-.sidebar-recents button.selected {
+.sidebar-recents .recent-row:hover,
+.sidebar-recents .recent-row.selected {
   color: var(--purple);
   background: #f7f6fc;
+}
+.sidebar-recents .recent-row:hover .recent-open,
+.sidebar-recents .recent-row.selected .recent-open {
+  color: var(--purple);
+}
+.sidebar-recents .recent-rename {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  height: 34px;
+  margin-right: 3px;
+  border-radius: 6px;
+  color: #8a80b2;
+}
+.sidebar-recents .recent-rename:hover {
+  background: #ebe8f9;
+  color: var(--purple);
 }
 .sidebar-recents p {
   font-size: 10px;
@@ -1669,6 +1691,19 @@ button {
   font-weight: 600;
   line-height: 1.65;
   margin: 9px 0 15px;
+}
+.meeting-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.meeting-title-row h1 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.meeting-title-row .button {
+  margin: 0 0 6px;
 }
 .meeting-meta {
   display: flex;
