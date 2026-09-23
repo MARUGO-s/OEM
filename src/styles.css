@@ -352,6 +352,8 @@ button {
   padding: 31px 20px 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
   z-index: 30;
 }
 .brand {
@@ -457,6 +459,9 @@ button {
 }
 .sidebar nav button:hover {
   background: #f5f4fb;
+}
+.sidebar nav button > .status-dot {
+  margin-left: auto;
 }
 .nav-count {
   margin-left: auto;

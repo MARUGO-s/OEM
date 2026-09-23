@@ -287,6 +287,14 @@ export default function App() {
               )}
             </button>
           ))}
+          <button onClick={() => {
+            setSettingsOpen(true);
+            setSidebarOpen(false);
+          }}>
+            <Settings2 size={18} />
+            <span>接続設定</span>
+            <span className={`status-dot ${settings?.configured ? "" : "off"}`} />
+          </button>
         </nav>
         <div className="sidebar-recents">
           <span className="nav-label">最近の会議</span>
@@ -326,16 +334,6 @@ export default function App() {
               </small>
             </div>
           </div>
-          <button
-            className="settings-link"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings2 size={17} />
-            接続設定
-            <span
-              className={`status-dot ${settings?.configured ? "" : "off"}`}
-            />
-          </button>
           {isCloud && (
             <button
               className="settings-link"
