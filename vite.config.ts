@@ -1,8 +1,18 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-// https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  base: mode === "production" ? "/OEM/" : "/",
   plugins: [react()],
-  base: '/OEM/',
-})
+  build: {
+    rollupOptions: {
+      output: { manualChunks: { supabase: ["@supabase/supabase-js"] } },
+    },
+  },
+  server: {
+    host: "127.0.0.1",
+    port: 5188,
+    strictPort: true,
+    proxy: { "/api": "http://127.0.0.1:4318" },
+  },
+}));

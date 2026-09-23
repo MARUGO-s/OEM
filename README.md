@@ -1,73 +1,76 @@
-# React + TypeScript + Vite
+# kotonoha — 会議録ワークスペース
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+録音済みの音声を取り込み、文字起こし → 会話解析 → 議事録作成まで一括で行う日本語Webアプリです。リアルタイム録音ではありません。
 
-Currently, two official plugins are available:
+公開先: [kotonoha](https://marugo-s.github.io/OEM/)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 使い始める
 
-## React Compiler
+1. Recipe-Managementの既存Supabaseアカウント（メールアドレス・パスワード）でログインします。新規登録や他アプリの認証設定の変更は行いません。アカウントが必要な場合は管理者へお問い合わせください。
+2. 左下の「接続設定」に、自分のOpenAI APIキーを入力します。文字起こしは `gpt-4o-transcribe`、議事録は `gpt-6-astra` または `gpt-6-sol` を使います。利用するAPIプロジェクトに対象モデルの権限・利用枠が必要です。設定保存は疎通確認を意味しません。
+3. 録音ファイル、または文字起こし済みのトークを取り込みます。会議名、開催日、参加者、議事録の詳しさを指定できます。
+4. 「議事録」「文字起こし」「アクション」で確認・編集します。文字起こし修正後の再生成、音声再生、アクションの完了チェックもできます。
+5. Markdown・テキスト・JSONで書き出せます。印刷画面からPDFにも保存できます。
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+ログイン後の「サンプルを開く」はOpenAIキー不要です。架空の固定データであり、AI処理をしたふりはしません。
 
-## Expanding the ESLint configuration
+## データと安全性
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Supabaseプロジェクト `hjhkccbktkscwtgzxjfq`（Recipe-Management）に間借りしています。会議録専用の非公開 `kotonoha` スキーマを使い、既存の業務テーブル・関数・Storageポリシー・Auth設定を変更しません。
+- 会議と設定は本人単位で分離。ブラウザからテーブルや保存RPCを直接呼べません。`kotonoha-api` がSupabase Authでトークンを検証したうえで、本人IDを付与して操作します。
+- 音声は非公開バケット `kotonoha-audio` に保存し、本人にのみ1時間の署名付き再生URLを発行します。URLは他人に共有しないでください。
+- OpenAIキーは利用者別にAES-256-GCMで暗号化し、会議録専用のサーバー鍵で保存します。他アプリの `OPENAI_API_KEY` は使用・変更しません。
+- AI解析時は音声とテキストをOpenAIへ送信します。議事録はResponses APIのStructured Outputs（medium）を使用。クラウド版は長い生成に対応するため `background: true, store: true` です。結果取得に必要なデータがOpenAI側にも保存されます。機密情報の利用可否を確認してください。
+- 削除は論理削除で、通常画面から非表示になります。音声は保持します。復元・完全消去は管理者対応で、自動消去はありません。
+- 同じSupabaseのAuthと計算資源は共用なので、負荷や利用枠まで完全に分離するものではありません。同時AI処理は利用者あたり2件に制限しています。
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 対応範囲と制限
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- MP3 / M4A / WAV / MP4 / MPEG / MPGA / WebM / OGG / FLAC、1ファイル24 MBまで。
+- 自動圧縮・自動分割は未実装です。大きな録音、文字起こしが時間切れになる長い録音は、圧縮または分割してください。クラウドの文字起こし待機上限は110秒です。
+- トーク貼り付けは10万文字まで。最大1,000会議／利用者。
+- GPT-4o Transcribeの出力に、話者名・発言時刻を推測で付けません。サンプルの話者と時刻は説明用の固定データです。
+- AIには決定と提案を区別し、明示されていない担当・期限を「未定」にするよう指示します。出力は必ず録音と照合してください。
+- 議事録本文の編集と、構造化された要点・決定事項・アクションは別に保存されます。本文の編集だけでは解析結果欄は変わりません。再生成は本文と解析結果を更新し、完了チェックをリセットします。
+- 文字起こし完了時に一度保存します。議事録だけ失敗した場合は保存済みテキストから再試行し、文字起こしを繰り返しません。クラウドは画面を閉じてもAI生成を続け、次回画面を開いた際に結果を取り込みます。長期間開かなかった場合など結果を取得できなければ再生成が必要です。
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## ローカル開発
+
+Node.js 22.18以上。
+
+```sh
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+開発画面: http://127.0.0.1:5188 。開発時はローカルモードで、会議・音声を `.data/` に保存します。キーはサーバーのメモリだけに保持し、再起動時は再設定が必要です。環境変数でも設定できます（`.env.example`）。Dropbox配下での開発は `.data` や `.env` が同期される可能性に注意してください。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+ローカルで削除した記録は `.data/trash/<ID>/` に移動します。復元時はサーバーを停止し、`meeting.json` を `.data/meetings/<ID>.json`、音声を元の `.data/audio/` へ戻します。
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+クラウド接続の開発画面:
+
+```sh
+VITE_STORAGE_MODE=supabase npx vite --port 5189
 ```
+
+`npm run build` はGitHub Pages `/OEM/` 用クラウド版です。`npm start` はローカルAPIサーバー用です（公開環境には不要）。
+
+## 検証
+
+```sh
+npm run check
+deno check --config supabase/functions/kotonoha-api/deno.json supabase/functions/kotonoha-api/index.ts
+deno test --allow-env --config supabase/functions/kotonoha-api/deno.json tests/cloud-api.test.ts
+```
+
+Nodeテストはアップロード・保存・再試行・編集・削除・アクセス制限・APIモデル指定・キー暗号化を確認します。EdgeテストはHTTP通信を模擬し、未認証拒否、所有者分離、Astra/Sol生成、結果取得、音声の取り込みを確認します。OpenAI実課金リクエストは実行しません。
+
+デプロイ・復旧手順と既存DBの照合情報は [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
+
+## 公式仕様
+
+- [Speech to text](https://developers.openai.com/api/docs/guides/speech-to-text)
+- [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
+- [Background mode](https://developers.openai.com/api/docs/guides/background)
+- [GPT-4o Transcribe](https://developers.openai.com/api/docs/models/gpt-4o-transcribe)
+- [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra) / [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol)
