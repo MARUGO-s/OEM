@@ -4,6 +4,12 @@ import { decryptApiKey } from "../supabase/functions/_shared/key-crypto.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
 import { documentFixtures, reviewFixture } from "./fixtures/documents.mjs";
 import {
+  calendarMeeting,
+  calendarEvent,
+  editFields,
+} from "./fixtures/calendar.mjs";
+import { eventKey } from "../supabase/functions/_shared/calendar.mjs";
+import {
   createToken,
   hashToken,
 } from "../supabase/functions/_shared/session.mjs";
@@ -85,6 +91,7 @@ globalThis.fetch = async (input, init: any) => {
       "/rest/v1/rpc/kotonoha_store",
       "/rest/v1/rpc/kotonoha_audio_upload",
       "/rest/v1/rpc/kotonoha_attachments",
+      "/rest/v1/rpc/kotonoha_calendar",
     ].includes(url.pathname)
   ) {
     const {
@@ -118,6 +125,19 @@ globalThis.fetch = async (input, init: any) => {
     const row = rows.get(id);
     if (!row || row.owner !== user)
       return json({ message: "NOT_FOUND", code: "P0002" }, 404);
+    if (url.pathname.endsWith("kotonoha_calendar")) {
+      if (
+        ["uploading", "transcribing", "analyzing"].includes(row.document.status)
+      )
+        return json({ message: "BUSY" }, 400);
+      row.document.calendarOverrides ||= {};
+      if (op === "set")
+        row.document.calendarOverrides[payload.eventId] = payload.value;
+      else if (op === "reset")
+        delete row.document.calendarOverrides[payload.eventId];
+      else throw new Error("Unexpected calendar operation");
+      return json(row);
+    }
     if (
       url.pathname.endsWith("kotonoha_attachments") &&
       ["add", "remove"].includes(op)
@@ -312,6 +332,89 @@ Deno.test(
   "Cloud HTTP: fixed login, shared sessions, encrypted settings, upload, GPT pipeline and edits",
   async () => {
     try {
+      const calendar = calendarMeeting(),
+        eventId = eventKey(calendarEvent),
+        calRoute = `/meetings/${calendar.id}`;
+      rows.set(calendar.id, {
+        owner,
+        document: calendar,
+        audioPath: null,
+        responseId: null,
+      });
+      const patch = {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...editFields(calendarEvent),
+          date: "2026-10-16",
+          owner: "田中",
+        }),
+      };
+      assert.equal(
+        (await request(`${calRoute}/calendar/${eventId}`, "anonymous", patch))
+          .status,
+        401,
+      );
+      assert.equal(
+        (await request(`${calRoute}/calendar/${eventId}`, "valid-a", patch))
+          .status,
+        200,
+      );
+      const fromB = await (await request(calRoute, "valid-b")).json();
+      assert.equal(fromB.calendarOverrides[eventId].event.date, "2026-10-16");
+      assert.equal(
+        fromB.calendarOverrides[eventId].original.date,
+        "2026-10-15",
+      );
+      assert.equal(
+        (
+          await request(calRoute, "valid-b", {
+            method: "PATCH",
+            body: JSON.stringify({ markdown: "# 全員に共有する手動の本文" }),
+          })
+        ).status,
+        200,
+      );
+      assert.equal(
+        (await (await request(calRoute, "valid-a")).json()).markdown,
+        "# 全員に共有する手動の本文",
+      );
+      assert.equal(
+        rows.get(calendar.id).document.calendarOverrides[eventId].event.owner,
+        "田中",
+      );
+      assert.equal(
+        (
+          await request(
+            `${calRoute}/calendar/0000000000000000`,
+            "valid-a",
+            patch,
+          )
+        ).status,
+        404,
+      );
+      assert.equal(
+        (
+          await request(`${calRoute}/calendar/${eventId}`, "valid-b", {
+            method: "PATCH",
+            body: JSON.stringify({
+              ...editFields(calendarEvent),
+              date: "2026-02-30",
+            }),
+          })
+        ).status,
+        400,
+      );
+      assert.equal(calls.length, 0, "manual edits must never call OpenAI");
+      assert.equal(
+        (
+          await request(`${calRoute}/calendar/${eventId}`, "valid-b", {
+            method: "DELETE",
+          })
+        ).status,
+        200,
+      );
+      assert.deepEqual(rows.get(calendar.id).document.calendarOverrides, {});
+      rows.delete(calendar.id);
       assert.equal((await request("/meetings", "invalid")).status, 401);
       assert.equal((await request("/meetings", "anonymous")).status, 401);
       assert.equal((await request("/meetings", createToken())).status, 401);

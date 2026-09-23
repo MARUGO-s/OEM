@@ -14,6 +14,89 @@ import { aacFixture } from "./fixtures/aac.mjs";
 import { splitRecordings } from "../src/split-recordings.mjs";
 import { randomUUID } from "node:crypto";
 import { documentFixtures, reviewFixture } from "./fixtures/documents.mjs";
+import {
+  calendarMeeting,
+  calendarEvent,
+  editFields,
+} from "./fixtures/calendar.mjs";
+import { eventKey } from "../supabase/functions/_shared/calendar.mjs";
+
+test("予定と議事録本文の手動編集を永続化し、再生成でも予定の変更を保持する", async (t) => {
+  const { request, store, waitForJobs, dataDir } = await setup(t, {
+    apiKey: key,
+    aiFactory: () => ({ summarize: async () => calendarMeeting().minutes }),
+  });
+  const m = calendarMeeting();
+  await store.save(m);
+  const route = `/meetings/${m.id}`,
+    id = eventKey(calendarEvent),
+    edit = {
+      ...editFields(calendarEvent),
+      date: "2026-10-16",
+      location: "オンライン",
+    };
+  const patch = (body) => ({ method: "PATCH", body: JSON.stringify(body) });
+  assert.equal(
+    (await request(`${route}/calendar/${id}`, patch(edit))).status,
+    200,
+  );
+  const saved = await (await request(route)).json();
+  assert.equal(saved.calendarOverrides[id].event.date, edit.date);
+  assert.equal(saved.markdown, m.markdown);
+  assert.equal(
+    (
+      await request(
+        route,
+        patch({ markdown: "# 手動修正した議事録\n決定事項を追記" }),
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    store.get(m.id).markdown,
+    "# 手動修正した議事録\n決定事項を追記",
+  );
+  assert.equal(
+    store.get(m.id).calendarOverrides[id].event.location,
+    "オンライン",
+  );
+  const reloaded = new MeetingStore(path.join(dataDir, "meetings"));
+  await reloaded.init();
+  assert.deepEqual(
+    reloaded.get(m.id).calendarOverrides,
+    store.get(m.id).calendarOverrides,
+  );
+  assert.equal(
+    (
+      await request(
+        `${route}/calendar/${id}`,
+        patch({ ...edit, endTime: "12:00" }),
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await request(`${route}/calendar/0000000000000000`, patch(edit))).status,
+    404,
+  );
+  assert.equal(
+    (await request(`${route}/retry`, { method: "POST" })).status,
+    202,
+  );
+  await waitForJobs();
+  assert.equal(store.get(m.id).calendarOverrides[id].event.date, "2026-10-16");
+  await store.save({ ...store.get(m.id), status: "analyzing" });
+  assert.equal(
+    (await request(`${route}/calendar/${id}`, patch(edit))).status,
+    409,
+  );
+  await store.save({ ...store.get(m.id), status: "done" });
+  assert.equal(
+    (await request(`${route}/calendar/${id}`, { method: "DELETE" })).status,
+    200,
+  );
+  assert.deepEqual(store.get(m.id).calendarOverrides, {});
+});
 
 const sampleMinutes = createDemo().minutes;
 const key = "sk-test-only-not-a-real-api-key";

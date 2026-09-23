@@ -4,6 +4,7 @@ export interface Action {
   due: string;
 }
 export interface Minutes {
+  scheduleEvents?: ScheduleEvent[];
   summary: string;
   topics: { title: string; points: string[] }[];
   decisions: string[];
@@ -31,6 +32,15 @@ export interface Attachment {
   uploadedAt: string;
 }
 export interface Meeting {
+  calendarOverrides?: Record<
+    string,
+    {
+      event: CalendarEdit;
+      original: ScheduleEvent;
+      analysisVersion: string;
+      updatedAt: string;
+    }
+  >;
   id: string;
   title: string;
   date: string;
@@ -67,6 +77,46 @@ export interface Settings {
   transcriptionModel: string;
   maxFileSize: number;
 }
+export interface ScheduleEvent {
+  title: string;
+  kind: "event" | "deadline";
+  date: string | null;
+  endDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  dateText: string;
+  status: "confirmed" | "tentative" | "needs_confirmation";
+  source: "conversation" | "document";
+  attachmentId: string | null;
+  location: string;
+  owner: string;
+  evidence: string;
+}
+export type CalendarEdit = Pick<
+  ScheduleEvent,
+  | "title"
+  | "kind"
+  | "date"
+  | "endDate"
+  | "startTime"
+  | "endTime"
+  | "status"
+  | "location"
+  | "owner"
+>;
+export type CalendarEntry = ScheduleEvent & {
+  id: string;
+  meetingId: string;
+  meetingTitle: string;
+  meetingDate: string;
+  manual: boolean;
+  legacy: boolean;
+  orphan: boolean;
+  notes: string[];
+  original: ScheduleEvent;
+  sourceName: string;
+  updatedAt: string | null;
+};
 export const isWorking = (m: Meeting) =>
   ["transcribing", "analyzing"].includes(m.status);
 export const modelName = (id?: string) =>

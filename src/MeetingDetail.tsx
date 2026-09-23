@@ -25,6 +25,7 @@ import { api, download, audioUrl } from "./api";
 import { clock, isWorking, modelName, type Meeting } from "./types";
 import { Modal } from "./Modal";
 import { AttachmentPanel } from "./Attachments";
+import { MeetingSchedule } from "./Calendar";
 
 function Markdown({ content }: { content: string }) {
   return (
@@ -131,6 +132,8 @@ export function ActionList({
 export function MeetingDetail({
   meeting: m,
   onBack,
+  backLabel,
+  onCalendar,
   onChange,
   onDelete,
   notify,
@@ -138,6 +141,8 @@ export function MeetingDetail({
 }: {
   meeting: Meeting;
   onBack: () => void;
+  backLabel: string;
+  onCalendar: (date?: string) => void;
   onChange: (m: Meeting) => void;
   onDelete: (id: string) => void;
   notify: (s: string) => void;
@@ -202,7 +207,7 @@ export function MeetingDetail({
         }),
       );
       setEditing(false);
-      notify("変更を保存しました");
+      notify("変更を保存しました。全員の共有内容に反映されます。");
     } catch (e) {
       notify((e as Error).message);
     } finally {
@@ -244,7 +249,7 @@ export function MeetingDetail({
           onClick={onBack}
         >
           <ArrowLeft size={16} />
-          すべての会議
+          {backLabel}
         </button>
         <div className="detail-tools">
           <span className="autosave">
@@ -376,6 +381,13 @@ export function MeetingDetail({
           文字起こし、または添付資料が変更されています。現在の議事録は変更前の内容です。反映するには「再生成」を実行してください。
         </div>
       )}
+      {!m.isDemo && (
+        <MeetingSchedule
+          meeting={m}
+          onOpen={onCalendar}
+          disabled={editing || attachmentsBusy || busy}
+        />
+      )}
       <AttachmentPanel
         meeting={m}
         locked={processing || editing || busy || m.status === "uploading"}
@@ -422,7 +434,15 @@ export function MeetingDetail({
                     <>
                       <button
                         className="text-button"
-                        onClick={() => setEditing(false)}
+                        onClick={() => {
+                          if (
+                            draft === displayText ||
+                            window.confirm(
+                              "保存していない本文の変更を破棄しますか？",
+                            )
+                          )
+                            setEditing(false);
+                        }}
                         disabled={busy}
                       >
                         <X size={14} />
@@ -463,7 +483,9 @@ export function MeetingDetail({
                         disabled={processing || attachmentsBusy}
                       >
                         <Pencil size={14} />
-                        編集
+                        {tab === "minutes"
+                          ? "議事録を編集"
+                          : "文字起こしを編集"}
                       </button>
                     </>
                   )}
@@ -475,7 +497,7 @@ export function MeetingDetail({
             <div className="editor-wrap">
               <p>
                 {tab === "minutes"
-                  ? "見出しは「## 」、箇条書きは「- 」で記入できます。アクションの完了状態は別タブで管理します。"
+                  ? "見出しは「## 」、箇条書きは「- 」で記入できます。「保存」で全員に共有します。カレンダー・AI抽出の要点・決定事項・アクションは別管理のため、本文の変更は自動反映しません。再生成すると編集した本文は上書きされます。"
                   : "文字起こしの修正後、議事録を再生成できます。"}
               </p>
               <textarea
@@ -578,7 +600,7 @@ export function MeetingDetail({
           <div className="insight-card">
             <h3>
               <Sparkles size={17} />
-              会議のポイント
+              会議のポイント（AI抽出）
             </h3>
             <p>
               {m.minutes?.summary ||
@@ -588,7 +610,8 @@ export function MeetingDetail({
           <div className="insight-card">
             <h3>
               <CheckCheck size={17} />
-              決まったこと<span>{m.minutes?.decisions.length || 0}</span>
+              決まったこと（AI抽出）
+              <span>{m.minutes?.decisions.length || 0}</span>
             </h3>
             {m.minutes?.decisions.length ? (
               <ul className="decision-list">
@@ -675,7 +698,7 @@ export function MeetingDetail({
               ? m.status === "uploading"
                 ? "取り込み途中の会議を一覧から取り除きます。クラウドに送信済みの未完了音声は完全に削除され、元に戻せません。元の録音ファイルから再度取り込めます。"
                 : "会議と音声を一覧から取り除き、アプリの保存先にあるゴミ箱へ移動します。"
-              : "現在の文字起こし・全添付資料と接続設定のモデルで再解析します。編集した議事録とアクションの完了状態は上書きされます。API利用料がかかります。"}
+              : "現在の文字起こし・全添付資料と接続設定のモデルで再解析します。編集した議事録本文とアクションの完了状態は上書きされます。カレンダーの手動変更は保持します。API利用料がかかります。"}
           </p>
           <div className="modal-footer">
             <button

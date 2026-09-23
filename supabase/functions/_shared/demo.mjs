@@ -62,6 +62,7 @@ export function createDemo() {
   };
   meeting.transcript = transcriptFromSegments(meeting.segments);
   meeting.minutes = {
+    scheduleEvents: [],
     summary:
       "新サービスの公開に向け、デザイン・開発・お客様への案内の進捗を確認しました。10月15日に既存のお客様限定で公開する方針を決定。最終デザイン、結合テスト、案内メールの担当と期限を整理しました。一般公開の時期と料金プランは引き続き検討します。",
     topics: [

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { calendarChange } from "../_shared/calendar.mjs";
 import {
   MAX_FILE_SIZE,
   MAX_TEXT_LENGTH,
@@ -92,6 +93,8 @@ async function store(
     p_payload: payload,
   });
   if (error) {
+    if (error.message.includes("CALENDAR_LIMIT"))
+      throw fail(400, "1会議の手動予定は200件までです。");
     if (error.message.includes("ATTACHMENT_LIMIT"))
       throw fail(
         400,
@@ -737,6 +740,45 @@ export async function handler(req: Request) {
             .remove(audioParts.map((part) => part.audioPath));
         throw error;
       }
+    }
+    const calendarMatch = route.match(
+      /^\/meetings\/([a-f0-9-]{36})\/calendar\/([a-f0-9]{16})$/,
+    );
+    if (calendarMatch) {
+      const id = z.uuid().parse(calendarMatch[1]),
+        eventId = calendarMatch[2];
+      const record = await store("get", owner, id);
+      if (
+        ["uploading", "transcribing", "analyzing"].includes(
+          record.document.status,
+        )
+      )
+        throw fail(409, "解析・取り込み中は予定を変更できません。");
+      if (req.method === "PATCH") {
+        const value = calendarChange(
+          record.document,
+          eventId,
+          await jsonBody(req),
+        );
+        return json(
+          expose(
+            await store(
+              "set",
+              owner,
+              id,
+              { eventId, value },
+              "kotonoha_calendar",
+            ),
+          ),
+        );
+      }
+      if (req.method === "DELETE")
+        return json(
+          expose(
+            await store("reset", owner, id, { eventId }, "kotonoha_calendar"),
+          ),
+        );
+      throw fail(405, "この操作には対応していません。");
     }
     const attachmentMatch = route.match(
       /^\/meetings\/([a-f0-9-]{36})\/attachments(?:\/([a-f0-9-]{36}))?$/,

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { MeetingStore } from "./store.mjs";
 import { createAI } from "./ai.mjs";
 import { createDemo } from "./demo.mjs";
+import { calendarChange } from "../supabase/functions/_shared/calendar.mjs";
 import { parseMinutes } from "../supabase/functions/_shared/summary.mjs";
 import {
   MAX_ATTACHMENT_SIZE,
@@ -484,6 +485,45 @@ export async function createApp({
     }
   });
 
+  app.patch("/api/meetings/:id/calendar/:eventId", async (req, res) => {
+    const id = req.params.id;
+    lock(id);
+    try {
+      const m = getMeeting(id);
+      if (working(m.status) || m.status === "uploading")
+        throw fail(409, "解析・取り込み中は予定を変更できません。");
+      if (!/^[a-f0-9]{16}$/.test(req.params.eventId))
+        throw fail(400, "予定IDが不正です。");
+      const value = calendarChange(m, req.params.eventId, req.body);
+      const edits = {
+        ...(m.calendarOverrides || {}),
+        [req.params.eventId]: value,
+      };
+      if (Object.keys(edits).length > 200)
+        throw fail(400, "1会議の手動予定は200件までです。");
+      res.json(
+        publicRecord(await store.save({ ...m, calendarOverrides: edits })),
+      );
+    } finally {
+      busy.delete(id);
+    }
+  });
+  app.delete("/api/meetings/:id/calendar/:eventId", async (req, res) => {
+    const id = req.params.id;
+    lock(id);
+    try {
+      const m = getMeeting(id);
+      if (working(m.status) || m.status === "uploading")
+        throw fail(409, "解析・取り込み中は予定を変更できません。");
+      const edits = { ...(m.calendarOverrides || {}) };
+      delete edits[req.params.eventId];
+      res.json(
+        publicRecord(await store.save({ ...m, calendarOverrides: edits })),
+      );
+    } finally {
+      busy.delete(id);
+    }
+  });
   app.patch("/api/meetings/:id", async (req, res) => {
     const patch = PatchSchema.parse(req.body);
     const meeting = getMeeting(req.params.id);

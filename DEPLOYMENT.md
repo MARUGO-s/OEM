@@ -25,6 +25,8 @@ supabase functions deploy kotonoha-api --project-ref hjhkccbktkscwtgzxjfq --no-v
 
 ## DB変更の注意
 
+カレンダー対応は `20260923000500_kotonoha_calendar.sql` のみを適用してからEdge Function・フロントを公開します。service_role限定 `public.kotonoha_calendar` を追加し、既存専用会議documentの `calendarOverrides` に1予定ずつ行ロックで保存します。共有の業務テーブル・Auth・Storageは変更しません。本文編集は従来のPATCHで保存し、予定とは独立しています。再生成時も手動変更を残します。
+
 添付資料対応は `20260923000400_kotonoha_attachments.sql` のみを適用してからEdge Function・フロントを公開します。専用の非公開 `kotonoha-documents` バケット（各10 MB）とservice_role限定 `public.kotonoha_attachments` RPCを追加します。共用のStorageポリシー・Auth・業務テーブルは変更しません。資料のメタデータは既存専用会議documentの `attachments` / `attachmentPlan` に保存します。保存後の完了・変更は行ロックで排他制御し、同時追加でも個数・合計容量を超えません。
 
 関連付けを解除した資料は `document.removedAttachments` とStorageに保持します。復元時は対象の会議・資料ID・パスを照合して管理者がメタデータを戻します（最大5ファイル・25 MB制限を再確認）。完全消去時は `attachments` と `removedAttachments` の**両方**の保存パスを確認し、明示した対象だけを消去します。バケット全体を削除しないでください。解析中の変更は禁止です。過去の資料非対応版へ戻すと添付資料が解析されないため、ロールバックは添付資料対応版に限ります。
@@ -50,6 +52,15 @@ DB実動確認は `tests/cloud-database.sql` を使用します。専用領域�
 - `node scripts/check-cloud-attachments.mjs` は**実課金あり**の検証です。隠した標準入力に共通ログインのJSONを渡します。サーバー内の既存キーを使い、架空のPDF・DOCX・XLSX（合計4,154バイト）を原本とハッシュ照合、別セッションから共有閲覧、1件の実AI生成を確認します。確認後は作成した会議だけを論理削除し、検証資料は復元可能なまま保持します。
 - 実際の `gpt-6-astra` で3資料全件の照合結果を取得。資料案10月1日／80万円と会議決定10月15日／60万円の差異、未決定のテレビ広告案、PDFページ・Excelシートの根拠を確認しました。実モデルでのSol・旧Office形式・大容量資料の網羅検証ではありません。
 - Nodeテスト28件、クラウドHTTPテスト1件（音声＋資料／テキスト＋資料の入出力、私有パス非公開、再生成・解除等）、UIで新規添付・既存会議への追加・再生成・未反映表示の解消を確認します。通常テストでは実API課金は発生しません。
+
+## カレンダー・本文編集の検証（2026-09-23）
+
+- Node35件とクラウドHTTP1件が成功。日付・閏年・期間・曖昧な表現、旧議事録の互換表示、手動変更の永続化と再生成後の保持、別ログインでの本文・予定共有を確認。
+- `node scripts/check-cloud-calendar.mjs` は**実課金あり（架空の会話1件）**。隠した標準入力に共通ログインのJSONを渡します。実際の `gpt-6-astra` で10月15日14–15時／本社会議室／佐藤、明日9月24日の期限、10月18日の未決定案、日付未定を分けて取得しました。中止した旧日程10月1日は登録されませんでした。
+- 公開APIを通して2セッションで別々の予定を編集し、相互に消えないこと、元の根拠を保持すること、本文編集が共有されること、1件だけ変更解除できることを確認。検証会議だけを論理削除し、既存の実会議は変更していません。
+- Supabase接続のSQL実行は `supabase_read_only_user` のため、書き込み型の `tests/cloud-calendar-database.sql` は権限拒否されました。権限は拡張せず、実際の保存経路である公開Edge APIの上記検証を実施しました。同SQLは管理者権限の検証用として残しています。
+- 他アプリpublic関数 `7af59434191676da1f1a0fcff37af937`、public列定義 `900122c8d03a27b20423f3d6b61c45c4`、Storageポリシー `9c044294871791de09c995a1fc1230b3` の定義ハッシュが追加前後で一致。新RPCはanon/authenticated不可、service_roleのみ実行可。
+- `node scripts/check-calendar-server.mjs` は架空のローカルデータだけのUI検証用サーバー（5192）です。終了時に作成した一時ディレクトリだけを削除します。実際のOpenAIは呼びません。
 
 ## 復旧
 

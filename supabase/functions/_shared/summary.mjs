@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { MinutesSchema } from "./domain.mjs";
-export const EnrichedMinutesSchema = MinutesSchema.extend({
+import {
+  ScheduleEventSchema,
+  normalizeScheduleEvents,
+  calendarPrompt,
+} from "./calendar.mjs";
+export const CalendarMinutesSchema = MinutesSchema.extend({
+  scheduleEvents: z.array(ScheduleEventSchema),
+});
+export const EnrichedMinutesSchema = CalendarMinutesSchema.extend({
   documentReview: z.array(
     z.object({
       attachmentId: z.string(),
@@ -20,9 +28,13 @@ export const EnrichedMinutesSchema = MinutesSchema.extend({
   ),
 });
 export const schemaForMeeting = (meeting) =>
-  meeting.attachments?.length ? EnrichedMinutesSchema : MinutesSchema;
+  meeting.attachments?.length ? EnrichedMinutesSchema : CalendarMinutesSchema;
 export function parseMinutes(meeting, value) {
-  const minutes = schemaForMeeting(meeting).parse(value);
+  // Responses already running at deployment may use the previous schema.
+  const hasSchedule = Object.hasOwn(value || {}, "scheduleEvents");
+  const minutes = schemaForMeeting(meeting).parse(
+    hasSchedule ? value : { ...value, scheduleEvents: [] },
+  );
   if (meeting.attachments?.length) {
     const ids = minutes.documentReview.map((r) => r.attachmentId);
     if (
@@ -32,7 +44,13 @@ export function parseMinutes(meeting, value) {
     )
       throw new Error("Incomplete document review");
   }
-  return minutes;
+  if (hasSchedule)
+    return {
+      ...minutes,
+      scheduleEvents: normalizeScheduleEvents(meeting, minutes.scheduleEvents),
+    };
+  const { scheduleEvents: _old, ...legacy } = minutes;
+  return legacy;
 }
 export function summaryInput(meeting, files = []) {
   const style =
@@ -66,7 +84,7 @@ export function summaryInput(meeting, files = []) {
       ]
     : metadata;
   return [
-    { role: "system", content: system },
+    { role: "system", content: system + calendarPrompt },
     { role: "user", content },
   ];
 }

@@ -38,12 +38,15 @@ import {
 import { NewMeeting } from "./NewMeeting";
 import { SettingsDialog } from "./SettingsDialog";
 import { ActionList, MeetingDetail } from "./MeetingDetail";
+import { Calendar } from "./Calendar";
+import { tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
 
-type Page = "meetings" | "actions" | "help";
+type Page = "meetings" | "calendar" | "actions" | "help";
 export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [page, setPage] = useState<Page>("meetings");
+  const [calendarDate, setCalendarDate] = useState(tokyoToday);
   const [selected, setSelected] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -125,7 +128,7 @@ export default function App() {
   }
   function openMeeting(id: string) {
     setSelected(id);
-    setPage("meetings");
+    if (page !== "calendar") setPage("meetings");
     setSidebarOpen(false);
     window.scrollTo({ top: 0 });
   }
@@ -168,11 +171,13 @@ export default function App() {
         .includes(search.toLowerCase()),
   );
   const pageTitle =
-    page === "actions"
-      ? "アクション"
-      : page === "help"
-        ? "使い方ガイド"
-        : "会議ワークスペース";
+    page === "calendar"
+      ? "共有カレンダー"
+      : page === "actions"
+        ? "アクション"
+        : page === "help"
+          ? "使い方ガイド"
+          : "会議ワークスペース";
   return (
     <div className="app-shell">
       {sidebarOpen && (
@@ -218,6 +223,7 @@ export default function App() {
           {(
             [
               { id: "meetings", Icon: LayoutGrid, label: "すべての会議" },
+              { id: "calendar", Icon: CalendarDays, label: "カレンダー" },
               { id: "actions", Icon: ListTodo, label: "アクション" },
               { id: "help", Icon: BookOpen, label: "使い方ガイド" },
             ] as const
@@ -346,6 +352,13 @@ export default function App() {
               key={current.id}
               meeting={current}
               onBack={() => setSelected(null)}
+              backLabel={
+                page === "calendar" ? "カレンダーへ戻る" : "すべての会議"
+              }
+              onCalendar={(date) => {
+                if (date) setCalendarDate(date);
+                go("calendar");
+              }}
               onChange={updateMeeting}
               onDelete={(id) => {
                 setMeetings((prev) => prev.filter((m) => m.id !== id));
@@ -680,6 +693,17 @@ export default function App() {
                 </button>
               </div>
             </>
+          ) : page === "calendar" ? (
+            <Calendar
+              meetings={meetings}
+              selectedDate={calendarDate}
+              onSelectDate={setCalendarDate}
+              onOpenMeeting={openMeeting}
+              onNew={() => setNewOpen(true)}
+              onChange={updateMeeting}
+              onEditingChange={setEditing}
+              notify={notify}
+            />
           ) : page === "actions" ? (
             <>
               <div className="page-heading">
@@ -817,8 +841,12 @@ function Help({
             text: "新しい会議の「会議の添付資料」からExcel・Word・PDF・PowerPoint・CSV・TXTを追加できます。資料は録音とは別枠で最大5ファイル・各10 MB・合計25 MB。既存会議では「添付資料」に保存後、「議事録を再生成」を押してください。関連性・参照箇所・相違点は議事録の「添付資料との照合」に残します。資料だけの記載は会議の決定と区別します。Excel・CSVは各シート先頭1,000行まで。Word・Excel・PowerPoint内の図表が重要な場合はPDFも添付し、パスワードは解除してください。",
           },
           {
+            title: "カレンダーで予定・期限を確認、手動で変更",
+            text: "会話で決まった予定や期限を月間・一覧で確認できます。日本時間で表示し、予定案・資料のみの記載は確定と区別します。日付を特定できない「来週まで」などは日付要確認に置きます。以前の議事録の日付は要確認の候補として表示します。「予定を編集」で日付・時間・場所・担当・状態を変更し、全員に共有できます。手動変更は再解析後も残り、元の予定が変わった場合は要確認になります。元の抽出結果に戻すこともできます。外部カレンダーへの同期・通知はありません。",
+          },
+          {
             title: "内容を確認して、編集・書き出し",
-            text: "「文字起こし」で音声を再生しながら内容を確認できます。修正した文字起こしから議事録の再生成も可能です。「書き出す」からMarkdown・テキスト・JSONを保存でき、ブラウザの印刷からPDFにもできます。",
+            text: "議事録タブの「議事録を編集」から本文を自由に修正し、「保存」で全員に共有できます。本文・カレンダー・AI抽出の要点やアクションは別々に管理され、本文の修正は他の欄に自動反映しません。同じ本文を同時に編集した場合は最後の保存が優先されます。「文字起こし」で音声を再生しながら確認・修正し、議事録を再生成することもできます。再生成は編集済み本文を上書きするため確認してください。「書き出す」からMarkdown・テキスト・JSONを保存でき、印刷からPDFにもできます。",
           },
         ].map((step, i) => (
           <section key={step.title}>
