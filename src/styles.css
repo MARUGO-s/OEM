@@ -2949,6 +2949,29 @@ button {
 .attachment-picker {
   margin: 18px 0;
   background: #fafaff;
+  border-style: dashed;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.attachment-picker.drag {
+  border-color: var(--purple);
+  background: #f2edff;
+}
+.attachment-drop-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px 0 2px;
+  padding: 14px;
+  border: 1px dashed #d3cbea;
+  border-radius: 8px;
+  color: #8674c9;
+  font-size: 11px;
+  text-align: center;
+  pointer-events: none;
+}
+.attachment-picker.drag .attachment-drop-hint {
+  border-color: var(--purple);
 }
 .attachment-heading,
 .attachment-heading > strong,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, Download, LoaderCircle, X, FileText } from "lucide-react";
+import { Paperclip, Download, LoaderCircle, X, FileText, UploadCloud } from "lucide-react";
 import {
   attachmentTypes,
   validateAttachments,
@@ -31,10 +31,46 @@ export function AttachmentPicker({
   disabled?: boolean;
   existing?: Attachment[];
 }) {
-  const input = useRef<HTMLInputElement>(null),
-    [error, setError] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+  const dragDepth = useRef(0);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState("");
+  function addFiles(incoming: FileList | null) {
+    if (disabled || !incoming?.length) return;
+    const selected = [...files, ...Array.from(incoming)];
+    try {
+      validateAttachments([...existing, ...selected]);
+      onChange(selected);
+      setError("");
+    } catch (error) {
+      setError((error as Error).message);
+    }
+  }
   return (
-    <div className="attachment-picker">
+    <div
+      className={`attachment-picker ${dragging && !disabled ? "drag" : ""}`}
+      onDragEnter={(event) => {
+        if (disabled || !event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        dragDepth.current += 1;
+        setDragging(true);
+      }}
+      onDragOver={(event) => {
+        if (disabled || !event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={() => {
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setDragging(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        dragDepth.current = 0;
+        setDragging(false);
+        addFiles(event.dataTransfer.files);
+      }}
+    >
       <div className="attachment-heading">
         <strong>
           <Paperclip size={17} />
@@ -53,6 +89,10 @@ export function AttachmentPicker({
         Excel・Word・PDF・PowerPoint・CSV・TXT ／ 最大5ファイル・各10 MB・合計25
         MB（録音とは別枠）
       </p>
+      <div className="attachment-drop-hint">
+        <UploadCloud size={19} />
+        <span>資料をここにドラッグ＆ドロップ、または上のボタンから選択</span>
+      </div>
       <input
         hidden
         type="file"
@@ -61,15 +101,8 @@ export function AttachmentPicker({
         multiple
         disabled={disabled}
         onChange={(event) => {
-          const selected = [...files, ...Array.from(event.target.files || [])];
+          addFiles(event.target.files);
           event.target.value = "";
-          try {
-            validateAttachments([...existing, ...selected]);
-            onChange(selected);
-            setError("");
-          } catch (error) {
-            setError((error as Error).message);
-          }
         }}
       />
       {files.map((file, index) => (
