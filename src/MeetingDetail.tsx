@@ -151,6 +151,10 @@ export function MeetingDetail({
   const [confirm, setConfirm] = useState<"delete" | "regenerate" | null>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const [audioSource, setAudioSource] = useState("");
+  const [audioPart, setAudioPart] = useState(0);
+  const recordings = m.recordings?.length
+    ? m.recordings
+    : [{ fileName: m.fileName || "録音", transcribed: Boolean(m.transcript) }];
   useEffect(() => {
     onEditingChange(editing);
     return () => onEditingChange(false);
@@ -158,7 +162,8 @@ export function MeetingDetail({
   useEffect(() => {
     if (!m.hasAudio || tab !== "transcript") return;
     let alive = true;
-    void audioUrl(m.id)
+    setAudioSource("");
+    void audioUrl(m.id, audioPart)
       .then((url) => {
         if (alive) setAudioSource(url);
       })
@@ -168,7 +173,7 @@ export function MeetingDetail({
     return () => {
       alive = false;
     };
-  }, [m.id, m.hasAudio, tab, notify]);
+  }, [m.id, m.hasAudio, tab, notify, audioPart]);
   const processing = isWorking(m);
   useEffect(() => {
     if (!editing) return;
@@ -326,7 +331,7 @@ export function MeetingDetail({
           <div>
             <strong>
               {m.status === "transcribing"
-                ? "録音を文字起こししています"
+                ? `録音を文字起こししています${recordings.length > 1 ? `（${recordings.filter((part) => part.transcribed).length}/${recordings.length} 完了）` : ""}`
                 : "会話を解析して議事録を作成しています"}
             </strong>
             <p>
@@ -478,12 +483,31 @@ export function MeetingDetail({
           ) : tab === "transcript" ? (
             <div className="transcript-content">
               {m.hasAudio && (
-                <audio
-                  ref={audio}
-                  controls
-                  src={audioSource || undefined}
-                  preload="metadata"
-                />
+                <>
+                  {recordings.length > 1 && (
+                    <label className="field">
+                      再生する録音（全{recordings.length}ファイル）
+                      <select
+                        value={audioPart}
+                        onChange={(e) => setAudioPart(Number(e.target.value))}
+                      >
+                        {recordings.map((part, index) => (
+                          <option key={index} value={index}>
+                            {index + 1}. {part.fileName}
+                            {part.transcribed ? "" : "（文字起こし未完了）"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <audio
+                    key={`${m.id}-${audioPart}`}
+                    ref={audio}
+                    controls
+                    src={audioSource || undefined}
+                    preload="metadata"
+                  />
+                </>
               )}
               {m.segments.length ? (
                 m.segments.map((s, i) => (

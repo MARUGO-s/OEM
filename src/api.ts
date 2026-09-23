@@ -45,9 +45,10 @@ export async function api<T>(
   return data as T;
 }
 
-export async function audioUrl(id: string) {
-  if (!isCloud) return `/api/meetings/${id}/audio`;
-  return (await api<{ url: string }>(`/meetings/${id}/audio`)).url;
+export async function audioUrl(id: string, part = 0) {
+  const path = `/meetings/${id}/audio?part=${part}`;
+  if (!isCloud) return `/api${path}`;
+  return (await api<{ url: string }>(path)).url;
 }
 
 export function download(

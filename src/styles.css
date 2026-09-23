@@ -1375,6 +1375,14 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
+  white-space: nowrap;
+}
+.recording-list > .field-hint {
+  margin-top: 12px;
+  line-height: 1.7;
+}
+.selected-audio .icon-button {
+  flex-shrink: 0;
 }
 .selected-audio small {
   font-size: 8px;

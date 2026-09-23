@@ -1,6 +1,8 @@
 import { useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight,
+  ArrowUp,
+  ArrowDown,
   Check,
   FileAudio,
   FileText,
@@ -12,7 +14,7 @@ import { Modal } from "./Modal";
 import { today, modelName, type Settings } from "./types";
 
 const LIMIT = 24_000_000;
-const ACCEPT = ".mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,.ogg,.flac";
+const ACCEPT = ".mp3,.mp4,.mpeg,.mpga,.m4a,.aac,.wav,.webm,.ogg,.flac";
 export function NewMeeting({
   settings,
   onClose,
@@ -25,7 +27,7 @@ export function NewMeeting({
   onSettings: () => void;
 }) {
   const [mode, setMode] = useState<"file" | "text">("file");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(today());
   const [participants, setParticipants] = useState("");
@@ -35,22 +37,44 @@ export function NewMeeting({
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  function chooseFile(next?: File) {
-    if (!next) return;
-    const extension = `.${next.name.split(".").pop()?.toLowerCase()}`;
-    if (!ACCEPT.split(",").includes(extension)) {
-      setError("MP3、M4A、WAVなどの対応音声ファイルを選んでください。");
+  function chooseFiles(selected: FileList | null) {
+    if (!selected?.length) return;
+    const next = [...files, ...Array.from(selected)];
+    if (
+      next.some(
+        (file) =>
+          !ACCEPT.split(",").includes(
+            `.${file.name.split(".").pop()?.toLowerCase()}`,
+          ),
+      )
+    ) {
+      setError("AAC、MP3、M4A、WAVなどの対応音声ファイルを選んでください。");
       return;
     }
-    if (next.size > LIMIT || next.size === 0) {
-      setError(
-        "音声は0バイトより大きく、24 MB以下のファイルを選んでください。",
-      );
+    if (next.length > 5) {
+      setError("1つの会議に取り込める録音は5ファイルまでです。");
       return;
     }
-    setFile(next);
+    if (
+      next.some((file) => file.size === 0) ||
+      next.reduce((n, file) => n + file.size, 0) > LIMIT
+    ) {
+      setError("空ではない音声ファイルを、合計24 MB以下で選んでください。");
+      return;
+    }
+    setFiles(next);
     setError("");
-    if (!title) setTitle(next.name.replace(/\.[^.]+$/, ""));
+    if (!title) setTitle(next[0].name.replace(/\.[^.]+$/, ""));
+  }
+  function moveFile(index: number, direction: number) {
+    setFiles((current) => {
+      const next = [...current];
+      [next[index], next[index + direction]] = [
+        next[index + direction],
+        next[index],
+      ];
+      return next;
+    });
   }
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -63,7 +87,7 @@ export function NewMeeting({
       data.set("participants", participants);
       data.set("template", template);
       if (mode === "text") data.set("transcript", transcript);
-      else if (file) data.set("audio", file);
+      else files.forEach((file) => data.append("audio", file));
       await onCreate(data);
     } catch (e) {
       setError((e as Error).message);
@@ -74,7 +98,7 @@ export function NewMeeting({
   return (
     <Modal
       title="録音から議事録を作成"
-      subtitle="録音済みのファイルを取り込んで、会話を整理します。"
+      subtitle="分かれた録音も、順番につないで1つの議事録に。"
       onClose={onClose}
       locked={busy}
       wide
@@ -113,7 +137,7 @@ export function NewMeeting({
             onDrop={(e) => {
               e.preventDefault();
               setDrag(false);
-              if (!busy) chooseFile(e.dataTransfer.files[0]);
+              if (!busy) chooseFiles(e.dataTransfer.files);
             }}
           >
             <UploadCloud size={32} />
@@ -125,15 +149,21 @@ export function NewMeeting({
               disabled={busy}
               onClick={() => input.current?.click()}
             >
-              ファイルを選択
+              {files.length ? "ファイルを追加" : "ファイルを選択"}
             </button>
-            <small>MP3 / M4A / WAV / MP4 / WebM / OGG / FLAC · 最大24 MB</small>
+            <small>AAC / MP3 / M4A / WAV / MP4 / WebM / OGG / FLAC</small>
+            <small>最大5ファイル・合計24 MBまで · 複数選択できます</small>
             <input
               ref={input}
               type="file"
+              multiple
+              disabled={busy}
               accept={ACCEPT}
               hidden
-              onChange={(e) => chooseFile(e.target.files?.[0])}
+              onChange={(e) => {
+                chooseFiles(e.target.files);
+                e.target.value = "";
+              }}
             />
           </div>
         )}
@@ -153,26 +183,66 @@ export function NewMeeting({
             </span>
           </label>
         )}
-        {file && mode === "file" && (
-          <div className="selected-audio">
-            <div>
-              <FileAudio size={21} />
-              <span>
-                <strong>{file.name}</strong>
-                <small>
-                  {(file.size / 1_000_000).toFixed(2)} MB · 取り込み準備完了
-                </small>
-              </span>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="音声ファイルを解除"
-                onClick={() => setFile(null)}
-                disabled={busy}
-              >
-                <X size={17} />
-              </button>
-            </div>
+        {files.length > 0 && mode === "file" && (
+          <div className="recording-list">
+            <p className="field-hint">
+              上から録音順に並べてください。{files.length}ファイル / 合計
+              {(
+                files.reduce((n, file) => n + file.size, 0) / 1_000_000
+              ).toFixed(2)}{" "}
+              MB
+            </p>
+            {files.map((file, index) => (
+              <div className="selected-audio" key={`${index}-${file.name}`}>
+                <div>
+                  <FileAudio size={21} />
+                  <span>
+                    <strong>
+                      {index + 1}. {file.name}
+                    </strong>
+                    <small>
+                      {(file.size / 1_000_000).toFixed(2)} MB
+                      {file.name.toLowerCase().endsWith(".aac")
+                        ? " · M4Aへ自動変換"
+                        : ""}
+                    </small>
+                  </span>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`録音${index + 1}を上へ`}
+                    disabled={busy || index === 0}
+                    onClick={() => moveFile(index, -1)}
+                  >
+                    <ArrowUp size={17} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`録音${index + 1}を下へ`}
+                    disabled={busy || index === files.length - 1}
+                    onClick={() => moveFile(index, 1)}
+                  >
+                    <ArrowDown size={17} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`録音${index + 1}を解除`}
+                    onClick={() => {
+                      setFiles(files.filter((_, i) => i !== index));
+                      setError("");
+                    }}
+                    disabled={busy}
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            <p className="field-hint">
+              各録音を文字起こしし、この順番で1つの議事録にまとめます。切れた間の会話は補完しません。AACは再圧縮せずM4Aに変換します。
+            </p>
           </div>
         )}
         <div className="form-grid">
@@ -247,7 +317,7 @@ export function NewMeeting({
             disabled={
               busy ||
               !settings?.configured ||
-              (mode === "text" ? !transcript.trim() : !file)
+              (mode === "text" ? !transcript.trim() : !files.length)
             }
           >
             {busy ? (

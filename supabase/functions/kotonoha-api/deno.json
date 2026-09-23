@@ -1,7 +1,8 @@
 {
   "imports": {
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.117.1",
-    "zod": "npm:zod@4.6.5"
+    "zod": "npm:zod@4.6.5",
+    "mediabunny": "npm:mediabunny@1.59.0"
   },
   "compilerOptions": { "checkJs": false }
 }

@@ -6,11 +6,18 @@ import {
   MetadataSchema,
   PatchSchema,
   MinutesSchema,
-  audioExtensions,
   minutesToMarkdown,
   safeError,
 } from "../_shared/domain.mjs";
 import { createDemo } from "../_shared/demo.mjs";
+import {
+  prepareAudio,
+  validateRecordings,
+  recordingsFor,
+  publicRecordings,
+  needsTranscription,
+  transcribeRecordings,
+} from "../_shared/audio.mjs";
 import { encryptApiKey, decryptApiKey } from "../_shared/key-crypto.mjs";
 import {
   createToken,
@@ -85,8 +92,16 @@ async function store(
   return data;
 }
 function expose(record: RecordRow) {
-  const { runId: _runId, audioFile: _audioFile, ...doc } = record.document;
-  return { ...doc, hasAudio: Boolean(record.audioPath) };
+  const {
+    runId: _runId,
+    audioFile: _audioFile,
+    audioParts: _audioParts,
+    ...doc
+  } = record.document;
+  const recordings = publicRecordings(
+    recordingsFor(record.document, record.audioPath),
+  );
+  return { ...doc, hasAudio: recordings.length > 0, recordings };
 }
 function exposeSettings(config: Doc) {
   return {
@@ -281,27 +296,42 @@ async function startSummary(owner: string, record: RecordRow, key: string) {
 async function processMeeting(owner: string, initial: RecordRow, key: string) {
   let record = initial;
   try {
-    if (!record.document.transcript) {
-      if (!record.audioPath) throw new Error("No audio");
-      const { data, error } = await service.storage
-        .from(BUCKET)
-        .download(record.audioPath);
-      if (error || !data) throw new Error("Audio unavailable");
-      const form = new FormData();
-      form.set("file", data, record.document.fileName || "meeting.mp3");
-      form.set("model", "gpt-4o-transcribe");
-      form.set("response_format", "json");
-      form.set("language", "ja");
-      const result = await openai(
-        key,
-        "/audio/transcriptions",
-        { method: "POST", body: form },
-        110_000,
+    if (
+      needsTranscription(record.document, record.audioPath) ||
+      !record.document.transcript
+    ) {
+      const transcript = await transcribeRecordings(
+        recordingsFor(record.document, record.audioPath),
+        async (part: Doc) => {
+          if (!part.audioPath) throw new Error("No audio");
+          const { data, error } = await service.storage
+            .from(BUCKET)
+            .download(part.audioPath);
+          if (error || !data) throw new Error("Audio unavailable");
+          const form = new FormData();
+          // The display name may be .aac, while storage contains a remuxed .m4a.
+          form.set(
+            "file",
+            data,
+            part.audioPath.split("/").pop() || "meeting.mp3",
+          );
+          form.set("model", "gpt-4o-transcribe");
+          form.set("response_format", "json");
+          form.set("language", "ja");
+          const result = await openai(
+            key,
+            "/audio/transcriptions",
+            { method: "POST", body: form },
+            110_000,
+          );
+          return result.text;
+        },
+        async (audioParts: Doc[]) => {
+          record = await jobUpdate(owner, record, { audioParts });
+        },
       );
-      if (typeof result.text !== "string" || !result.text.trim())
-        throw Object.assign(new Error("empty audio"), { code: "EMPTY_AUDIO" });
       record = await jobUpdate(owner, record, {
-        transcript: result.text,
+        transcript,
         status: "analyzing",
         segments: [],
         transcriptionModel: "gpt-4o-transcribe",
@@ -312,7 +342,7 @@ async function processMeeting(owner: string, initial: RecordRow, key: string) {
     const message =
       (error as Error).name === "TimeoutError"
         ? "音声の処理が時間内に完了しませんでした。長い録音は分割して取り込んでください。"
-        : safeError(error);
+        : (error as any).publicMessage || safeError(error);
     await jobUpdate(owner, record, { status: "error", error: message });
     console.error(
       "kotonoha job failed",
@@ -540,54 +570,49 @@ export async function handler(req: Request) {
         .trim()
         .max(MAX_TEXT_LENGTH)
         .parse(form.get("transcript") || "");
-      const audio = form.get("audio");
-      if (!(audio instanceof File) && !transcript)
+      const inputs = form.getAll("audio");
+      if (inputs.some((audio) => !(audio instanceof File)))
+        throw fail(400, "録音ファイルの形式を確認してください。");
+      const audioFiles = inputs as File[];
+      if (!audioFiles.length && !transcript)
         throw fail(400, "録音ファイルか会話テキストを入力してください。");
-      if (audio && transcript)
+      if (audioFiles.length && transcript)
         throw fail(400, "録音とテキストはどちらか一方を選んでください。");
       const id = crypto.randomUUID();
       let audioPath: string | null = null;
-      if (audio instanceof File) {
-        const ext = `.${audio.name.split(".").pop()?.toLowerCase()}`;
-        if (
-          !audioExtensions.has(ext) ||
-          !audio.size ||
-          audio.size > MAX_FILE_SIZE
-        )
-          throw fail(400, "対応する形式の音声を24 MB以下で選択してください。");
-        audioPath = `${owner}/${id}/recording${ext}`;
-        const mime: Record<string, string> = {
-          ".mp3": "audio/mpeg",
-          ".mpga": "audio/mpeg",
-          ".mpeg": "audio/mpeg",
-          ".m4a": "audio/mp4",
-          ".mp4": "video/mp4",
-          ".wav": "audio/wav",
-          ".webm": "audio/webm",
-          ".ogg": "audio/ogg",
-          ".flac": "audio/flac",
-        };
-        const { error } = await service.storage
-          .from(BUCKET)
-          .upload(audioPath, audio, {
-            contentType: mime[ext] || "application/octet-stream",
-            upsert: false,
-          });
-        if (error)
-          throw fail(
-            503,
-            "音声を保存できませんでした。形式とファイルサイズをご確認ください。",
-          );
-      }
+      const audioParts: Doc[] = [];
+      validateRecordings(audioFiles);
       try {
+        for (const [index, audio] of audioFiles.entries()) {
+          const prepared = await prepareAudio(audio);
+          const partPath = `${owner}/${id}/recording-${index + 1}${prepared.extension}`;
+          const { error } = await service.storage
+            .from(BUCKET)
+            .upload(partPath, prepared.blob, {
+              contentType: prepared.contentType || "application/octet-stream",
+              upsert: false,
+            });
+          if (error)
+            throw fail(
+              503,
+              "音声を保存できませんでした。形式とファイルサイズをご確認ください。",
+            );
+          audioParts.push({
+            fileName: audio.name,
+            audioPath: partPath,
+            transcript: "",
+          });
+        }
+        audioPath = audioParts[0]?.audioPath || null;
         const document = {
           ...metadata,
           id,
           createdAt: new Date().toISOString(),
-          status: audio ? "transcribing" : "analyzing",
-          source: audio ? "audio" : "text",
+          status: audioFiles.length ? "transcribing" : "analyzing",
+          source: audioFiles.length ? "audio" : "text",
           isDemo: false,
-          fileName: audio instanceof File ? audio.name : null,
+          fileName: audioFiles[0]?.name || null,
+          audioParts,
           duration: null,
           transcript,
           segments: [],
@@ -598,7 +623,7 @@ export async function handler(req: Request) {
           error: null,
           minutesStale: false,
           minutesModel: config.model,
-          transcriptionModel: audio ? "gpt-4o-transcribe" : null,
+          transcriptionModel: audioFiles.length ? "gpt-4o-transcribe" : null,
           runId: crypto.randomUUID(),
         };
         const record = await store("create", owner, id, {
@@ -612,7 +637,10 @@ export async function handler(req: Request) {
         );
         return json(expose(record), 202);
       } catch (error) {
-        if (audioPath) await service.storage.from(BUCKET).remove([audioPath]);
+        if (audioParts.length)
+          await service.storage
+            .from(BUCKET)
+            .remove(audioParts.map((part) => part.audioPath));
         throw error;
       }
     }
@@ -623,10 +651,15 @@ export async function handler(req: Request) {
     const id = z.uuid().parse(match[1]);
     let record: RecordRow = await store("get", owner, id);
     if (match[2] === "audio" && req.method === "GET") {
-      if (!record.audioPath) throw fail(404, "音声ファイルがありません。");
+      const index = Number(new URL(req.url).searchParams.get("part") ?? 0);
+      const part =
+        Number.isInteger(index) && index >= 0
+          ? recordingsFor(record.document, record.audioPath)[index]
+          : null;
+      if (!part?.audioPath) throw fail(404, "音声ファイルがありません。");
       const { data, error } = await service.storage
         .from(BUCKET)
-        .createSignedUrl(record.audioPath, 3600);
+        .createSignedUrl(part.audioPath, 3600);
       if (error || !data)
         throw fail(503, "音声の再生URLを作成できませんでした。");
       return json({ url: data.signedUrl });
@@ -639,7 +672,9 @@ export async function handler(req: Request) {
       if (working(record.document))
         throw fail(409, "まだ処理中です。完了をお待ちください。");
       record = await store("claim", owner, id, {
-        status: record.document.transcript ? "analyzing" : "transcribing",
+        status: needsTranscription(record.document, record.audioPath)
+          ? "transcribing"
+          : "analyzing",
         error: null,
         minutesModel: config.model,
         runId: crypto.randomUUID(),

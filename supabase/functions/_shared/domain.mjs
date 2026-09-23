@@ -8,6 +8,7 @@ export const audioExtensions = new Set([
   ".mpeg",
   ".mpga",
   ".m4a",
+  ".aac",
   ".wav",
   ".webm",
   ".ogg",

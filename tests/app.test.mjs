@@ -10,6 +10,7 @@ import { createDemo } from "../server/demo.mjs";
 import { MeetingStore } from "../server/store.mjs";
 import { createAI } from "../server/ai.mjs";
 import { MAX_FILE_SIZE } from "../server/domain.mjs";
+import { aacFixture } from "./fixtures/aac.mjs";
 
 const sampleMinutes = createDemo().minutes;
 const key = "sk-test-only-not-a-real-api-key";
@@ -189,6 +190,84 @@ test("解析失敗後も文字起こしを保持し、Solへ変更して音声�
   assert.equal(meeting.minutesModel, "gpt-6-sol");
   assert.equal(transcriptions, 1);
   assert.deepEqual(models, ["gpt-6-astra", "gpt-6-sol"]);
+});
+
+test("AACとWAVを順番どおりに1会議へ統合し、個別再生・一括ゴミ箱移動する", async (t) => {
+  const calls = [];
+  const { request, waitForJobs, dataDir } = await setup(t, {
+    apiKey: key,
+    aiFactory: () => ({
+      async transcribe(file) {
+        calls.push(path.extname(file));
+        return {
+          transcript: file.endsWith(".m4a") ? "前半の議論" : "後半の決定",
+        };
+      },
+      async summarize(meeting) {
+        assert.equal(
+          meeting.transcript,
+          "【録音 1】\n前半の議論\n\n【録音 2】\n後半の決定",
+        );
+        return sampleMinutes;
+      },
+    }),
+  });
+  const form = payload({ audio: true });
+  form.delete("audio");
+  form.append("audio", new File([aacFixture], "前半.AAC"));
+  form.append("audio", new File([new Uint8Array(44)], "後半.wav"));
+  const response = await request("/meetings", { method: "POST", body: form });
+  assert.equal(response.status, 202);
+  const created = await response.json();
+  assert.equal(created.audioParts, undefined);
+  assert.equal(created.fileName, "前半.AAC");
+  await waitForJobs();
+  const done = await (await request(`/meetings/${created.id}`)).json();
+  assert.equal(done.status, "done");
+  assert.deepEqual(
+    done.recordings.map((part) => part.transcribed),
+    [true, true],
+  );
+  assert.deepEqual(calls.sort(), [".m4a", ".wav"]);
+  const first = await request(`/meetings/${created.id}/audio?part=0`);
+  assert.match(first.headers.get("content-type"), /audio\/mp4/);
+  assert.equal(
+    Buffer.from(await first.arrayBuffer()).toString("ascii", 4, 8),
+    "ftyp",
+  );
+  assert.equal(
+    (
+      await (
+        await request(`/meetings/${created.id}/audio?part=1`)
+      ).arrayBuffer()
+    ).byteLength,
+    44,
+  );
+  assert.equal(
+    (await request(`/meetings/${created.id}/audio?part=2`)).status,
+    404,
+  );
+  assert.equal(
+    (await request(`/meetings/${created.id}/audio?part=-1`)).status,
+    404,
+  );
+  await request(`/meetings/${created.id}`, { method: "DELETE" });
+  assert.equal((await readdir(path.join(dataDir, "audio"))).length, 0);
+  assert.equal(
+    (await readdir(path.join(dataDir, "trash", created.id))).length,
+    3,
+  );
+});
+
+test("複数アップロードの途中でAACが不正なら音声も会議も残さない", async (t) => {
+  const { request, dataDir, store } = await setup(t, { apiKey: key });
+  const form = payload({ audio: true });
+  form.append("audio", new File(["invalid AAC"], "broken.aac"));
+  const result = await request("/meetings", { method: "POST", body: form });
+  assert.equal(result.status, 400);
+  assert.match((await result.json()).error, /AACを読み込めません/);
+  assert.deepEqual(await readdir(path.join(dataDir, "audio")), []);
+  assert.equal(store.list().length, 0);
 });
 
 test("テキスト取り込み、議事録編集、アクション完了、文字起こし修正を保存する", async (t) => {

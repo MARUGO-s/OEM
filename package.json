@@ -17,6 +17,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",
+    "mediabunny": "1.59.0",
     "multer": "^2.0.2",
     "openai": "^6.0.0",
     "react": "^19.1.1",

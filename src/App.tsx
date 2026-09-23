@@ -396,7 +396,7 @@ export default function App() {
                     <ArrowRight size={17} />
                   </button>
                   <span className="hero-formats">
-                    MP3・M4A・WAV・MP4 などに対応
+                    AAC・MP3・M4A など対応 · 複数録音を統合
                   </span>
                 </div>
                 <div className="hero-illustration" aria-hidden="true">
@@ -797,7 +797,7 @@ function Help({
           },
           {
             title: "録音済みファイルを取り込む",
-            text: "MP3・M4A・WAV・MP4・WebM・OGG・FLACの録音ファイルを選び、会議名と開催日を入力。24 MBを超える場合は、音声を圧縮するか分割して取り込んでください。文字起こし済みの会話テキストも使えます。",
+            text: "AAC・MP3・M4A・WAV・MP4・WebM・OGG・FLACに対応。最大5ファイル・合計24 MBまでまとめて選び、上下ボタンで録音順に並べます。各文字起こしを順番につなぎ、1つの議事録を作成します。AACはM4Aへ自動変換。録音は文字起こしタブで切り替えて再生できます。24 MBを超える場合は事前に圧縮するか別の会議に分けてください。会話テキストも使えます。",
             action: "録音を取り込む",
             run: onNew,
           },

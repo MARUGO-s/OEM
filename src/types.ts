@@ -22,6 +22,7 @@ export interface Meeting {
   isDemo: boolean;
   hasAudio: boolean;
   fileName: string | null;
+  recordings?: { fileName: string; transcribed: boolean }[];
   duration: number | null;
   transcript: string;
   markdown: string;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createDemo } from "../supabase/functions/_shared/demo.mjs";
 import { decryptApiKey } from "../supabase/functions/_shared/key-crypto.mjs";
+import { aacFixture } from "./fixtures/aac.mjs";
 import {
   createToken,
   hashToken,
@@ -34,6 +35,8 @@ const rows = new Map<string, any>();
 const configs = new Map<string, any>();
 const jobs: Promise<unknown>[] = [];
 const calls: { route: string; body: any }[] = [];
+const audioObjects = new Map<string, Blob>();
+let failSecondRecording = false;
 const realFetch = globalThis.fetch;
 const json = (value: unknown, status = 200) => Response.json(value, { status });
 
@@ -112,6 +115,7 @@ globalThis.fetch = async (input, init: any) => {
       if ("responseId" in payload) row.responseId = payload.responseId;
     }
     if (op === "claim" || op === "patch") Object.assign(row.document, payload);
+    if (op === "claim") row.responseId = null;
     if (op === "delete") {
       rows.delete(id);
       return json({ deleted: true });
@@ -124,9 +128,28 @@ globalThis.fetch = async (input, init: any) => {
       const form = init?.body as FormData;
       assert.equal(form.get("model"), "gpt-4o-transcribe");
       assert.equal(form.get("response_format"), "json");
-      assert.ok(form.get("file") instanceof File);
-      calls.push({ route: url.pathname, body: null });
-      return json({ text: "佐藤さんが来週までに企画書を作成します。" });
+      const file = form.get("file") as File;
+      assert.ok(file instanceof File);
+      calls.push({
+        route: url.pathname,
+        body: { name: file.name, type: file.type },
+      });
+      if (file.name.endsWith(".m4a")) {
+        assert.equal(file.type, "audio/mp4");
+        assert.equal(
+          new TextDecoder().decode(
+            new Uint8Array(await file.arrayBuffer()).slice(4, 8),
+          ),
+          "ftyp",
+        );
+      }
+      if (file.name.startsWith("recording-2") && failSecondRecording)
+        return json({ error: { message: "test-only failure" } }, 429);
+      return json({
+        text: file.name.startsWith("recording-2")
+          ? "後半で実施が決定しました。"
+          : "佐藤さんが来週までに企画書を作成します。",
+      });
     }
     if (init?.method === "POST" && url.pathname === "/v1/responses") {
       const body = JSON.parse(init.body as string);
@@ -153,10 +176,28 @@ globalThis.fetch = async (input, init: any) => {
     });
   }
   if (url.pathname.startsWith("/storage/v1/object/")) {
-    if (init?.method === "POST") return json({ Key: "saved" });
-    return new Response(new Uint8Array(44), {
-      headers: { "content-type": "audio/wav" },
-    });
+    if (url.pathname.includes("/sign/"))
+      return json({
+        signedURL: `/object/signed/${url.pathname.split("/").pop()}?token=test`,
+      });
+    if (init?.method === "DELETE") {
+      for (const prefix of JSON.parse(init.body).prefixes)
+        audioObjects.delete(`/storage/v1/object/kotonoha-audio/${prefix}`);
+      return json([]);
+    }
+    if (init?.method === "POST") {
+      const body = init.body;
+      const blob =
+        body instanceof FormData
+          ? [...body.values()].find((value) => value instanceof Blob)
+          : body;
+      assert.ok(blob instanceof Blob);
+      audioObjects.set(url.pathname, blob);
+      return json({ Key: "saved" });
+    }
+    const blob = audioObjects.get(url.pathname);
+    assert.ok(blob, `stored audio missing: ${url.pathname}`);
+    return new Response(blob);
   }
   throw new Error(`Unexpected network request: ${url.pathname}`);
 };
@@ -318,6 +359,129 @@ Deno.test(
       assert.equal(
         calls.filter((c) => c.route === "/v1/audio/transcriptions").length,
         1,
+      );
+      // Same workspace, mixed formats, durable partial results and retry only missing parts.
+      const combined = new FormData();
+      combined.set("title", "分割録音の統合テスト");
+      combined.set("date", "2026-09-23");
+      combined.append("audio", new File([aacFixture], "前半.AAC"));
+      combined.append(
+        "audio",
+        new File([new Uint8Array(44)], "後半.wav", { type: "audio/wav" }),
+      );
+      failSecondRecording = true;
+      const batchResponse = await request("/meetings", "valid-a", {
+        method: "POST",
+        body: combined,
+      });
+      assert.equal(
+        batchResponse.status,
+        202,
+        await batchResponse.clone().text(),
+      );
+      const batch = await batchResponse.json();
+      assert.equal(batch.audioParts, undefined);
+      assert.deepEqual(
+        batch.recordings.map((part: any) => part.fileName),
+        ["前半.AAC", "後半.wav"],
+      );
+      await drain();
+      const failed = await (
+        await request(`/meetings/${batch.id}`, "valid-b")
+      ).json();
+      assert.equal(failed.status, "error");
+      assert.match(failed.error, /録音2/);
+      assert.deepEqual(
+        failed.recordings.map((part: any) => part.transcribed),
+        [true, false],
+      );
+      const beforeRetry = calls.length;
+      failSecondRecording = false;
+      assert.equal(
+        (
+          await request(`/meetings/${batch.id}/retry`, "valid-b", {
+            method: "POST",
+          })
+        ).status,
+        202,
+      );
+      await drain();
+      const retriedCalls = calls.slice(beforeRetry);
+      assert.equal(
+        retriedCalls.filter((call) => call.route === "/v1/audio/transcriptions")
+          .length,
+        1,
+      );
+      assert.equal(retriedCalls[0].body.name, "recording-2.wav");
+      const summaryInput = retriedCalls.find(
+        (call) => call.route === "/v1/responses",
+      )!.body.input[1].content;
+      assert.match(summaryInput, /【録音 1】.*佐藤.*【録音 2】.*後半/);
+      const batchDone = (
+        await (await request("/meetings", "valid-b")).json()
+      ).find((m: any) => m.id === batch.id);
+      assert.equal(batchDone.status, "done");
+      assert.deepEqual(
+        batchDone.recordings.map((part: any) => part.transcribed),
+        [true, true],
+      );
+      assert.match(
+        (await (await request(`/meetings/${batch.id}/audio?part=0`)).json())
+          .url,
+        /recording-1.m4a/,
+      );
+      assert.match(
+        (await (await request(`/meetings/${batch.id}/audio?part=1`)).json())
+          .url,
+        /recording-2.wav/,
+      );
+      assert.equal(
+        (await request(`/meetings/${batch.id}/audio?part=2`)).status,
+        404,
+      );
+      assert.equal(
+        (await request(`/meetings/${batch.id}/audio?part=-1`)).status,
+        404,
+      );
+
+      const beforeFiles = audioObjects.size;
+      const beforeMeetings = rows.size;
+      const broken = new FormData();
+      broken.set("title", "失敗テスト");
+      broken.set("date", "2026-09-23");
+      broken.append("audio", new File([aacFixture], "valid.aac"));
+      broken.append(
+        "audio",
+        new File([aacFixture.slice(0, -1)], "truncated.aac"),
+      );
+      assert.equal(
+        (
+          await request("/meetings", "valid-a", {
+            method: "POST",
+            body: broken,
+          })
+        ).status,
+        400,
+      );
+      assert.equal(
+        audioObjects.size,
+        beforeFiles,
+        "cleanup all previously uploaded parts",
+      );
+      assert.equal(rows.size, beforeMeetings);
+      const tooMany = new FormData();
+      tooMany.set("title", "上限テスト");
+      tooMany.set("date", "2026-09-23");
+      for (let i = 0; i < 6; i++)
+        tooMany.append("audio", new File([aacFixture], `${i}.aac`));
+      assert.equal(
+        (
+          await request("/meetings", "valid-a", {
+            method: "POST",
+            body: tooMany,
+          })
+        ).status,
+        400,
       );
       assert.equal(
         (await request("/auth/logout", loginSession.token, { method: "POST" }))
