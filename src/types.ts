@@ -88,6 +88,7 @@ export interface UsageEvent {
   id: string;
   meetingId: string;
   meetingTitle: string;
+  runId?: string | null;
   kind: "transcription" | "minutes";
   provider: "OpenAI" | "Google";
   model: string;

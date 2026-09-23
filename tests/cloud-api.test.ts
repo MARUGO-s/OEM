@@ -719,6 +719,10 @@ Deno.test(
       assert.equal(geminiEvent.costUsd, (1500 * 2 + 175 * 12) / 1_000_000);
       assert.ok(geminiUsage.events.some((event: any) =>
         event.meetingId === geminiMeeting.id && event.kind === "minutes"));
+      assert.ok(geminiEvent.runId);
+      assert.ok(geminiUsage.events.some((event: any) =>
+        event.meetingId === geminiMeeting.id && event.kind === "minutes" &&
+        event.runId === geminiEvent.runId));
       assert.ok(calls.some((c) => c.route === "/v1beta/interactions"));
       assert.ok(
         calls.some(
@@ -849,6 +853,11 @@ Deno.test(
         await pollTogether();
       }
       assert.equal(rows.get(longId).document.status, "done");
+      const longUsage = [...usageEvents.values()].filter((event: any) =>
+        event.meetingId === longId);
+      assert.ok(longUsage.length >= 2);
+      assert.ok(longUsage.every((event: any) =>
+        event.runId === rows.get(longId).document.analysisId));
       assert.equal(
         rows.get(longId).document.audioParts.filter((p: any) => p.transcript)
           .length,
@@ -975,6 +984,7 @@ Deno.test(
         assert.equal(created.status, 202, await created.clone().text());
         const meeting = await created.json();
         assert.equal(meeting.runId, undefined);
+        assert.equal(meeting.analysisId, undefined);
         await drain();
         assert.equal(
           calls.filter((c) => c.route === "/v1/responses").at(-1)?.body.model,

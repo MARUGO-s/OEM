@@ -954,6 +954,13 @@ test("API使用料を呼び出しごとに保存し、会議削除後も月別�
   assert.equal(usage.eventCount, 2);
   assert.equal(usage.totalUsd, 0.0045 + (1000 * 10 + 200 * 50) / 1_000_000);
   assert.ok(usage.events.every((event) => event.meetingId === meeting.id));
+  assert.ok(usage.events.every((event) => event.runId === usage.events[0].runId));
+  assert.ok(usage.events[0].runId);
+  assert.equal((await request(`/meetings/${meeting.id}/retry`, { method: "POST" })).status, 202);
+  await waitForJobs();
+  const afterRetry = await (await request(route)).json();
+  assert.equal(afterRetry.eventCount, 3);
+  assert.equal(new Set(afterRetry.events.map((event) => event.runId)).size, 2);
   assert.equal((await request(`/meetings/${meeting.id}`, { method: "DELETE" })).status, 204);
-  assert.equal((await (await request(route)).json()).eventCount, 2);
+  assert.equal((await (await request(route)).json()).eventCount, 3);
 });

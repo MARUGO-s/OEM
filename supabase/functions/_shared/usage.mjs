@@ -84,7 +84,7 @@ export function summaryUsage(model, response) {
   };
 }
 
-export function usageEvent({ id, meetingId, meetingTitle, kind, model, response, audioSeconds }) {
+export function usageEvent({ id, meetingId, meetingTitle, runId, kind, model, response, audioSeconds }) {
   const usage = kind === "transcription"
     ? transcriptionUsage(model, response, audioSeconds)
     : summaryUsage(model, response);
@@ -92,6 +92,7 @@ export function usageEvent({ id, meetingId, meetingTitle, kind, model, response,
     id,
     meetingId,
     meetingTitle,
+    runId: runId || null,
     kind,
     provider: model.startsWith("gemini") ? "Google" : "OpenAI",
     model,

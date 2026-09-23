@@ -161,6 +161,7 @@ async function store(
 function expose(record: RecordRow) {
   const {
     runId: _runId,
+    analysisId: _analysisId,
     audioFile: _audioFile,
     audioParts: _audioParts,
     uploadPlan: _uploadPlan,
@@ -316,6 +317,7 @@ async function recordApiUsage(
     const id = await usageId(response?.id ? `${owner}:${kind}:${response.id}` : undefined);
     await store("record", owner, null, usageEvent({
       id, meetingId: meeting.id, meetingTitle: meeting.title,
+      runId: meeting.analysisId,
       kind, model, response, audioSeconds: duration,
     }), "kotonoha_usage");
   } catch (error) {
@@ -879,12 +881,10 @@ export async function handler(req: Request) {
         owner,
         id,
         {
-          document: uploadDocument(
-            input,
-            id,
-            config.model,
-            config.transcriptionModel,
-          ),
+          document: {
+            ...uploadDocument(input, id, config.model, config.transcriptionModel),
+            analysisId: crypto.randomUUID(),
+          },
         },
         "kotonoha_audio_upload",
       );
@@ -981,6 +981,7 @@ export async function handler(req: Request) {
             ? config.transcriptionModel
             : null,
           runId: crypto.randomUUID(),
+          analysisId: crypto.randomUUID(),
         };
         const record = await store("create", owner, id, {
           document,
@@ -1283,6 +1284,7 @@ export async function handler(req: Request) {
         geminiRetryCount: 0,
         diagnosticCode: null,
         runId: crypto.randomUUID(),
+        analysisId: crypto.randomUUID(),
         partReady: false,
       });
       EdgeRuntime.waitUntil(

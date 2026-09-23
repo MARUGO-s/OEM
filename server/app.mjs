@@ -124,10 +124,10 @@ export async function createApp({
   const jobs = new Set();
   const acquireGemini = createLocalGeminiGate();
   let settingsBusy = false;
-  async function recordApiUsage(kind, meeting, modelId, response, duration) {
+  async function recordApiUsage(kind, meeting, runId, modelId, response, duration) {
     try {
       await usageStore.record(usageEvent({
-        id: randomUUID(), meetingId: meeting.id, meetingTitle: meeting.title,
+        id: randomUUID(), meetingId: meeting.id, meetingTitle: meeting.title, runId,
         kind, model: modelId, response, audioSeconds: duration,
       }));
     } catch (error) {
@@ -212,6 +212,7 @@ export async function createApp({
   }
   async function processMeeting(
     id,
+    runId,
     key,
     geminiKey,
     modelForJob,
@@ -233,7 +234,7 @@ export async function createApp({
         const duration = part.duration || (recordingsFor(meeting).length === 1
           ? meeting.duration : null);
         const onUsage = (response) => recordApiUsage(
-          "transcription", meeting, transcriptionModelForJob, response, duration,
+          "transcription", meeting, runId, transcriptionModelForJob, response, duration,
         );
         if (!gemini)
           return (await ai.transcribe(path.join(uploadsDir, part.audioFile), onUsage))
@@ -314,7 +315,7 @@ export async function createApp({
       }
       const minutes = parseMinutes(meeting, await ai.summarize(
         meeting, files,
-        (response) => recordApiUsage("minutes", meeting, modelForJob, response, null),
+        (response) => recordApiUsage("minutes", meeting, runId, modelForJob, response, null),
       ));
       await store.save({
         ...meeting,
@@ -348,6 +349,7 @@ export async function createApp({
     const meeting = getMeeting(id);
     const job = processMeeting(
       id,
+      randomUUID(),
       currentKey,
       currentGeminiKey,
       currentModel,

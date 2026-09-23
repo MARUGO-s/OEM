@@ -5,6 +5,7 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { UsageStore } from "../server/usage-store.mjs";
 import { summaryUsage, transcriptionUsage, usageEvent } from "../supabase/functions/_shared/usage.mjs";
+import { groupUsageEvents } from "../supabase/functions/_shared/usage-groups.mjs";
 
 test("API応答のトークン・キャッシュ・音声時間で料金を計算し、不明な料金をゼロにしない", () => {
   const minutes = summaryUsage("gpt-6-sol", {
@@ -42,4 +43,36 @@ test("ローカル利用履歴は再起動後も月別で読み取れ、重複�
   assert.equal(result.eventCount, 1);
   assert.equal(result.events[0].meetingTitle, "会議");
   assert.equal(result.totalUsd, 0.004);
+});
+
+test("解析IDで分割録音と議事録を合算し、再生成は別の解析として扱う", () => {
+  const base = { meetingId: "meeting", meetingTitle: "会議", inputTokens: 10,
+    outputTokens: 5, audioSeconds: null, costUsd: 0.001 };
+  const events = [
+    { ...base, id: "a", runId: "run-1", kind: "transcription", createdAt: "2026-09-24T01:00:00Z" },
+    { ...base, id: "b", runId: "run-1", kind: "transcription", createdAt: "2026-09-24T01:01:00Z" },
+    { ...base, id: "c", runId: "run-1", kind: "minutes", createdAt: "2026-09-24T01:02:00Z" },
+    { ...base, id: "d", runId: "run-2", kind: "minutes", costUsd: null, createdAt: "2026-09-24T02:00:00Z" },
+  ];
+  const groups = groupUsageEvents(events.reverse());
+  assert.equal(groups.length, 2);
+  assert.equal(groups[0].events.length, 1);
+  assert.equal(groups[0].unpricedCount, 1);
+  assert.equal(groups[1].events.length, 3);
+  assert.equal(groups[1].totalUsd, 0.003);
+  assert.equal(groups[1].inputTokens, 30);
+});
+
+test("解析IDのない旧履歴は議事録呼び出しで区切る", () => {
+  const base = { meetingId: "meeting", costUsd: 0.01 };
+  const events = [
+    { ...base, id: "a", kind: "transcription", createdAt: "2026-09-24T01:00:00Z" },
+    { ...base, id: "b", kind: "minutes", createdAt: "2026-09-24T01:01:00Z" },
+    { ...base, id: "c", kind: "minutes", createdAt: "2026-09-24T02:00:00Z" },
+  ];
+  const groups = groupUsageEvents(events);
+  assert.equal(groups.length, 2);
+  assert.equal(groups[0].events.length, 1);
+  assert.equal(groups[1].events.length, 2);
+  assert.ok(groups.every((group) => group.legacy));
 });

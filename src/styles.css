@@ -3037,11 +3037,21 @@ button {
 }
 .usage-toolbar label { display: grid; gap: 7px; color: var(--muted); font-size: 12px; }
 .usage-toolbar input { min-height: 39px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 9px; background: white; color: var(--ink); }
-.usage-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.usage-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .usage-summary > div { display: grid; gap: 8px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: white; }
 .usage-summary span, .usage-muted { color: var(--muted); }
 .usage-summary strong { font-size: 24px; font-weight: 700; }
 .usage-note { max-width: 850px; color: var(--muted); line-height: 1.8; font-size: 12px; }
+.usage-groups { display: grid; gap: 12px; }
+.usage-group { border: 1px solid var(--border); border-radius: 14px; background: white; overflow: hidden; }
+.usage-group > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; cursor: pointer; }
+.usage-group > summary:hover { background: #fafaff; }
+.usage-group > summary span { display: grid; gap: 4px; }
+.usage-group > summary small { color: var(--muted); font-size: 12px; }
+.usage-group-total { margin-left: auto; text-align: right; white-space: nowrap; }
+.usage-group-total strong { font-size: 20px; }
+.usage-group-meta { padding: 0 20px 16px; color: var(--muted); font-size: 12px; }
+.usage-group .usage-table-wrap { border: 0; border-top: 1px solid var(--border); border-radius: 0; }
 .usage-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; background: white; }
 .usage-table { width: 100%; min-width: 760px; border-collapse: collapse; text-align: left; }
 .usage-table th, .usage-table td { padding: 15px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -3058,6 +3068,8 @@ button {
   .usage-summary { grid-template-columns: 1fr; }
   .usage-summary > div { padding: 14px 17px; }
   .usage-summary strong { font-size: 21px; }
+  .usage-group > summary { padding: 14px; }
+  .usage-group-total strong { font-size: 16px; }
 }
 @media print {
   body {
