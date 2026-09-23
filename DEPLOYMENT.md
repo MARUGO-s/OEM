@@ -64,6 +64,13 @@ DB実動確認は `tests/cloud-database.sql` を使用します。専用領域�
 - 他アプリpublic関数 `7af59434191676da1f1a0fcff37af937`、public列定義 `900122c8d03a27b20423f3d6b61c45c4`、Storageポリシー `9c044294871791de09c995a1fc1230b3` の定義ハッシュが追加前後で一致。新RPCはanon/authenticated不可、service_roleのみ実行可。
 - `node scripts/check-calendar-server.mjs` は架空のローカルデータだけのUI検証用サーバー（5192）です。終了時に作成した一時ディレクトリだけを削除します。実際のOpenAIは呼びません。
 
+## Gemini文字起こしの修正（2026-09-24）
+
+- `gemini-3.5-transcribe` を旧 `generateContent` と `candidates` 形式で呼び出していたため、応答を読めず `EMPTY_AUDIO` と誤判定していました。[公式仕様](https://ai.google.dev/gemini-api/docs/transcribe) に合わせ、`POST /v1beta/interactions`、`generation_config.transcription_config`、`steps` の `model_output` に修正しました。
+- 応答形式の不一致・処理未完了・空の文字起こしを別のエラーとして扱います。`store: false` と処理後の一時ファイル削除要求を使用し、ファイル準備に失敗した場合も後片付けします。DBマイグレーション・キー再設定は不要です。
+- Node45件、Edge Functionの型検査、クラウドHTTPテスト1件が成功。回帰テストは公式REST形式を使用し、思考や入力の混入、部分結果の誤採用、空応答の誤判定、エラー時のファイル後片付けを確認します。
+- 本番で失敗していた会議1件を保存済み音声から再試行し、Geminiによる4分割すべての文字起こしを確認しました。途中のGoogle HTTP 429は1分以上待って未完了の1分割だけを再試行し、保存済み3分割を保持して回復しました。429自体を自動再試行する変更は含みません。
+
 ## 復旧
 
 旧OEMの全Git履歴を `codex/backup-oem-before-kotonoha-20260923` に退避しています。置き換え前のコミットは `ec92fbfd9727024afac239a350cf955d075d59c8`。旧画面へ戻す場合は、この退避ブランチから内容を復元する新しいコミットを作成してください。共有DBはリセットしません。

@@ -232,18 +232,30 @@ globalThis.fetch = async (input, init: any) => {
   }
   if (
     url.hostname === "generativelanguage.googleapis.com" &&
-    url.pathname.endsWith(":generateContent")
+    url.pathname === "/v1beta/interactions"
   ) {
     assert.equal(headers.get("x-goog-api-key"), geminiApiKey);
     const body = JSON.parse(init.body);
     assert.deepEqual(
-      body.generationConfig.audioTranscriptionConfig.languageCodes,
+      body.generation_config.transcription_config.language_codes,
       ["ja-JP"],
+    );
+    assert.equal(body.model, "gemini-3.5-transcribe");
+    assert.equal(body.store, false);
+    assert.equal(body.input[0].type, "audio");
+    assert.equal(body.input[0].mime_type, "audio/wav");
+    assert.equal(
+      body.input[0].uri,
+      "https://generativelanguage.googleapis.com/v1beta/files/test-audio",
     );
     calls.push({ route: url.pathname, body });
     return json({
-      candidates: [
-        { content: { parts: [{ text: "Geminiで文字起こししました。" }] } },
+      status: "completed",
+      steps: [
+        {
+          type: "model_output",
+          content: [{ type: "text", text: "Geminiで文字起こししました。" }],
+        },
       ],
     });
   }
@@ -582,11 +594,7 @@ Deno.test(
       assert.equal(geminiDone.status, "done");
       assert.equal(geminiDone.transcriptionModel, "gemini-3.5-transcribe");
       assert.equal(geminiDone.transcript, "Geminiで文字起こししました。");
-      assert.ok(
-        calls.some((c) =>
-          c.route.includes("gemini-3.5-transcribe:generateContent"),
-        ),
-      );
+      assert.ok(calls.some((c) => c.route === "/v1beta/interactions"));
       assert.ok(
         calls.some(
           (c) => c.route === "/v1beta/files/test-audio" && c.body === "delete",

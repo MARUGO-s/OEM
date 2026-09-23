@@ -89,6 +89,46 @@ async function activeFile(apiKey, initial) {
   return file;
 }
 
+function transcriptFromInteraction(interaction) {
+  // REST responses contain model_output steps; candidates belongs to the
+  // legacy generateContent API, not the Transcribe Interactions API.
+  if (!interaction || typeof interaction !== "object") {
+    throw geminiError(
+      "Invalid Gemini interaction",
+      "GEMINI_TRANSCRIPT_INVALID",
+    );
+  }
+  if (interaction.status !== "completed") {
+    throw geminiError(
+      "Gemini transcription did not complete",
+      "GEMINI_TRANSCRIPT_INCOMPLETE",
+    );
+  }
+  let text;
+  if (Array.isArray(interaction.steps)) {
+    const parts = interaction.steps
+      .filter((step) => step?.type === "model_output")
+      .flatMap((step) => (Array.isArray(step.content) ? step.content : []))
+      .filter((part) => part?.type === "text" && typeof part.text === "string");
+    if (parts.length) text = parts.map((part) => part.text).join("");
+  } else if (typeof interaction.output_text === "string") {
+    text = interaction.output_text;
+  }
+  if (typeof text !== "string") {
+    throw geminiError(
+      "Missing Gemini transcript output",
+      "GEMINI_TRANSCRIPT_INVALID",
+    );
+  }
+  if (!text.trim()) {
+    throw geminiError(
+      "Gemini returned an empty transcript",
+      "GEMINI_NO_TRANSCRIPT",
+    );
+  }
+  return text.trim();
+}
+
 export async function transcribeWithGemini(apiKey, audio, fileName) {
   const mimeType = mimeFor(fileName, audio.type);
   const start = await google(
@@ -132,12 +172,12 @@ export async function transcribeWithGemini(apiKey, audio, fileName) {
   if (!uploaded.file?.uri || !uploaded.file?.name) {
     throw geminiError("Missing Gemini file", "GEMINI_UPLOAD_RESULT_MISSING");
   }
-  const file = await activeFile(apiKey, uploaded.file);
   try {
+    const file = await activeFile(apiKey, uploaded.file);
     const generated = await google(
       await geminiFetch(
         "TRANSCRIBE",
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TRANSCRIPTION_MODEL}:generateContent`,
+        "https://generativelanguage.googleapis.com/v1beta/interactions",
         {
           method: "POST",
           headers: {
@@ -145,31 +185,27 @@ export async function transcribeWithGemini(apiKey, audio, fileName) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            contents: [
+            model: GEMINI_TRANSCRIPTION_MODEL,
+            store: false,
+            input: [
               {
-                parts: [{ fileData: { fileUri: file.uri, mimeType } }],
+                type: "audio",
+                uri: file.uri,
+                mime_type: mimeType,
               },
             ],
-            generationConfig: {
-              audioTranscriptionConfig: { languageCodes: ["ja-JP"] },
+            generation_config: {
+              transcription_config: { language_codes: ["ja-JP"] },
             },
           }),
           signal: AbortSignal.timeout(110_000),
         },
       ),
     ).then((response) => geminiJson(response, "GEMINI_TRANSCRIPT_INVALID"));
-    const transcript = (generated.candidates || [])
-      .flatMap((candidate) => candidate.content?.parts || [])
-      .map((part) => part.text || "")
-      .join("")
-      .trim();
-    if (!transcript) {
-      throw Object.assign(new Error("empty audio"), { code: "EMPTY_AUDIO" });
-    }
-    return transcript;
+    return transcriptFromInteraction(generated);
   } finally {
     await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${file.name}?key=${encodeURIComponent(
+      `https://generativelanguage.googleapis.com/v1beta/${uploaded.file.name}?key=${encodeURIComponent(
         apiKey,
       )}`,
       { method: "DELETE", signal: AbortSignal.timeout(15_000) },

@@ -92,6 +92,10 @@ deno test --allow-env --config supabase/functions/kotonoha-api/deno.json tests/c
 
 Nodeテストはアップロード・保存・再試行・編集・削除・アクセス制限・APIモデル指定・キー非永続化を確認します。EdgeテストはHTTP通信を模擬し、共通ログイン、OpenAI/Geminiキーの暗号化、GPT/Gemini文字起こし、Astra/Sol生成、結果取得、音声の取り込みを確認します。実課金リクエストは実行しません。
 
+Geminiの文字起こしには [Interactions APIの文字起こし仕様](https://ai.google.dev/gemini-api/docs/transcribe) を使用します。RESTの `steps[].content` にある `model_output` のテキストを取得し、未完了・応答形式の不一致・空の結果を区別します。応答が読めないだけで「発話なし」とは判定しません。`store: false` を指定し、処理後にはGoogleへ送信した一時音声の削除を要求します。これらは `tests/gemini-transcribe.test.mjs` で検証します。
+
+2026年9月24日のGemini連携修正前に「発話を検出できませんでした」となった会議は、会議を開いて「再試行」を押してください。保存済み音声を使用し、文字起こしが完了した分は繰り返しません。再試行にはAPI利用料がかかります。
+
 デプロイ・復旧手順と既存DBの照合情報は [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
 
 ## 公式仕様

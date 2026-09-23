@@ -176,6 +176,12 @@ export function safeError(error) {
   if (error.code === "GEMINI_TRANSCRIPT_INVALID") {
     return "Geminiへの音声送信は成功しましたが、文字起こし応答を読み取れませんでした。再試行してください。";
   }
+  if (error.code === "GEMINI_TRANSCRIPT_INCOMPLETE") {
+    return "Geminiの文字起こしが完了しませんでした。保存済みの音声から再試行してください。";
+  }
+  if (error.code === "GEMINI_NO_TRANSCRIPT") {
+    return "Geminiは処理を完了しましたが、文字起こしが空でした。録音を再生して確認し、再試行するか文字起こしモデルを変更してください。";
+  }
   if (error.code === "GEMINI_UPLOAD_URL_MISSING") {
     return "GeminiはAPIキーを受理しましたが、音声アップロード先を返しませんでした。キーのAPI制限とGenerative Language APIの設定を確認してください。";
   }
