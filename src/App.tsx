@@ -658,7 +658,9 @@ export default function App() {
               <div className="page-footer">
                 <span>
                   <ShieldCheck size={14} />
-                  記録はこのPCに保存。AI解析時のみOpenAIへ送信。
+                  {isCloud
+                    ? "記録は専用クラウドで全員に共有。AI解析時はOpenAIへ送信。"
+                    : "記録はこのPCに保存。AI解析時のみOpenAIへ送信。"}
                 </span>
                 <button
                   className="text-button"
