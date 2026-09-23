@@ -16,7 +16,7 @@ export interface Meeting {
   date: string;
   participants: string;
   createdAt: string;
-  status: "transcribing" | "analyzing" | "done" | "error";
+  status: "uploading" | "transcribing" | "analyzing" | "done" | "error";
   template: "standard" | "brief" | "detailed";
   source: "audio" | "text" | "demo";
   isDemo: boolean;

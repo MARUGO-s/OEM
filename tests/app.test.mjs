@@ -11,9 +11,77 @@ import { MeetingStore } from "../server/store.mjs";
 import { createAI } from "../server/ai.mjs";
 import { MAX_FILE_SIZE } from "../server/domain.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
+import { splitRecordings } from "../src/split-recordings.mjs";
 
 const sampleMinutes = createDemo().minutes;
 const key = "sk-test-only-not-a-real-api-key";
+
+test("段階アップロードは全音声保存後だけ開始し、順序・欠損・二重完了を検証する", async (t) => {
+  const calls = [];
+  const { request, waitForJobs, store } = await setup(t, {
+    apiKey: key,
+    aiFactory: () => ({
+      transcribe: async (file) => {
+        calls.push(file);
+        return { transcript: `会話${calls.length}` };
+      },
+      summarize: async () => sampleMinutes,
+    }),
+  });
+  const file = new File([aacFixture, aacFixture], "前後.aac");
+  const parts = await splitRecordings([file], () => {}, { durationLimit: 0.1 });
+  const manifest = {
+    metadata: { title: "分割統合", date: "2026-09-23" },
+    sources: [{ name: file.name, size: file.size }],
+    parts: parts.map(({ name, blob, sourceIndex, partNumber, duration }) => ({
+      name,
+      size: blob.size,
+      sourceIndex,
+      partNumber,
+      duration,
+    })),
+  };
+  const response = await request("/uploads", {
+    method: "POST",
+    body: JSON.stringify(manifest),
+  });
+  assert.equal(response.status, 201);
+  const draft = await response.json();
+  assert.equal(draft.uploadPlan, undefined);
+  assert.equal(
+    (await request(`/meetings/${draft.id}/complete`, { method: "POST" }))
+      .status,
+    409,
+  );
+  for (const [i, p] of parts.entries()) {
+    assert.equal(
+      (
+        await request(`/meetings/${draft.id}/parts?index=${i}`, {
+          method: "POST",
+          body: p.blob,
+          headers: { "Content-Type": p.blob.type },
+        })
+      ).status,
+      200,
+    );
+  }
+  assert.equal(calls.length, 0);
+  assert.equal(
+    (await request(`/meetings/${draft.id}/complete`, { method: "POST" }))
+      .status,
+    202,
+  );
+  await waitForJobs();
+  assert.equal(store.get(draft.id).status, "done");
+  assert.equal(calls.length, parts.length);
+  assert.equal(
+    (await request(`/meetings/${draft.id}/complete`, { method: "POST" }))
+      .status,
+    202,
+  );
+  assert.equal(calls.length, parts.length);
+  assert.ok(store.get(draft.id).transcript.endsWith(`会話${parts.length}`));
+});
 
 async function setup(t, options = {}) {
   const dataDir = await mkdtemp(path.join(tmpdir(), "kotonoha-test-"));

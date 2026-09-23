@@ -297,7 +297,9 @@ export function MeetingDetail({
                 ? "作成完了"
                 : m.status === "error"
                   ? "要確認"
-                  : "AI処理中"}
+                  : m.status === "uploading"
+                    ? "取り込み途中"
+                    : "AI処理中"}
           </span>
           <span>MEETING NOTES</span>
         </div>
@@ -325,6 +327,11 @@ export function MeetingDetail({
           操作確認用の架空の会議です。実際の録音を解析した結果ではありません。
         </div>
       )}
+      {m.status === "uploading" && (
+        <div className="notice" role="status">
+          音声の取り込み途中です。送信中の画面で完了をお待ちください。送信を中断した場合は、この会議を削除してファイルを選び直してください。
+        </div>
+      )}
       {processing && (
         <div className="progress-panel" role="status">
           <LoaderCircle className="spin" size={23} />
@@ -338,7 +345,7 @@ export function MeetingDetail({
               {m.status === "transcribing"
                 ? "GPT-4o Transcribeが音声を読み取っています。"
                 : `${modelName(m.minutesModel)}が議題・決定事項・アクションを整理しています。`}{" "}
-              この画面を離れても処理は続きます。
+              完了分は保存されます。アプリを閉じた場合、残りの処理は次回開いたときに再開します。
             </p>
           </div>
         </div>
@@ -614,7 +621,9 @@ export function MeetingDetail({
             {!m.isDemo && (
               <button
                 className="text-button"
-                disabled={processing || busy || editing}
+                disabled={
+                  processing || busy || editing || m.status === "uploading"
+                }
                 onClick={() => setConfirm("regenerate")}
               >
                 <RefreshCw size={14} />
@@ -644,7 +653,9 @@ export function MeetingDetail({
         >
           <p className="confirm-copy">
             {confirm === "delete"
-              ? "会議と音声を一覧から取り除き、アプリの保存先にあるゴミ箱へ移動します。"
+              ? m.status === "uploading"
+                ? "取り込み途中の会議を一覧から取り除きます。クラウドに送信済みの未完了音声は完全に削除され、元に戻せません。元の録音ファイルから再度取り込めます。"
+                : "会議と音声を一覧から取り除き、アプリの保存先にあるゴミ箱へ移動します。"
               : "現在の文字起こしと接続設定のモデルで再解析します。編集した議事録とアクションの完了状態は上書きされます。API利用料がかかります。"}
           </p>
           <div className="modal-footer">

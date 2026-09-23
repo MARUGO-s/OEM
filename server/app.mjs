@@ -8,6 +8,12 @@ import { MeetingStore } from "./store.mjs";
 import { createAI } from "./ai.mjs";
 import { createDemo } from "./demo.mjs";
 import {
+  MAX_BATCH_SIZE,
+  UploadSchema,
+  uploadDocument,
+  uploadPart,
+} from "../supabase/functions/_shared/upload.mjs";
+import {
   MAX_AUDIO_FILES,
   prepareAudio,
   validateRecordings,
@@ -36,7 +42,7 @@ const working = (status) => ["transcribing", "analyzing"].includes(status);
 const fail = (status, message) =>
   Object.assign(new Error(message), { status, publicMessage: message });
 const publicRecord = (record) => {
-  const { audioFile, audioParts, ...rest } = record;
+  const { audioFile, audioParts, uploadPlan, ...rest } = record;
   const recordings = publicRecordings(recordingsFor(record));
   return { ...rest, hasAudio: recordings.length > 0, recordings };
 };
@@ -148,15 +154,19 @@ export async function createApp({
       const ai = aiFactory(key, modelForJob);
       let meeting = getMeeting(id);
       if (needsTranscription(meeting) || !meeting.transcript) {
-        const transcript = await transcribeRecordings(
-          recordingsFor(meeting),
-          async (part) =>
-            (await ai.transcribe(path.join(uploadsDir, part.audioFile)))
-              .transcript,
-          async (audioParts) => {
-            meeting = await store.save({ ...meeting, audioParts });
-          },
-        );
+        let transcript;
+        do {
+          transcript = await transcribeRecordings(
+            recordingsFor(meeting),
+            async (part) =>
+              (await ai.transcribe(path.join(uploadsDir, part.audioFile)))
+                .transcript,
+            async (audioParts) => {
+              meeting = await store.save({ ...meeting, audioParts });
+            },
+            meeting.chunked ? 1 : Infinity,
+          );
+        } while (transcript === null);
         meeting = await store.save({
           ...meeting,
           transcript,
@@ -207,7 +217,7 @@ export async function createApp({
       configured: Boolean(currentKey),
       model: currentModel,
       transcriptionModel: "gpt-4o-transcribe",
-      maxFileSize: MAX_FILE_SIZE,
+      maxFileSize: MAX_BATCH_SIZE,
     }),
   );
   app.put("/api/settings", async (req, res) => {
@@ -226,7 +236,7 @@ export async function createApp({
         configured: Boolean(currentKey),
         model: currentModel,
         transcriptionModel: "gpt-4o-transcribe",
-        maxFileSize: MAX_FILE_SIZE,
+        maxFileSize: MAX_BATCH_SIZE,
       });
     } finally {
       settingsBusy = false;
@@ -243,6 +253,69 @@ export async function createApp({
     const existing = store.list().find((m) => m.isDemo);
     const meeting = existing || (await store.save(createDemo()));
     res.status(existing ? 200 : 201).json(publicRecord(meeting));
+  });
+  app.post("/api/uploads", requireKey, async (req, res) => {
+    const input = UploadSchema.parse(req.body);
+    if (store.list().filter((m) => m.status === "uploading").length >= 2)
+      throw fail(
+        429,
+        "取り込み途中の会議を削除してから再度取り込んでください。",
+      );
+    const doc = uploadDocument(input, randomUUID(), currentModel);
+    await store.save(doc);
+    res.status(201).json(publicRecord(doc));
+  });
+  app.post(
+    "/api/meetings/:id/parts",
+    express.raw({ type: () => true, limit: MAX_FILE_SIZE }),
+    async (req, res) => {
+      const id = req.params.id;
+      lock(id);
+      let destination;
+      let saved = false;
+      try {
+        const doc = getMeeting(id);
+        let expected;
+        try {
+          expected = uploadPart(doc, Number(req.query.index));
+        } catch (error) {
+          throw fail(409, error.message);
+        }
+        if (!Buffer.isBuffer(req.body) || req.body.length !== expected.size)
+          throw fail(400, "録音のサイズが一致しません。");
+        const audioFile = `${randomUUID()}${path.extname(expected.name)}`;
+        destination = path.join(uploadsDir, audioFile);
+        await writeFile(destination, req.body, { mode: 0o600 });
+        const next = await store.save({
+          ...doc,
+          audioParts: [
+            ...doc.audioParts,
+            { ...expected, audioFile, transcript: "" },
+          ],
+        });
+        saved = true;
+        res.json(publicRecord(next));
+      } finally {
+        busy.delete(id);
+        if (!saved && destination) await unlink(destination).catch(() => {});
+      }
+    },
+  );
+  app.post("/api/meetings/:id/complete", requireKey, async (req, res) => {
+    const doc = getMeeting(req.params.id);
+    if (doc.status !== "uploading")
+      return res.status(202).json(publicRecord(doc));
+    lock(doc.id);
+    try {
+      if (doc.audioParts.length !== doc.uploadPlan.length)
+        throw fail(409, "音声の取り込みが未完了です。");
+      const next = await store.save({ ...doc, status: "transcribing" });
+      startJob(doc.id);
+      res.status(202).json(publicRecord(next));
+    } catch (error) {
+      busy.delete(doc.id);
+      throw error;
+    }
   });
   app.post(
     "/api/meetings",
@@ -341,6 +414,11 @@ export async function createApp({
 
   app.post("/api/meetings/:id/retry", requireKey, async (req, res) => {
     const meeting = getMeeting(req.params.id);
+    if (meeting.status === "uploading")
+      throw fail(
+        409,
+        "音声の取り込みが未完了です。削除してファイルを選び直してください。",
+      );
     if (meeting.isDemo)
       throw fail(
         400,

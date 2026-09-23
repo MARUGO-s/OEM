@@ -78,7 +78,12 @@ globalThis.fetch = async (input, init: any) => {
     }
     return json(sessions.get(payload.tokenHash) || { error: "INVALID_TOKEN" });
   }
-  if (url.pathname === "/rest/v1/rpc/kotonoha_store") {
+  if (
+    [
+      "/rest/v1/rpc/kotonoha_store",
+      "/rest/v1/rpc/kotonoha_audio_upload",
+    ].includes(url.pathname)
+  ) {
     const {
       p_operation: op,
       p_owner: user,
@@ -110,6 +115,32 @@ globalThis.fetch = async (input, init: any) => {
     const row = rows.get(id);
     if (!row || row.owner !== user)
       return json({ message: "NOT_FOUND", code: "P0002" }, 404);
+    if (op === "append") {
+      if (
+        row.document.status !== "uploading" ||
+        payload.index !== row.document.audioParts.length
+      )
+        return json({ message: "UPLOAD_ORDER" }, 400);
+      row.document.audioParts.push(payload.part);
+      row.audioPath ||= payload.part.audioPath;
+    }
+    if (op === "complete" && row.document.status === "uploading") {
+      if (row.document.audioParts.length !== row.document.uploadPlan.length)
+        return json({ message: "UPLOAD_INCOMPLETE" }, 400);
+      Object.assign(row.document, {
+        status: "transcribing",
+        partReady: true,
+        runId: payload.runId,
+      });
+    }
+    if (op === "next") {
+      if (
+        !row.document.partReady ||
+        !["transcribing", "analyzing"].includes(row.document.status)
+      )
+        return json(null);
+      Object.assign(row.document, { partReady: false, runId: payload.runId });
+    }
     if (op === "job_update" && row.document.runId === payload.runId) {
       Object.assign(row.document, payload.patch);
       if ("responseId" in payload) row.responseId = payload.responseId;
@@ -132,7 +163,7 @@ globalThis.fetch = async (input, init: any) => {
       assert.ok(file instanceof File);
       calls.push({
         route: url.pathname,
-        body: { name: file.name, type: file.type },
+        body: { name: file.name, type: file.type, prompt: form.get("prompt") },
       });
       if (file.name.endsWith(".m4a")) {
         assert.equal(file.type, "audio/mp4");
@@ -143,7 +174,11 @@ globalThis.fetch = async (input, init: any) => {
           "ftyp",
         );
       }
-      if (file.name.startsWith("recording-2") && failSecondRecording)
+      if (
+        (file.name.startsWith("recording-2") ||
+          file.name.endsWith("recording-1-2.wav")) &&
+        failSecondRecording
+      )
         return json({ error: { message: "test-only failure" } }, 429);
       return json({
         text: file.name.startsWith("recording-2")
@@ -483,6 +518,129 @@ Deno.test(
         ).status,
         400,
       );
+      // New staged protocol: upload all parts first, then one transcription per
+      // worker lease. Concurrent polling must not duplicate OpenAI requests.
+      const plan = {
+        metadata: { title: "100MB境界", date: "2026-09-23" },
+        sources: [{ name: "large.wav", size: 100_000_000 }],
+        parts: Array.from({ length: 7 }, (_, i) => ({
+          name: `recording-1-${i + 1}.wav`,
+          size: 44,
+          sourceIndex: 0,
+          partNumber: i + 1,
+          duration: 1,
+        })),
+      };
+      const createUpload = () =>
+        request("/uploads", "valid-a", {
+          method: "POST",
+          body: JSON.stringify(plan),
+        });
+      const draftResponse = await createUpload();
+      assert.equal(draftResponse.status, 201);
+      const draft = await draftResponse.json();
+      assert.equal(draft.uploadPlan, undefined);
+      assert.equal(draft.status, "uploading");
+      assert.equal(
+        (
+          await request(`/meetings/${draft.id}/complete`, "valid-a", {
+            method: "POST",
+          })
+        ).status,
+        409,
+      );
+      assert.equal(
+        (
+          await request(`/meetings/${draft.id}/retry`, "valid-a", {
+            method: "POST",
+          })
+        ).status,
+        409,
+      );
+      const putPart = (index: number, bytes = 44) =>
+        request(`/meetings/${draft.id}/parts?index=${index}`, "valid-b", {
+          method: "POST",
+          body: new Blob([new Uint8Array(bytes)], { type: "audio/wav" }),
+          headers: { "Content-Type": "audio/wav" },
+        });
+      assert.equal((await putPart(1)).status, 409);
+      assert.equal((await putPart(0, 43)).status, 400);
+      const transcriptionCount = () =>
+        calls.filter((c) => c.route.endsWith("/transcriptions")).length;
+      const beforeCount = transcriptionCount();
+      for (let i = 0; i < 7; i++) assert.equal((await putPart(i)).status, 200);
+      assert.equal((await putPart(6)).status, 409);
+      assert.equal(
+        transcriptionCount(),
+        beforeCount,
+        "upload does not call OpenAI",
+      );
+      assert.equal(
+        (
+          await request(`/meetings/${draft.id}/complete`, "valid-a", {
+            method: "POST",
+          })
+        ).status,
+        202,
+      );
+      await drain();
+      assert.equal(transcriptionCount(), beforeCount + 1);
+      failSecondRecording = true;
+      await Promise.all([
+        request("/meetings"),
+        request("/meetings", "valid-b"),
+      ]);
+      await drain();
+      assert.equal(
+        transcriptionCount(),
+        beforeCount + 2,
+        "one claim even with concurrent shared sessions",
+      );
+      assert.equal(rows.get(draft.id).document.status, "error");
+      assert.ok(rows.get(draft.id).document.audioParts[0].transcript);
+      failSecondRecording = false;
+      assert.equal(
+        (
+          await request(`/meetings/${draft.id}/retry`, "valid-b", {
+            method: "POST",
+          })
+        ).status,
+        202,
+      );
+      await drain();
+      for (let i = 0; i < 8; i++) {
+        await request("/meetings");
+        await drain();
+      }
+      assert.equal(rows.get(draft.id).document.status, "done");
+      assert.equal(
+        transcriptionCount(),
+        beforeCount + 8,
+        "7 successful calls and 1 failed; no re-transcription of saved chunks",
+      );
+      assert.ok(
+        calls.filter((c) => c.route.endsWith("/transcriptions")).at(-1)!.body
+          .prompt,
+      );
+      assert.ok(rows.get(draft.id).document.transcript.includes("【録音 7】"));
+      const abandoned = await (await createUpload()).json();
+      const filesBefore = audioObjects.size;
+      await request(`/meetings/${abandoned.id}/parts?index=0`, "valid-a", {
+        method: "POST",
+        body: new Blob([new Uint8Array(44)]),
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      assert.equal(audioObjects.size, filesBefore + 1);
+      await request(`/meetings/${abandoned.id}`, "valid-b", {
+        method: "DELETE",
+      });
+      assert.equal(
+        audioObjects.size,
+        filesBefore,
+        "abandoned upload audio cleaned up",
+      );
+      plan.sources[0].size++;
+      assert.equal((await createUpload()).status, 400);
       assert.equal(
         (await request("/auth/logout", loginSession.token, { method: "POST" }))
           .status,

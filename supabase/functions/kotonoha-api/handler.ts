@@ -11,6 +11,12 @@ import {
 } from "../_shared/domain.mjs";
 import { createDemo } from "../_shared/demo.mjs";
 import {
+  MAX_BATCH_SIZE,
+  UploadSchema,
+  uploadDocument,
+  uploadPart,
+} from "../_shared/upload.mjs";
+import {
   prepareAudio,
   validateRecordings,
   recordingsFor,
@@ -65,14 +71,22 @@ async function store(
   owner: string,
   id: string | null = null,
   payload: Doc = {},
+  rpc = "kotonoha_store",
 ): Promise<any> {
-  const { data, error } = await service.rpc("kotonoha_store", {
+  const { data, error } = await service.rpc(rpc, {
     p_operation: operation,
     p_owner: owner,
     p_id: id,
     p_payload: payload,
   });
   if (error) {
+    if (error.message.includes("UPLOAD_LIMIT"))
+      throw fail(
+        429,
+        "取り込み途中の会議があります。削除してから再度取り込んでください。",
+      );
+    if (error.message.includes("UPLOAD_"))
+      throw fail(409, "音声の取り込みが未完了、または順序が不正です。");
     if (error.message.includes("NOT_FOUND"))
       throw fail(404, "会議が見つかりません。");
     if (error.message.includes("BUSY"))
@@ -96,6 +110,8 @@ function expose(record: RecordRow) {
     runId: _runId,
     audioFile: _audioFile,
     audioParts: _audioParts,
+    uploadPlan: _uploadPlan,
+    partReady: _partReady,
     ...doc
   } = record.document;
   const recordings = publicRecordings(
@@ -108,7 +124,7 @@ function exposeSettings(config: Doc) {
     configured: Boolean(config.encryptedKey && encryptionSecret),
     model: config.model,
     transcriptionModel: "gpt-4o-transcribe",
-    maxFileSize: MAX_FILE_SIZE,
+    maxFileSize: MAX_BATCH_SIZE,
     cloud: true,
   };
 }
@@ -302,7 +318,7 @@ async function processMeeting(owner: string, initial: RecordRow, key: string) {
     ) {
       const transcript = await transcribeRecordings(
         recordingsFor(record.document, record.audioPath),
-        async (part: Doc) => {
+        async (part: Doc, index: number) => {
           if (!part.audioPath) throw new Error("No audio");
           const { data, error } = await service.storage
             .from(BUCKET)
@@ -318,6 +334,9 @@ async function processMeeting(owner: string, initial: RecordRow, key: string) {
           form.set("model", "gpt-4o-transcribe");
           form.set("response_format", "json");
           form.set("language", "ja");
+          const previous = record.document.audioParts?.[index - 1]?.transcript;
+          if (record.document.chunked && previous)
+            form.set("prompt", previous.slice(-1200));
           const result = await openai(
             key,
             "/audio/transcriptions",
@@ -329,7 +348,17 @@ async function processMeeting(owner: string, initial: RecordRow, key: string) {
         async (audioParts: Doc[]) => {
           record = await jobUpdate(owner, record, { audioParts });
         },
+        record.document.chunked ? 1 : Infinity,
       );
+      if (record.document.chunked) {
+        await jobUpdate(owner, record, {
+          partReady: true,
+          ...(transcript !== null
+            ? { transcript, status: "analyzing", segments: [] }
+            : {}),
+        });
+        return;
+      }
       record = await jobUpdate(owner, record, {
         transcript,
         status: "analyzing",
@@ -357,6 +386,22 @@ async function reconcile(
   key: string | null,
 ): Promise<RecordRow> {
   if (!working(record.document)) return record;
+  if (record.document.chunked && record.document.partReady && key) {
+    const next = await store(
+      "next",
+      owner,
+      record.document.id,
+      { runId: crypto.randomUUID() },
+      "kotonoha_audio_upload",
+    );
+    if (next)
+      EdgeRuntime.waitUntil(
+        processMeeting(owner, next, key).catch(() =>
+          console.error("kotonoha persistence failure"),
+        ),
+      );
+    return next || record;
+  }
   if (record.responseId && key) {
     let result: Doc;
     try {
@@ -531,7 +576,9 @@ export async function handler(req: Request) {
     }
     if (route === "/meetings" && req.method === "GET") {
       const records: RecordRow[] = await store("list", owner);
-      const key = records.some((r) => working(r.document) && r.responseId)
+      const key = records.some(
+        (r) => working(r.document) && (r.responseId || r.document.partReady),
+      )
         ? await getKey(owner, config)
         : null;
       const resolved = await Promise.all(
@@ -545,6 +592,19 @@ export async function handler(req: Request) {
         expose(await store("create", owner, demo.id, { document: demo })),
         201,
       );
+    }
+    if (route === "/uploads" && req.method === "POST") {
+      await getKey(owner, config);
+      const input = UploadSchema.parse(await jsonBody(req));
+      const id = crypto.randomUUID();
+      const record = await store(
+        "create",
+        owner,
+        id,
+        { document: uploadDocument(input, id, config.model) },
+        "kotonoha_audio_upload",
+      );
+      return json(expose(record), 201);
     }
     if (route === "/meetings" && req.method === "POST") {
       const key = await getKey(owner, config);
@@ -645,11 +705,70 @@ export async function handler(req: Request) {
       }
     }
     const match = route.match(
-      /^\/meetings\/([a-f0-9-]{36})(?:\/(audio|retry))?$/,
+      /^\/meetings\/([a-f0-9-]{36})(?:\/(audio|retry|parts|complete))?$/,
     );
     if (!match) throw fail(404, "指定された機能が見つかりません。");
     const id = z.uuid().parse(match[1]);
     let record: RecordRow = await store("get", owner, id);
+    if (match[2] === "parts" && req.method === "POST") {
+      const index = Number(new URL(req.url).searchParams.get("index"));
+      let expected;
+      try {
+        expected = uploadPart(record.document, index);
+      } catch (error) {
+        throw fail(409, (error as Error).message);
+      }
+      const bytes = await bodyBytes(req, expected.size);
+      if (bytes.length !== expected.size)
+        throw fail(400, "録音のサイズが一致しません。");
+      const partPath = `${owner}/${id}/${crypto.randomUUID()}-${expected.name}`;
+      const ext = expected.name.split(".").pop();
+      const mime = (
+        {
+          m4a: "audio/mp4",
+          mp3: "audio/mpeg",
+          wav: "audio/wav",
+          ogg: "audio/ogg",
+          flac: "audio/flac",
+        } as Record<string, string>
+      )[ext];
+      const { error } = await service.storage
+        .from(BUCKET)
+        .upload(partPath, new Blob([bytes], { type: mime }), {
+          contentType: mime,
+          upsert: false,
+        });
+      if (error)
+        throw fail(503, "音声を保存できませんでした。再度取り込んでください。");
+      try {
+        record = await store(
+          "append",
+          owner,
+          id,
+          { index, part: { ...expected, audioPath: partPath, transcript: "" } },
+          "kotonoha_audio_upload",
+        );
+      } catch (error) {
+        // A network error may mean the append committed but its response was
+        // lost. Do not destroy a potentially registered recording in that case.
+        if ([404, 409].includes((error as any).status))
+          await service.storage.from(BUCKET).remove([partPath]);
+        throw error;
+      }
+      return json(expose(record));
+    }
+    if (match[2] === "complete" && req.method === "POST") {
+      const key = await getKey(owner, config);
+      record = await store(
+        "complete",
+        owner,
+        id,
+        { runId: crypto.randomUUID() },
+        "kotonoha_audio_upload",
+      );
+      record = await reconcile(owner, record, key);
+      return json(expose(record), 202);
+    }
     if (match[2] === "audio" && req.method === "GET") {
       const index = Number(new URL(req.url).searchParams.get("part") ?? 0);
       const part =
@@ -665,6 +784,11 @@ export async function handler(req: Request) {
       return json({ url: data.signedUrl });
     }
     if (match[2] === "retry" && req.method === "POST") {
+      if (record.document.status === "uploading")
+        throw fail(
+          409,
+          "音声の取り込みが未完了です。会議を削除して再度ファイルを選択してください。",
+        );
       if (record.document.isDemo)
         throw fail(400, "サンプルは再生成できません。");
       const key = await getKey(owner, config);
@@ -678,6 +802,7 @@ export async function handler(req: Request) {
         error: null,
         minutesModel: config.model,
         runId: crypto.randomUUID(),
+        partReady: false,
       });
       EdgeRuntime.waitUntil(
         processMeeting(owner, record, key).catch(() =>
@@ -704,6 +829,13 @@ export async function handler(req: Request) {
     }
     if (!match[2] && req.method === "DELETE") {
       await store("delete", owner, id);
+      if (
+        record.document.status === "uploading" &&
+        record.document.audioParts?.length
+      )
+        await service.storage
+          .from(BUCKET)
+          .remove(record.document.audioParts.map((p: Doc) => p.audioPath));
       return json(null, 204);
     }
     throw fail(405, "この操作には対応していません。");

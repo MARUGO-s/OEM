@@ -51,7 +51,7 @@ export function validateRecordings(files) {
 
 // The demuxer tolerates a truncated last frame. Validate framing first so no
 // recording tail silently disappears. ID3v2 tags before the audio are allowed.
-function validateAdts(bytes) {
+export function validateAdts(bytes) {
   let offset = 0;
   let frames = 0;
   let config;
@@ -88,7 +88,7 @@ function validateAdts(bytes) {
       throw new Error("Truncated or changing ADTS stream");
     config = nextConfig;
     offset += length;
-    if (++frames > 250000)
+    if (++frames > 10_000_000)
       throw fail(
         "AAC録音が長すぎます。短く分割して別の会議として取り込んでください。",
       );
@@ -233,12 +233,23 @@ export function publicRecordings(parts) {
 
 // At most five calls in parallel, bounded by the existing 24 MB batch limit.
 // Persist completed parts in a serialized queue; retry only missing parts.
-export async function transcribeRecordings(parts, transcribe, saveProgress) {
+export async function transcribeRecordings(
+  parts,
+  transcribe,
+  saveProgress,
+  limit = Infinity,
+) {
   const next = parts.map((part) => ({ ...part }));
+  const selected = new Set(
+    next
+      .map((p, i) => (!p.transcript ? i : -1))
+      .filter((i) => i >= 0)
+      .slice(0, limit),
+  );
   let saving = Promise.resolve();
   const results = await Promise.allSettled(
     next.map(async (part, index) => {
-      if (part.transcript) return;
+      if (part.transcript || !selected.has(index)) return;
       const text = await transcribe(part, index);
       if (typeof text !== "string" || !text.trim())
         throw Object.assign(new Error("empty"), { code: "EMPTY_AUDIO" });
@@ -261,6 +272,7 @@ export async function transcribeRecordings(parts, transcribe, saveProgress) {
       publicMessage: `録音${failed + 1}の文字起こしに失敗しました。${safeError(error)} 完了した録音は再処理せず、未完了分から再試行できます。`,
     });
   }
+  if (next.some((part) => !part.transcript)) return null;
   const transcript = next
     .map((part, i) =>
       next.length === 1

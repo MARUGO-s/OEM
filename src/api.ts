@@ -21,7 +21,7 @@ export async function api<T>(
   const response = await fetch(`${base}${path}`, {
     ...options,
     headers: {
-      ...(options.body instanceof FormData
+      ...(options.body instanceof FormData || options.body instanceof Blob
         ? {}
         : { "Content-Type": "application/json" }),
       "X-Kotonoha": "1",

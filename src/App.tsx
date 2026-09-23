@@ -141,8 +141,12 @@ export default function App() {
       setDemoLoading(false);
     }
   }
-  async function create(data: FormData) {
-    const m = await api<Meeting>("/meetings", { method: "POST", body: data });
+  async function create(data: FormData, progress: (message: string) => void) {
+    const m = data.getAll("audio").length
+      ? await (
+          await import("./upload-recordings")
+        ).uploadRecordings(data, progress)
+      : await api<Meeting>("/meetings", { method: "POST", body: data });
     updateMeeting(m);
     setNewOpen(false);
     openMeeting(m.id);
@@ -621,7 +625,9 @@ export default function App() {
                               ? "文字起こし中"
                               : m.status === "analyzing"
                                 ? "解析中"
-                                : "要確認"}
+                                : m.status === "uploading"
+                                  ? "取り込み途中"
+                                  : "要確認"}
                         </span>
                         <ChevronRight size={17} />
                       </button>
@@ -797,7 +803,7 @@ function Help({
           },
           {
             title: "録音済みファイルを取り込む",
-            text: "AAC・MP3・M4A・WAV・MP4・WebM・OGG・FLACに対応。最大5ファイル・合計24 MBまでまとめて選び、上下ボタンで録音順に並べます。各文字起こしを順番につなぎ、1つの議事録を作成します。AACはM4Aへ自動変換。録音は文字起こしタブで切り替えて再生できます。24 MBを超える場合は事前に圧縮するか別の会議に分けてください。会話テキストも使えます。",
+            text: "AAC・MP3・M4A・WAV・MP4・WebM・OGG・FLACに対応。最大5ファイル・合計100 MB（100,000,000バイト）まで選び、上下ボタンで録音順に並べます。大きな録音はブラウザー内で自動分割し、順番に文字起こしして1つの議事録にまとめます。送信完了まで画面を開いたままにしてください。その後は、画面を閉じても完了分が保存され、次回開くと未処理分を再開します。録音は文字起こしタブで分割ごとに再生できます。文字起こしは合計10万文字までです。",
             action: "録音を取り込む",
             run: onNew,
           },

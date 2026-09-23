@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight,
   ArrowUp,
@@ -13,7 +13,7 @@ import {
 import { Modal } from "./Modal";
 import { today, modelName, type Settings } from "./types";
 
-const LIMIT = 24_000_000;
+const LIMIT = 100_000_000;
 const ACCEPT = ".mp3,.mp4,.mpeg,.mpga,.m4a,.aac,.wav,.webm,.ogg,.flac";
 export function NewMeeting({
   settings,
@@ -23,7 +23,10 @@ export function NewMeeting({
 }: {
   settings: Settings | null;
   onClose: () => void;
-  onCreate: (data: FormData) => Promise<void>;
+  onCreate: (
+    data: FormData,
+    progress: (message: string) => void,
+  ) => Promise<void>;
   onSettings: () => void;
 }) {
   const [mode, setMode] = useState<"file" | "text">("file");
@@ -35,8 +38,17 @@ export function NewMeeting({
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!busy) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [busy]);
   function chooseFiles(selected: FileList | null) {
     if (!selected?.length) return;
     const next = [...files, ...Array.from(selected)];
@@ -59,7 +71,7 @@ export function NewMeeting({
       next.some((file) => file.size === 0) ||
       next.reduce((n, file) => n + file.size, 0) > LIMIT
     ) {
-      setError("空ではない音声ファイルを、合計24 MB以下で選んでください。");
+      setError("空ではない音声ファイルを、合計100 MB以下で選んでください。");
       return;
     }
     setFiles(next);
@@ -88,7 +100,7 @@ export function NewMeeting({
       data.set("template", template);
       if (mode === "text") data.set("transcript", transcript);
       else files.forEach((file) => data.append("audio", file));
-      await onCreate(data);
+      await onCreate(data, setProgress);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -152,7 +164,7 @@ export function NewMeeting({
               {files.length ? "ファイルを追加" : "ファイルを選択"}
             </button>
             <small>AAC / MP3 / M4A / WAV / MP4 / WebM / OGG / FLAC</small>
-            <small>最大5ファイル・合計24 MBまで · 複数選択できます</small>
+            <small>最大5ファイル・合計100 MBまで · 大きな録音は自動分割</small>
             <input
               ref={input}
               type="file"
@@ -241,7 +253,7 @@ export function NewMeeting({
               </div>
             ))}
             <p className="field-hint">
-              各録音を文字起こしし、この順番で1つの議事録にまとめます。切れた間の会話は補完しません。AACは再圧縮せずM4Aに変換します。
+              音声を自動分割し、この順番で1つの議事録にまとめます。切れた間の会話は補完しません。AACは再圧縮せずM4Aに変換します。送信完了まで画面を開いたままにしてください。
             </p>
           </div>
         )}
@@ -304,6 +316,13 @@ export function NewMeeting({
               <ArrowRight size={14} />
             </button>
           </div>
+        )}
+        {busy && (
+          <p className="notice" role="status" aria-live="polite">
+            {progress || "取り込み中…"}
+            <br />
+            送信完了までこの画面を開いておいてください。
+          </p>
         )}
         {error && (
           <div className="error-message" role="alert">
