@@ -133,7 +133,7 @@ function transcriptFromInteraction(interaction) {
   return text.trim();
 }
 
-export async function transcribeWithGemini(apiKey, audio, fileName) {
+export async function transcribeWithGemini(apiKey, audio, fileName, onUsage = (_response) => {}) {
   const mimeType = mimeFor(fileName, audio.type);
   const start = await google(
     await geminiFetch(
@@ -206,6 +206,7 @@ export async function transcribeWithGemini(apiKey, audio, fileName) {
         },
       ),
     ).then((response) => geminiJson(response, "GEMINI_TRANSCRIPT_INVALID"));
+    await onUsage(generated);
     return transcriptFromInteraction(generated);
   } finally {
     await fetch(

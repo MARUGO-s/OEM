@@ -83,6 +83,30 @@ export interface Settings {
   transcriptionModel: string;
   maxFileSize: number;
 }
+export interface UsageEvent {
+  id: string;
+  meetingId: string;
+  meetingTitle: string;
+  kind: "transcription" | "minutes";
+  provider: "OpenAI" | "Google";
+  model: string;
+  createdAt: string;
+  pricingDate: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cachedInputTokens: number | null;
+  reasoningTokens: number | null;
+  audioSeconds: number | null;
+  costUsd: number | null;
+  estimated: boolean;
+}
+export interface UsageMonth {
+  month: string;
+  totalUsd: number;
+  unpricedCount: number;
+  eventCount: number;
+  events: UsageEvent[];
+}
 export interface ScheduleEvent {
   title: string;
   kind: "event" | "deadline";

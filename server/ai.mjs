@@ -27,13 +27,14 @@ export function createAI(
     ...clientOptions,
   });
   return {
-    async transcribe(filePath) {
+    async transcribe(filePath, onUsage = () => {}) {
       if (transcriptionModel === GEMINI_TRANSCRIPTION_MODEL) {
         const bytes = await readFile(filePath);
         const transcript = await transcribeWithGemini(
           geminiApiKey,
           new Blob([bytes]),
           path.basename(filePath),
+          onUsage,
         );
         return { transcript, segments: [], duration: null };
       }
@@ -43,13 +44,14 @@ export function createAI(
         response_format: "json",
         languages: ["ja"],
       });
+      await onUsage(response);
       const transcript = response.text;
       if (!transcript?.trim())
         throw Object.assign(new Error("empty audio"), { code: "EMPTY_AUDIO" });
       // GPT Transcribe does not return speaker IDs or timestamps. Never invent them.
       return { transcript, segments: [], duration: null };
     },
-    async summarize(meeting, files = []) {
+    async summarize(meeting, files = [], onUsage = () => {}) {
       if (meeting.transcript.length > MAX_TEXT_LENGTH)
         throw Object.assign(new Error("too long"), { code: "TEXT_TOO_LONG" });
       const response = await client.responses.parse({
@@ -62,6 +64,7 @@ export function createAI(
           format: zodTextFormat(schemaForMeeting(meeting), "meeting_minutes"),
         },
       });
+      await onUsage(response);
       if (response.status !== "completed" || !response.output_parsed)
         throw new Error("No complete structured output");
       return parseMinutes(meeting, response.output_parsed);

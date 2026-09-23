@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { calendarChange } from "../_shared/calendar.mjs";
+import { usageEvent } from "../_shared/usage.mjs";
 import {
   MAX_FILE_SIZE,
   MAX_TEXT_LENGTH,
@@ -292,6 +293,30 @@ async function openai(
   }
   return await response.json();
 }
+async function usageId(providerId?: string) {
+  if (!providerId) return crypto.randomUUID();
+  const digest = new Uint8Array(await crypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(providerId),
+  ));
+  digest[6] = (digest[6] & 15) | 80;
+  digest[8] = (digest[8] & 63) | 128;
+  const hex = Array.from(digest.slice(0, 16), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+async function recordApiUsage(
+  owner: string, meeting: Doc, kind: "transcription" | "minutes",
+  model: string, response: Doc, duration?: number | null,
+) {
+  try {
+    const id = await usageId(response?.id ? `${owner}:${kind}:${response.id}` : undefined);
+    await store("record", owner, null, usageEvent({
+      id, meetingId: meeting.id, meetingTitle: meeting.title,
+      kind, model, response, audioSeconds: duration,
+    }), "kotonoha_usage");
+  } catch (error) {
+    console.error("kotonoha API usage could not be saved", (error as any)?.status || "unknown");
+  }
+}
 async function jobUpdate(
   owner: string,
   record: RecordRow,
@@ -309,6 +334,9 @@ async function finalize(
   record: RecordRow,
   result: Doc,
 ): Promise<RecordRow> {
+  if (["completed", "failed", "cancelled", "incomplete"].includes(result.status)) {
+    await recordApiUsage(owner, record.document, "minutes", record.document.minutesModel, result);
+  }
   if (result.status === "completed") {
     const output = (result.output || []).flatMap((item: Doc) =>
       item.type === "message" ? item.content || [] : [],
@@ -451,13 +479,17 @@ async function processMeeting(
           if (error || !data) throw new Error("Audio unavailable");
           const fileName = part.audioPath.split("/").pop() || "meeting.mp3";
           const previous = record.document.audioParts?.[index - 1]?.transcript;
+          const duration = part.duration || (recordingsFor(record.document, record.audioPath).length === 1
+            ? record.document.duration : null);
           if (
             record.document.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL
           ) {
             if (!keys.gemini) {
               throw fail(428, "接続設定でGemini APIキーを設定してください。");
             }
-            return transcribeWithGemini(keys.gemini, data, fileName);
+            return transcribeWithGemini(keys.gemini, data, fileName,
+              (response: Doc) => recordApiUsage(owner, record.document,
+                "transcription", GEMINI_TRANSCRIPTION_MODEL, response, duration));
           }
           const form = new FormData();
           // The display name may be .aac, while storage contains a remuxed .m4a.
@@ -474,6 +506,8 @@ async function processMeeting(
             { method: "POST", body: form },
             110_000,
           );
+          await recordApiUsage(owner, record.document, "transcription",
+            OPENAI_TRANSCRIPTION_MODEL, result, duration);
           return result.text;
         },
         async (audioParts: Doc[]) => {
@@ -748,6 +782,12 @@ export async function handler(req: Request) {
     const config = await store("get", owner, null, {}, "kotonoha_settings");
     if (route === "/settings" && req.method === "GET") {
       return json(exposeSettings(config));
+    }
+    if (route === "/usage" && req.method === "GET") {
+      const query = new URL(req.url).searchParams;
+      const month = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/).parse(query.get("month"));
+      const page = z.coerce.number().int().min(0).max(100000).parse(query.get("page") || "0");
+      return json(await store("list", owner, null, { month, page }, "kotonoha_usage"));
     }
     if (route === "/settings" && req.method === "PUT") {
       const input = settingsSchema.parse(await jsonBody(req));

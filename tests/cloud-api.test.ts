@@ -45,6 +45,7 @@ const jobs: Promise<unknown>[] = [];
 const calls: { route: string; body: any }[] = [];
 const audioObjects = new Map<string, Blob>();
 const responses = new Map<string, any>();
+const usageEvents = new Map<string, any>();
 let failSecondRecording = false;
 let geminiFailures = 0;
 let geminiDailyLimit = false;
@@ -101,6 +102,7 @@ globalThis.fetch = async (input, init: any) => {
       "/rest/v1/rpc/kotonoha_attachments",
       "/rest/v1/rpc/kotonoha_calendar",
       "/rest/v1/rpc/kotonoha_gemini_gate",
+      "/rest/v1/rpc/kotonoha_usage",
     ].includes(url.pathname)
   ) {
     const {
@@ -115,6 +117,24 @@ globalThis.fetch = async (input, init: any) => {
       transcriptionModel: "gpt-transcribe",
       encryptedGeminiKey: null,
     };
+    if (url.pathname.endsWith("kotonoha_usage")) {
+      if (op === "record") {
+        usageEvents.set(`${user}:${payload.id}`, payload);
+        return json({ recorded: true });
+      }
+      const month = new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit",
+      });
+      const matching = [...usageEvents.entries()]
+        .filter(([key, event]) => key.startsWith(`${user}:`) &&
+          month.format(new Date(event.createdAt)) === payload.month)
+        .map(([, event]) => event)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return json({ month: payload.month, eventCount: matching.length,
+        totalUsd: matching.reduce((n, event) => n + (event.costUsd || 0), 0),
+        unpricedCount: matching.filter((event) => event.costUsd === null).length,
+        events: matching.slice(payload.page * 100, (payload.page + 1) * 100) });
+    }
     if (url.pathname.endsWith("kotonoha_settings") && op === "get")
       return json(config);
     if (url.pathname.endsWith("kotonoha_settings") && op === "put") {
@@ -317,7 +337,9 @@ globalThis.fetch = async (input, init: any) => {
       );
     }
     return json({
+      id: `gemini-${calls.length}`,
       status: "completed",
+      usage: { total_input_tokens: 1500, total_output_tokens: 175 },
       steps: [
         {
           type: "model_output",
@@ -365,6 +387,8 @@ globalThis.fetch = async (input, init: any) => {
       )
         return json({ error: { message: "test-only failure" } }, 429);
       return json({
+        id: `transcription-${calls.length}`,
+        usage: { type: "duration", seconds: 60 },
         text: file.name.startsWith("recording-2")
           ? "後半で実施が決定しました。"
           : "佐藤さんが来週までに企画書を作成します。",
@@ -394,7 +418,11 @@ globalThis.fetch = async (input, init: any) => {
       return json({ id, status: "queued" });
     }
     return json({
+      id: url.pathname.split("/").pop(),
       status: "completed",
+      usage: { input_tokens: 1000, output_tokens: 200,
+        input_tokens_details: { cached_tokens: 100 },
+        output_tokens_details: { reasoning_tokens: 50 } },
       output: [
         {
           type: "message",
@@ -662,6 +690,17 @@ Deno.test(
       assert.equal(geminiDone.status, "done");
       assert.equal(geminiDone.transcriptionModel, "gemini-3.5-transcribe");
       assert.equal(geminiDone.transcript, "Geminiで文字起こししました。");
+      const usageMonth = new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit",
+      }).format(new Date());
+      const geminiUsage = await (await request(`/usage?month=${usageMonth}&page=0`, "valid-b")).json();
+      const geminiEvent = geminiUsage.events.find((event: any) =>
+        event.meetingId === geminiMeeting.id && event.kind === "transcription");
+      assert.equal(geminiEvent.inputTokens, 1500);
+      assert.equal(geminiEvent.outputTokens, 175);
+      assert.equal(geminiEvent.costUsd, (1500 * 2 + 175 * 12) / 1_000_000);
+      assert.ok(geminiUsage.events.some((event: any) =>
+        event.meetingId === geminiMeeting.id && event.kind === "minutes"));
       assert.ok(calls.some((c) => c.route === "/v1beta/interactions"));
       assert.ok(
         calls.some(
@@ -824,6 +863,13 @@ Deno.test(
       await pollTogether();
       await pollTogether();
       await pollTogether();
+      for (let guard = 0; guard < 10 && [parallelA, parallelB].some(
+        (id) => rows.get(id).document.status !== "done"); guard++) {
+        for (const id of [parallelA, parallelB]) {
+          if (rows.get(id).document.transcriptionWait) advanceWait(id);
+        }
+        await pollTogether();
+      }
       for (const id of [parallelA, parallelB]) {
         assert.equal(rows.get(id).document.status, "done");
         assert.equal(
@@ -953,6 +999,16 @@ Deno.test(
         calls.filter((c) => c.route === "/v1/audio/transcriptions").length,
         1,
       );
+      const usageAfterDelete = await (await request(`/usage?month=${usageMonth}&page=0`)).json();
+      assert.ok(usageAfterDelete.events.some((event: any) => event.meetingId === geminiMeeting.id),
+        "deleting a meeting must preserve its API usage history");
+      assert.ok(usageAfterDelete.events.some((event: any) =>
+        event.kind === "transcription" && event.model === "gpt-transcribe" &&
+        event.audioSeconds === 60 && event.costUsd === 0.0045));
+      assert.ok(usageAfterDelete.events.some((event: any) =>
+        event.kind === "minutes" && event.model === "gpt-6-sol" &&
+        event.inputTokens === 1000 && event.cachedInputTokens === 100 &&
+        event.reasoningTokens === 50));
       // Same workspace, mixed formats, durable partial results and retry only missing parts.
       const combined = new FormData();
       combined.set("title", "分割録音の統合テスト");

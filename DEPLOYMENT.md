@@ -25,6 +25,8 @@ supabase functions deploy kotonoha-api --project-ref hjhkccbktkscwtgzxjfq --no-v
 
 ## DB変更の注意
 
+API使用料ページは `20260924000400_kotonoha_api_usage.sql` のみを適用してからEdge Function・フロントを公開します。会議録専用 `kotonoha.api_usage` とservice_role限定 `public.kotonoha_usage` RPCを追加します。他アプリのテーブル・Auth・Storageには触れません。マイグレーション前の料金は復元できません。`tests/cloud-usage-database.sql` は管理者権限でロールバック付きの所有者分離・重複防止・権限テストを行います。
+
 カレンダー対応は `20260923000500_kotonoha_calendar.sql` のみを適用してからEdge Function・フロントを公開します。service_role限定 `public.kotonoha_calendar` を追加し、既存専用会議documentの `calendarOverrides` に1予定ずつ行ロックで保存します。共有の業務テーブル・Auth・Storageは変更しません。本文編集は従来のPATCHで保存し、予定とは独立しています。再生成時も手動変更を残します。
 
 Gemini文字起こし対応は `20260924000100_kotonoha_gemini_transcription.sql` のみを適用してからEdge Function・フロントを公開します。会議録専用 `kotonoha.settings` に文字起こしモデルと暗号化Geminiキー列を追加し、service_role限定 `public.kotonoha_settings` RPCで操作します。既存のOpenAIキー、業務テーブル、Auth、Storageには触れません。`gemini-1.5-flash` は提供終了済みのため `gemini-3.5-transcribe` を使用します。

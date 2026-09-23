@@ -5,7 +5,9 @@ import { mkdir, unlink, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { MeetingStore } from "./store.mjs";
+import { UsageStore } from "./usage-store.mjs";
 import { createAI } from "./ai.mjs";
+import { usageEvent } from "../supabase/functions/_shared/usage.mjs";
 import {
   createLocalGeminiGate,
   geminiRetryPlan,
@@ -90,6 +92,8 @@ export async function createApp({
   const app = express();
   const store = new MeetingStore(path.join(dataDir, "meetings"));
   await store.init();
+  const usageStore = new UsageStore(path.join(dataDir, "usage"));
+  await usageStore.init();
   const uploadsDir = path.join(dataDir, "audio");
   await mkdir(uploadsDir, { recursive: true, mode: 0o700 });
   const attachmentsDir = path.join(dataDir, "attachments");
@@ -115,6 +119,16 @@ export async function createApp({
   const jobs = new Set();
   const acquireGemini = createLocalGeminiGate();
   let settingsBusy = false;
+  async function recordApiUsage(kind, meeting, modelId, response, duration) {
+    try {
+      await usageStore.record(usageEvent({
+        id: randomUUID(), meetingId: meeting.id, meetingTitle: meeting.title,
+        kind, model: modelId, response, audioSeconds: duration,
+      }));
+    } catch (error) {
+      console.error("API usage could not be saved", error?.code || error?.name);
+    }
+  }
 
   app.disable("x-powered-by");
   app.use("/api", (req, res, next) => {
@@ -211,8 +225,13 @@ export async function createApp({
       let meeting = getMeeting(id);
       const gemini = transcriptionModelForJob === "gemini-3.5-transcribe";
       async function transcribePart(part) {
+        const duration = part.duration || (recordingsFor(meeting).length === 1
+          ? meeting.duration : null);
+        const onUsage = (response) => recordApiUsage(
+          "transcription", meeting, transcriptionModelForJob, response, duration,
+        );
         if (!gemini)
-          return (await ai.transcribe(path.join(uploadsDir, part.audioFile)))
+          return (await ai.transcribe(path.join(uploadsDir, part.audioFile), onUsage))
             .transcript;
         for (;;) {
           const release = await acquireGemini(async (until, reason) => {
@@ -230,6 +249,7 @@ export async function createApp({
             meeting = await store.save({ ...meeting, transcriptionWait: null });
             const result = await ai.transcribe(
               path.join(uploadsDir, part.audioFile),
+              onUsage,
             );
             meeting = await store.save({ ...meeting, geminiRetryCount: 0 });
             return result.transcript;
@@ -287,7 +307,10 @@ export async function createApp({
           },
         });
       }
-      const minutes = parseMinutes(meeting, await ai.summarize(meeting, files));
+      const minutes = parseMinutes(meeting, await ai.summarize(
+        meeting, files,
+        (response) => recordApiUsage("minutes", meeting, modelForJob, response, null),
+      ));
       await store.save({
         ...meeting,
         status: "done",
@@ -341,6 +364,11 @@ export async function createApp({
       maxFileSize: MAX_BATCH_SIZE,
     }),
   );
+  app.get("/api/usage", (req, res) => {
+    const month = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/).parse(req.query.month);
+    const page = z.coerce.number().int().min(0).max(100000).parse(req.query.page ?? 0);
+    res.json(usageStore.month(month, page));
+  });
   app.put("/api/settings", async (req, res) => {
     const input = settingsSchema.parse(req.body);
     if (settingsBusy) throw fail(409, "設定を保存中です。");

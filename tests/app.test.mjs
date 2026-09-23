@@ -881,3 +881,34 @@ test("実際のSDKリクエストはGPT Transcribeと指定のAstra/Solを使用
     assert.equal(calls.length, 2);
   }
 });
+
+test("API使用料を呼び出しごとに保存し、会議削除後も月別に表示する", async (t) => {
+  const { request, waitForJobs } = await setup(t, {
+    apiKey: key,
+    aiFactory: () => ({
+      async transcribe(_path, onUsage) {
+        await onUsage({ usage: { seconds: 60 } });
+        return { transcript: "来週始めます。", segments: [], duration: null };
+      },
+      async summarize(_meeting, _files, onUsage) {
+        await onUsage({ usage: { input_tokens: 1000, output_tokens: 200,
+          input_tokens_details: { cached_tokens: 0 } } });
+        return sampleMinutes;
+      },
+    }),
+  });
+  const meeting = await (await request("/meetings", {
+    method: "POST", body: payload({ audio: true }),
+  })).json();
+  await waitForJobs();
+  const month = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit",
+  }).format(new Date());
+  const route = `/usage?month=${month}&page=0`;
+  const usage = await (await request(route)).json();
+  assert.equal(usage.eventCount, 2);
+  assert.equal(usage.totalUsd, 0.0045 + (1000 * 10 + 200 * 50) / 1_000_000);
+  assert.ok(usage.events.every((event) => event.meetingId === meeting.id));
+  assert.equal((await request(`/meetings/${meeting.id}`, { method: "DELETE" })).status, 204);
+  assert.equal((await (await request(route)).json()).eventCount, 2);
+});

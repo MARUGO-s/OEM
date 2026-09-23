@@ -18,6 +18,7 @@ import {
   Menu,
   MessageSquareText,
   Plus,
+  ReceiptText,
   Search,
   Settings2,
   ShieldCheck,
@@ -40,9 +41,10 @@ import { NewMeeting } from "./NewMeeting";
 import { SettingsDialog } from "./SettingsDialog";
 import { ActionList, MeetingDetail } from "./MeetingDetail";
 import { Calendar } from "./Calendar";
+import { UsagePage } from "./UsagePage";
 import { tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
 
-type Page = "meetings" | "calendar" | "actions" | "help";
+type Page = "meetings" | "calendar" | "actions" | "usage" | "help";
 export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -178,6 +180,8 @@ export default function App() {
         ? "アクション"
         : page === "help"
           ? "使い方ガイド"
+          : page === "usage"
+            ? "API使用料"
           : "会議ワークスペース";
   return (
     <div className="app-shell">
@@ -226,6 +230,7 @@ export default function App() {
               { id: "meetings", Icon: LayoutGrid, label: "すべての会議" },
               { id: "calendar", Icon: CalendarDays, label: "カレンダー" },
               { id: "actions", Icon: ListTodo, label: "アクション" },
+              { id: "usage", Icon: ReceiptText, label: "API使用料" },
               { id: "help", Icon: BookOpen, label: "使い方ガイド" },
             ] as const
           ).map(({ id, Icon, label }) => (
@@ -761,6 +766,8 @@ export default function App() {
                 </div>
               )}
             </>
+          ) : page === "usage" ? (
+            <UsagePage />
           ) : (
             <Help
               onNew={() => setNewOpen(true)}
@@ -838,6 +845,10 @@ function Help({
           {
             title: "文字起こしから議事録まで自動作成",
             text: `録音を全文テキストに変換した後、議題・決定事項・アクション・継続検討事項を整理します。Geminiは送信間隔を30秒以上空け、一時的な利用制限（429）では待ち時間を延ばして最大5回自動で再試行します。待機時間と完了数は会議の詳細に表示されます。日次上限などはGoogle AI Studioで利用枠をご確認ください。${isCloud ? "完了分と待機時刻は保存され、次回画面を開いた時に未処理分から再開します。" : "処理中はアプリのサーバーを起動したままにしてください。"}`,
+          },
+          {
+            title: "API使用料を確認",
+            text: "左メニューの「API使用料」で、文字起こし・議事録生成の日時、モデル、入力・出力トークン、音声時間、米ドルの概算料金を月ごとに確認できます。録音の分割や議事録の再生成は呼び出しごとに記録します。履歴は記録開始後の処理から表示され、請求の確定額ではありません。",
           },
           {
             title: "会議資料を添えて、会話との関連性を解析",
