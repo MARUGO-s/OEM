@@ -20,13 +20,50 @@ function mimeFor(fileName, type) {
 
 async function google(response) {
   if (response.ok) return response;
+  let providerCode = "";
+  try {
+    const payload = await response.clone().json();
+    providerCode = String(payload?.error?.status || "");
+    if (
+      payload?.error?.details?.some?.(
+        (detail) => detail?.reason === "API_KEY_INVALID",
+      )
+    )
+      providerCode = "API_KEY_INVALID";
+  } catch {
+    // Keep provider responses private; only expose a normalized status below.
+  }
   throw Object.assign(new Error("Gemini request failed"), {
-    status: response.status,
+    status: providerCode === "API_KEY_INVALID" ? 401 : response.status,
+    provider: "gemini",
+    providerCode,
   });
 }
 
 const pause = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const geminiError = (message, code) =>
+  Object.assign(new Error(message), { code, provider: "gemini" });
+
+async function geminiFetch(stage, url, init) {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    throw Object.assign(error, {
+      code: `GEMINI_${stage}_NETWORK`,
+      provider: "gemini",
+    });
+  }
+}
+
+async function geminiJson(response, code) {
+  try {
+    return await response.json();
+  } catch {
+    throw geminiError("Invalid Gemini JSON response", code);
+  }
+}
 
 async function activeFile(apiKey, initial) {
   let file = initial;
@@ -37,22 +74,29 @@ async function activeFile(apiKey, initial) {
   ) {
     await pause(1000);
     file = await google(
-      await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/${file.name}?key=${encodeURIComponent(apiKey)}`,
+      await geminiFetch(
+        "FILE_STATUS",
+        `https://generativelanguage.googleapis.com/v1beta/${file.name}?key=${encodeURIComponent(
+          apiKey,
+        )}`,
         { signal: AbortSignal.timeout(15_000) },
       ),
-    ).then((response) => response.json());
+    ).then((response) => geminiJson(response, "GEMINI_FILE_STATUS_INVALID"));
   }
-  if (file.state && file.state !== "ACTIVE")
-    throw new Error("Gemini file is not ready");
+  if (file.state && file.state !== "ACTIVE") {
+    throw geminiError("Gemini file is not ready", "GEMINI_FILE_NOT_READY");
+  }
   return file;
 }
 
 export async function transcribeWithGemini(apiKey, audio, fileName) {
   const mimeType = mimeFor(fileName, audio.type);
   const start = await google(
-    await fetch(
-      `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(apiKey)}`,
+    await geminiFetch(
+      "UPLOAD_START",
+      `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(
+        apiKey,
+      )}`,
       {
         method: "POST",
         headers: {
@@ -70,12 +114,13 @@ export async function transcribeWithGemini(apiKey, audio, fileName) {
     ),
   );
   const uploadUrl = start.headers.get("x-goog-upload-url");
-  if (!uploadUrl) throw new Error("Missing Gemini upload URL");
+  if (!uploadUrl) {
+    throw geminiError("Missing Gemini upload URL", "GEMINI_UPLOAD_URL_MISSING");
+  }
   const uploaded = await google(
-    await fetch(uploadUrl, {
+    await geminiFetch("UPLOAD_BODY", uploadUrl, {
       method: "POST",
       headers: {
-        "Content-Length": String(audio.size),
         "X-Goog-Upload-Offset": "0",
         "X-Goog-Upload-Command": "upload, finalize",
         "Content-Type": mimeType,
@@ -83,13 +128,15 @@ export async function transcribeWithGemini(apiKey, audio, fileName) {
       body: audio,
       signal: AbortSignal.timeout(110_000),
     }),
-  ).then((response) => response.json());
-  if (!uploaded.file?.uri || !uploaded.file?.name)
-    throw new Error("Missing Gemini file");
+  ).then((response) => geminiJson(response, "GEMINI_UPLOAD_RESULT_INVALID"));
+  if (!uploaded.file?.uri || !uploaded.file?.name) {
+    throw geminiError("Missing Gemini file", "GEMINI_UPLOAD_RESULT_MISSING");
+  }
   const file = await activeFile(apiKey, uploaded.file);
   try {
     const generated = await google(
-      await fetch(
+      await geminiFetch(
+        "TRANSCRIBE",
         `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TRANSCRIPTION_MODEL}:generateContent`,
         {
           method: "POST",
@@ -110,18 +157,21 @@ export async function transcribeWithGemini(apiKey, audio, fileName) {
           signal: AbortSignal.timeout(110_000),
         },
       ),
-    ).then((response) => response.json());
+    ).then((response) => geminiJson(response, "GEMINI_TRANSCRIPT_INVALID"));
     const transcript = (generated.candidates || [])
       .flatMap((candidate) => candidate.content?.parts || [])
       .map((part) => part.text || "")
       .join("")
       .trim();
-    if (!transcript)
+    if (!transcript) {
       throw Object.assign(new Error("empty audio"), { code: "EMPTY_AUDIO" });
+    }
     return transcript;
   } finally {
     await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${file.name}?key=${encodeURIComponent(apiKey)}`,
+      `https://generativelanguage.googleapis.com/v1beta/${file.name}?key=${encodeURIComponent(
+        apiKey,
+      )}`,
       { method: "DELETE", signal: AbortSignal.timeout(15_000) },
     ).catch(() => {});
   }

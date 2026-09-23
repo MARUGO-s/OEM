@@ -1,19 +1,19 @@
 import {
   ADTS,
-  MP4,
-  Input,
   BufferSource,
-  StreamTarget,
-  Output,
-  Mp4OutputFormat,
-  EncodedPacketSink,
   EncodedAudioPacketSource,
   EncodedPacket,
+  EncodedPacketSink,
+  Input,
+  MP4,
+  Mp4OutputFormat,
+  Output,
+  StreamTarget,
 } from "mediabunny";
 import {
+  audioExtensions,
   MAX_FILE_SIZE,
   MAX_TEXT_LENGTH,
-  audioExtensions,
   safeError,
 } from "./domain.mjs";
 
@@ -35,18 +35,21 @@ const mime = {
 };
 
 export function validateRecordings(files) {
-  if (files.length > MAX_AUDIO_FILES)
+  if (files.length > MAX_AUDIO_FILES) {
     throw fail("1つの会議に取り込める録音は5ファイルまでです。");
+  }
   if (
     files.some(
       (file) => !audioExtensions.has(audioExtension(file.name)) || !file.size,
     )
-  )
+  ) {
     throw fail(
       "空ではない対応音声ファイル（AAC / MP3 / M4A / WAVなど）を選択してください。",
     );
-  if (files.reduce((sum, file) => sum + file.size, 0) > MAX_FILE_SIZE)
+  }
+  if (files.reduce((sum, file) => sum + file.size, 0) > MAX_FILE_SIZE) {
     throw fail("録音ファイルは1つの会議につき合計24 MB以下にしてください。");
+  }
 }
 
 // The demuxer tolerates a truncated last frame. Validate framing first so no
@@ -71,8 +74,9 @@ export function validateAdts(bytes) {
       offset + 7 > bytes.length ||
       bytes[offset] !== 255 ||
       (bytes[offset + 1] & 246) !== 240
-    )
+    ) {
       throw new Error("Invalid ADTS header");
+    }
     const headerSize = bytes[offset + 1] & 1 ? 7 : 9;
     const length =
       ((bytes[offset + 3] & 3) << 11) |
@@ -84,14 +88,16 @@ export function validateAdts(bytes) {
       offset + length > bytes.length ||
       (bytes[offset + 6] & 3) !== 0 ||
       (config && config !== nextConfig)
-    )
+    ) {
       throw new Error("Truncated or changing ADTS stream");
+    }
     config = nextConfig;
     offset += length;
-    if (++frames > 10_000_000)
+    if (++frames > 10_000_000) {
       throw fail(
         "AAC録音が長すぎます。短く分割して別の会議として取り込んでください。",
       );
+    }
   }
   if (!frames || offset !== bytes.length) throw new Error("No ADTS frames");
   const sampleRate = [
@@ -99,8 +105,9 @@ export function validateAdts(bytes) {
     8000, 7350,
   ][(bytes[first + 2] >> 2) & 15];
   const channels = ((bytes[first + 2] & 1) << 2) | (bytes[first + 3] >> 6);
-  if (!sampleRate || !channels)
+  if (!sampleRate || !channels) {
     throw new Error("Unsupported AAC configuration");
+  }
   const decoderConfig = {
     codec: `mp4a.40.${(bytes[first + 2] >> 6) + 1}`,
     sampleRate,
@@ -131,8 +138,9 @@ export function validateAdts(bytes) {
 /** Remux AAC packets; never rename raw AAC or decode/re-encode the recording. */
 export async function prepareAudio(file) {
   const extension = audioExtension(file.name);
-  if (extension !== ".aac")
+  if (extension !== ".aac") {
     return { blob: file, extension, contentType: mime[extension] };
+  }
   let input;
   let output;
   try {
@@ -147,8 +155,9 @@ export async function prepareAudio(file) {
       ({ decoderConfig, packets } = validateAdts(bytes));
     } else {
       const track = await input.getPrimaryAudioTrack();
-      if (!track || (await track.getCodec()) !== "aac")
+      if (!track || (await track.getCodec()) !== "aac") {
         throw new Error("Not AAC");
+      }
       decoderConfig = await track.getDecoderConfig();
       packets = new EncodedPacketSink(track).packets();
     }
@@ -158,13 +167,15 @@ export async function prepareAudio(file) {
     const target = new StreamTarget(
       new WritableStream({
         write({ data, position }) {
-          if (position !== written)
+          if (position !== written) {
             throw new Error("Non-sequential MP4 output");
+          }
           written += data.byteLength;
-          if (written > MAX_FILE_SIZE)
+          if (written > MAX_FILE_SIZE) {
             throw fail(
               "M4Aへの変換後に24 MBを超えます。録音を短くして取り込んでください。",
             );
+          }
           chunks.push(data);
         },
       }),
@@ -183,8 +194,9 @@ export async function prepareAudio(file) {
     await output.start();
     let count = 0;
     for await (const packet of packets) {
-      if (++count > 250000)
+      if (++count > 250000) {
         throw fail("AAC録音が長すぎます。短く分割して取り込んでください。");
+      }
       await source.add(packet, count === 1 ? { decoderConfig } : undefined);
     }
     if (!count) throw new Error("Empty AAC");
@@ -195,8 +207,9 @@ export async function prepareAudio(file) {
       contentType: "audio/mp4",
     };
   } catch (error) {
-    if (output && output.state !== "finalized")
+    if (output && output.state !== "finalized") {
       await output.cancel().catch(() => {});
+    }
     if (error.publicMessage) throw error;
     throw fail(
       "AACを読み込めませんでした。録音の破損や形式をご確認ください。ADTS形式のAAC、またはM4Aで書き出すと取り込めます。",
@@ -251,13 +264,15 @@ export async function transcribeRecordings(
     next.map(async (part, index) => {
       if (part.transcript || !selected.has(index)) return;
       const text = await transcribe(part, index);
-      if (typeof text !== "string" || !text.trim())
+      if (typeof text !== "string" || !text.trim()) {
         throw Object.assign(new Error("empty"), { code: "EMPTY_AUDIO" });
+      }
       if (
         next.reduce((n, p) => n + (p.transcript?.length || 0), text.length) >
         MAX_TEXT_LENGTH
-      )
+      ) {
         throw Object.assign(new Error("long"), { code: "TEXT_TOO_LONG" });
+      }
       part.transcript = text;
       const snapshot = next.map((p) => ({ ...p }));
       saving = saving.then(() => saveProgress(snapshot));
@@ -269,7 +284,12 @@ export async function transcribeRecordings(
   if (failed !== -1) {
     const error = results[failed].reason;
     throw Object.assign(new Error("Recording transcription failed"), {
-      publicMessage: `録音${failed + 1}の文字起こしに失敗しました。${safeError(error)} 完了した録音は再処理せず、未完了分から再試行できます。`,
+      diagnosticCode:
+        error?.code ||
+        (error?.status ? `HTTP_${error.status}` : error?.name || "UNKNOWN"),
+      publicMessage: `録音${failed + 1}の文字起こしに失敗しました。${safeError(
+        error,
+      )} 完了した録音は再処理せず、未完了分から再試行できます。`,
     });
   }
   if (next.some((part) => !part.transcript)) return null;
@@ -280,7 +300,8 @@ export async function transcribeRecordings(
         : `【録音 ${i + 1}】\n${part.transcript}`,
     )
     .join("\n\n");
-  if (transcript.length > MAX_TEXT_LENGTH)
+  if (transcript.length > MAX_TEXT_LENGTH) {
     throw Object.assign(new Error("long"), { code: "TEXT_TOO_LONG" });
+  }
   return transcript;
 }
