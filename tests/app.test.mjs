@@ -424,7 +424,7 @@ test("キーを返却・永続化せず、AIモデル設定のみ再起動後も
     JSON.parse(await readFile(path.join(dataDir, "config.json"), "utf8")),
     {
       model: "gpt-6-sol",
-      transcriptionModel: "gpt-4o-transcribe",
+      transcriptionModel: "gpt-transcribe",
     },
   );
   const missingGemini = await request("/settings", {
@@ -497,7 +497,7 @@ test("録音を文字起こしして議事録まで作成し、音声を再生�
   assert.equal(meeting.status, "done");
   assert.match(meeting.markdown, /## 決定事項/);
   assert.equal(meeting.hasAudio, true);
-  assert.equal(meeting.transcriptionModel, "gpt-4o-transcribe");
+  assert.equal(meeting.transcriptionModel, "gpt-transcribe");
   assert.equal(meeting.minutesModel, "gpt-6-astra");
   assert.equal(meeting.audioFile, undefined);
   const range = await request(`/meetings/${meeting.id}/audio`, {
@@ -817,7 +817,7 @@ test("外部サイトからの操作とDNS rebindingを拒否する", async (t) 
   );
 });
 
-test("実際のSDKリクエストはGPT-4o Transcribeと指定のAstra/Solを使用する", async (t) => {
+test("実際のSDKリクエストはGPT Transcribeと指定のAstra/Solを使用する", async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), "kotonoha-wire-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const file = path.join(directory, "meeting.wav");
@@ -833,7 +833,9 @@ test("実際のSDKリクエストはGPT-4o Transcribeと指定のAstra/Solを使
           const form = await new Response(init.body, {
             headers: init.headers,
           }).formData();
-          assert.equal(form.get("model"), "gpt-4o-transcribe");
+          assert.equal(form.get("model"), "gpt-transcribe");
+          assert.deepEqual(form.getAll("languages[]"), ["ja"]);
+          assert.equal(form.get("language"), null);
           assert.equal(form.get("response_format"), "json");
           assert.equal(form.get("chunking_strategy"), null);
           return Response.json({ text: "文字起こしの本文。" });

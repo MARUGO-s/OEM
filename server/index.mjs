@@ -11,7 +11,7 @@ const { app } = await createApp({
   apiKey: process.env.OPENAI_API_KEY || "",
   geminiApiKey: process.env.GEMINI_API_KEY || "",
   model: process.env.OPENAI_MINUTES_MODEL || "gpt-6-astra",
-  transcriptionModel: process.env.TRANSCRIPTION_MODEL || "gpt-4o-transcribe",
+  transcriptionModel: process.env.TRANSCRIPTION_MODEL || "gpt-transcribe",
 });
 app.listen(port, "127.0.0.1", () =>
   console.log(`kotonoha is running at http://127.0.0.1:${port}`),

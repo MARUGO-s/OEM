@@ -7,7 +7,7 @@
 ## 使い始める
 
 1. 共通ID `marugo` と管理者から受け取ったパスワードでログインします。全員が同じ会議・音声・議事録を閲覧・編集します。既存Supabaseアカウントは使いません。
-2. 左下の「接続設定」に、ワークスペース共通のOpenAI APIキーを入力します。文字起こしは `gpt-4o-transcribe` または `gemini-3.5-transcribe` から選択でき、Geminiを選ぶ場合はGemini APIキーも入力します。議事録は `gpt-6-astra` または `gpt-6-sol` を使います。対象モデルの権限・利用枠が必要です。設定保存は疎通確認を意味しません。
+2. 左下の「接続設定」に、ワークスペース共通のOpenAI APIキーを入力します。文字起こしは `gpt-transcribe` または `gemini-3.5-transcribe` から選択でき、Geminiを選ぶ場合はGemini APIキーも入力します。議事録は `gpt-6-astra` または `gpt-6-sol` を使います。対象モデルの権限・利用枠が必要です。設定保存は疎通確認を意味しません。
 3. 録音ファイル、または文字起こし済みのトークを取り込みます。途切れて複数ファイルになった録音は、まとめて選び、上下ボタンで録音順に並べてください。ファイルの追加・解除もできます。会議名、開催日、参加者、議事録の詳しさを指定できます。
 4. 「議事録」「文字起こし」「アクション」で確認・編集します。文字起こし修正後の再生成、音声再生、アクションの完了チェックもできます。
 5. Markdown・テキスト・JSONで書き出せます。印刷画面からPDFにも保存できます。
@@ -100,7 +100,7 @@ Nodeテストはアップロード・保存・再試行・編集・削除・ア�
 - [File inputs](https://developers.openai.com/api/docs/guides/file-inputs)
 - [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [Background mode](https://developers.openai.com/api/docs/guides/background)
-- [GPT-4o Transcribe](https://developers.openai.com/api/docs/models/gpt-4o-transcribe)
+- [GPT Transcribe](https://developers.openai.com/api/docs/models/gpt-transcribe)
 - [Gemini audio transcription](https://ai.google.dev/gemini-api/docs/transcribe)
 - `gemini-1.5-flash` は2025年9月29日に提供終了したため、現行の音声文字起こし専用モデル `gemini-3.5-transcribe` を使用します。
 - [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra) / [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol)

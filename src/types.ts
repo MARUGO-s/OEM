@@ -125,7 +125,7 @@ export const modelName = (id?: string) =>
 export const transcriptionModelName = (id?: string) =>
   id === "gemini-3.5-transcribe"
     ? "Gemini 3.5 Transcribe"
-    : "GPT-4o Transcribe";
+    : "GPT Transcribe";
 export const today = () => new Intl.DateTimeFormat("sv-SE").format(new Date());
 export const formatDate = (date: string) =>
   new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric" }).format(

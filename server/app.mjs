@@ -44,12 +44,12 @@ import {
 } from "./domain.mjs";
 
 const models = ["gpt-6-astra", "gpt-6-sol"];
-const transcriptionModels = ["gpt-4o-transcribe", "gemini-3.5-transcribe"];
+const transcriptionModels = ["gpt-transcribe", "gemini-3.5-transcribe"];
 const settingsSchema = z.object({
   apiKey: z.string().trim().min(20).max(500).optional(),
   geminiApiKey: z.string().trim().min(20).max(500).optional(),
   model: z.enum(models),
-  transcriptionModel: z.enum(transcriptionModels).default("gpt-4o-transcribe"),
+  transcriptionModel: z.enum(transcriptionModels).default("gpt-transcribe"),
 });
 const working = (status) => ["transcribing", "analyzing"].includes(status);
 const fail = (status, message) =>
@@ -78,7 +78,7 @@ export async function createApp({
   apiKey = "",
   geminiApiKey = "",
   model = "gpt-6-astra",
-  transcriptionModel = "gpt-4o-transcribe",
+  transcriptionModel = "gpt-transcribe",
   aiFactory = createAI,
   staticDir,
 } = {}) {

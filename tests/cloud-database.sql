@@ -12,11 +12,11 @@ begin
   perform public.kotonoha_settings('put', a, null,
     '{"model":"gpt-6-astra","transcriptionModel":"gemini-3.5-transcribe","encryptedKey":"openai-envelope","encryptedGeminiKey":"gemini-envelope"}');
   perform public.kotonoha_settings('put', a, null,
-    '{"model":"gpt-6-sol","transcriptionModel":"gpt-4o-transcribe"}');
+    '{"model":"gpt-6-sol","transcriptionModel":"gpt-transcribe"}');
   doc := public.kotonoha_settings('get', a);
   assert doc->>'encryptedKey' = 'openai-envelope', 'OpenAI key must survive model changes';
   assert doc->>'encryptedGeminiKey' = 'gemini-envelope', 'Gemini key must survive model changes';
-  assert doc->>'transcriptionModel' = 'gpt-4o-transcribe', 'transcription model changes must persist';
+  assert doc->>'transcriptionModel' = 'gpt-transcribe', 'transcription model changes must persist';
 
   perform public.kotonoha_store('settings_put', a, null, '{"model":"gpt-6-astra","encryptedKey":"test-envelope"}');
   perform public.kotonoha_store('settings_put', a, null, '{"model":"gpt-6-sol"}');

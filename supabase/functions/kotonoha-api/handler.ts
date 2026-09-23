@@ -72,7 +72,7 @@ const service = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
 const encryptionSecret = Deno.env.get("KOTONOHA_KEY_ENCRYPTION_SECRET") || "";
-const OPENAI_TRANSCRIPTION_MODEL = "gpt-4o-transcribe";
+const OPENAI_TRANSCRIPTION_MODEL = "gpt-transcribe";
 const settingsSchema = z
   .object({
     model: z.enum(["gpt-6-astra", "gpt-6-sol"]),
@@ -430,7 +430,7 @@ async function processMeeting(
           form.set("file", data, fileName);
           form.set("model", OPENAI_TRANSCRIPTION_MODEL);
           form.set("response_format", "json");
-          form.set("language", "ja");
+          form.append("languages[]", "ja");
           if (record.document.chunked && previous) {
             form.set("prompt", previous.slice(-1200));
           }

@@ -18,7 +18,7 @@ export function createAI(
   apiKey,
   model,
   clientOptions = {},
-  { transcriptionModel = "gpt-4o-transcribe", geminiApiKey = "" } = {},
+  { transcriptionModel = "gpt-transcribe", geminiApiKey = "" } = {},
 ) {
   const client = new OpenAI({
     apiKey,
@@ -39,14 +39,14 @@ export function createAI(
       }
       const response = await client.audio.transcriptions.create({
         file: createReadStream(filePath),
-        model: "gpt-4o-transcribe",
+        model: "gpt-transcribe",
         response_format: "json",
-        language: "ja",
+        languages: ["ja"],
       });
       const transcript = response.text;
       if (!transcript?.trim())
         throw Object.assign(new Error("empty audio"), { code: "EMPTY_AUDIO" });
-      // GPT-4o Transcribe does not return speaker IDs or timestamps. Never invent them.
+      // GPT Transcribe does not return speaker IDs or timestamps. Never invent them.
       return { transcript, segments: [], duration: null };
     },
     async summarize(meeting, files = []) {

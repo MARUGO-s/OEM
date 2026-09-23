@@ -50,7 +50,7 @@ export function uploadDocument(
   input,
   id,
   model,
-  transcriptionModel = "gpt-4o-transcribe",
+  transcriptionModel = "gpt-transcribe",
 ) {
   return {
     ...input.metadata,

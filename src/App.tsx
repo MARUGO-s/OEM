@@ -823,7 +823,7 @@ function Help({
         {[
           {
             title: "AIの接続設定",
-            text: "OpenAIのAPIキーを設定し、議事録に使うGPT-6 AstraまたはGPT-6 Solを選択します。文字起こしはGPT-4o TranscribeまたはGemini 3.5 Transcribeから選べます。Geminiを使う場合はGemini APIキーも設定してください。",
+            text: "OpenAIのAPIキーを設定し、議事録に使うGPT-6 AstraまたはGPT-6 Solを選択します。文字起こしはGPT TranscribeまたはGemini 3.5 Transcribeから選べます。Geminiを使う場合はGemini APIキーも設定してください。",
             action: "接続設定を開く",
             run: onSettings,
           },

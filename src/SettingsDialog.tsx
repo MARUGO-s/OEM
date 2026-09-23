@@ -18,7 +18,7 @@ export function SettingsDialog({
   const [geminiKey, setGeminiKey] = useState("");
   const [model, setModel] = useState(settings?.model || "gpt-6-astra");
   const [transcriptionModel, setTranscriptionModel] = useState(
-    settings?.transcriptionModel || "gpt-4o-transcribe",
+    settings?.transcriptionModel || "gpt-transcribe",
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -122,9 +122,9 @@ export function SettingsDialog({
           <legend>文字起こし</legend>
           {[
             {
-              id: "gpt-4o-transcribe",
-              title: "GPT-4o Transcribe",
-              detail: "OpenAIで音声を文字にする",
+              id: "gpt-transcribe",
+              title: "GPT Transcribe",
+              detail: "OpenAIの最新モデルで録音を文字にする",
               Icon: Zap,
             },
             {

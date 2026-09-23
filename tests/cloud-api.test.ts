@@ -105,7 +105,7 @@ globalThis.fetch = async (input, init: any) => {
     const config = configs.get(user) || {
       model: "gpt-6-astra",
       encryptedKey: null,
-      transcriptionModel: "gpt-4o-transcribe",
+      transcriptionModel: "gpt-transcribe",
       encryptedGeminiKey: null,
     };
     if (url.pathname.endsWith("kotonoha_settings") && op === "get")
@@ -260,7 +260,9 @@ globalThis.fetch = async (input, init: any) => {
     assert.equal(headers.get("authorization"), `Bearer ${apiKey}`);
     if (url.pathname === "/v1/audio/transcriptions") {
       const form = init?.body as FormData;
-      assert.equal(form.get("model"), "gpt-4o-transcribe");
+      assert.equal(form.get("model"), "gpt-transcribe");
+      assert.deepEqual(form.getAll("languages[]"), ["ja"]);
+      assert.equal(form.get("language"), null);
       assert.equal(form.get("response_format"), "json");
       const file = form.get("file") as File;
       assert.ok(file instanceof File);
@@ -603,7 +605,7 @@ Deno.test(
           method: "PUT",
           body: JSON.stringify({
             model,
-            transcriptionModel: "gpt-4o-transcribe",
+            transcriptionModel: "gpt-transcribe",
           }),
         });
         const form = new FormData();
