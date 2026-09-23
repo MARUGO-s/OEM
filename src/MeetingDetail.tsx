@@ -24,6 +24,7 @@ import {
 import { api, download, audioUrl } from "./api";
 import { clock, isWorking, modelName, type Meeting } from "./types";
 import { Modal } from "./Modal";
+import { AttachmentPanel } from "./Attachments";
 
 function Markdown({ content }: { content: string }) {
   return (
@@ -146,6 +147,7 @@ export function MeetingDetail({
     "minutes",
   );
   const [editing, setEditing] = useState(false);
+  const [attachmentsBusy, setAttachmentsBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"delete" | "regenerate" | null>(null);
@@ -156,9 +158,9 @@ export function MeetingDetail({
     ? m.recordings
     : [{ fileName: m.fileName || "録音", transcribed: Boolean(m.transcript) }];
   useEffect(() => {
-    onEditingChange(editing);
+    onEditingChange(editing || attachmentsBusy);
     return () => onEditingChange(false);
-  }, [editing, onEditingChange]);
+  }, [editing, attachmentsBusy, onEditingChange]);
   useEffect(() => {
     if (!m.hasAudio || tab !== "transcript") return;
     let alive = true;
@@ -236,7 +238,11 @@ export function MeetingDetail({
   return (
     <>
       <div className="detail-top">
-        <button className="text-button" disabled={editing} onClick={onBack}>
+        <button
+          className="text-button"
+          disabled={editing || attachmentsBusy}
+          onClick={onBack}
+        >
           <ArrowLeft size={16} />
           すべての会議
         </button>
@@ -339,7 +345,9 @@ export function MeetingDetail({
             <strong>
               {m.status === "transcribing"
                 ? `録音を文字起こししています${recordings.length > 1 ? `（${recordings.filter((part) => part.transcribed).length}/${recordings.length} 完了）` : ""}`
-                : "会話を解析して議事録を作成しています"}
+                : m.attachments?.length
+                  ? "会話と添付資料を照合して議事録を作成しています"
+                  : "会話を解析して議事録を作成しています"}
             </strong>
             <p>
               {m.status === "transcribing"
@@ -365,9 +373,16 @@ export function MeetingDetail({
       )}
       {m.minutesStale && (
         <div className="notice">
-          文字起こしが編集されています。議事録へ反映するには「再生成」を実行してください。
+          文字起こし、または添付資料が変更されています。現在の議事録は変更前の内容です。反映するには「再生成」を実行してください。
         </div>
       )}
+      <AttachmentPanel
+        meeting={m}
+        locked={processing || editing || busy || m.status === "uploading"}
+        onChange={onChange}
+        onBusyChange={setAttachmentsBusy}
+        notify={notify}
+      />
       <div className="detail-grid">
         <section className="document-panel">
           <div className="document-tabs">
@@ -445,7 +460,7 @@ export function MeetingDetail({
                       <button
                         className="text-button"
                         onClick={beginEdit}
-                        disabled={processing}
+                        disabled={processing || attachmentsBusy}
                       >
                         <Pencil size={14} />
                         編集
@@ -554,7 +569,7 @@ export function MeetingDetail({
                 meeting={m}
                 onChange={onChange}
                 notify={notify}
-                disabled={editing || busy}
+                disabled={editing || busy || attachmentsBusy}
               />
             </div>
           )}
@@ -597,7 +612,7 @@ export function MeetingDetail({
               meeting={m}
               onChange={onChange}
               notify={notify}
-              disabled={editing || busy}
+              disabled={editing || busy || attachmentsBusy}
             />
             <button
               className="text-button purple"
@@ -622,7 +637,11 @@ export function MeetingDetail({
               <button
                 className="text-button"
                 disabled={
-                  processing || busy || editing || m.status === "uploading"
+                  processing ||
+                  busy ||
+                  editing ||
+                  attachmentsBusy ||
+                  m.status === "uploading"
                 }
                 onClick={() => setConfirm("regenerate")}
               >
@@ -632,7 +651,7 @@ export function MeetingDetail({
             )}
             <button
               className="text-button delete-button"
-              disabled={processing || editing}
+              disabled={processing || editing || attachmentsBusy}
               onClick={() => setConfirm("delete")}
             >
               <Trash2 size={14} />
@@ -656,7 +675,7 @@ export function MeetingDetail({
               ? m.status === "uploading"
                 ? "取り込み途中の会議を一覧から取り除きます。クラウドに送信済みの未完了音声は完全に削除され、元に戻せません。元の録音ファイルから再度取り込めます。"
                 : "会議と音声を一覧から取り除き、アプリの保存先にあるゴミ箱へ移動します。"
-              : "現在の文字起こしと接続設定のモデルで再解析します。編集した議事録とアクションの完了状態は上書きされます。API利用料がかかります。"}
+              : "現在の文字起こし・全添付資料と接続設定のモデルで再解析します。編集した議事録とアクションの完了状態は上書きされます。API利用料がかかります。"}
           </p>
           <div className="modal-footer">
             <button

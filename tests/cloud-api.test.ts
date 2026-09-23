@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createDemo } from "../supabase/functions/_shared/demo.mjs";
 import { decryptApiKey } from "../supabase/functions/_shared/key-crypto.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
+import { documentFixtures, reviewFixture } from "./fixtures/documents.mjs";
 import {
   createToken,
   hashToken,
@@ -36,6 +37,7 @@ const configs = new Map<string, any>();
 const jobs: Promise<unknown>[] = [];
 const calls: { route: string; body: any }[] = [];
 const audioObjects = new Map<string, Blob>();
+const responses = new Map<string, any>();
 let failSecondRecording = false;
 const realFetch = globalThis.fetch;
 const json = (value: unknown, status = 200) => Response.json(value, { status });
@@ -82,6 +84,7 @@ globalThis.fetch = async (input, init: any) => {
     [
       "/rest/v1/rpc/kotonoha_store",
       "/rest/v1/rpc/kotonoha_audio_upload",
+      "/rest/v1/rpc/kotonoha_attachments",
     ].includes(url.pathname)
   ) {
     const {
@@ -115,6 +118,29 @@ globalThis.fetch = async (input, init: any) => {
     const row = rows.get(id);
     if (!row || row.owner !== user)
       return json({ message: "NOT_FOUND", code: "P0002" }, 404);
+    if (
+      url.pathname.endsWith("kotonoha_attachments") &&
+      ["add", "remove"].includes(op)
+    ) {
+      if (["transcribing", "analyzing"].includes(row.document.status))
+        return json({ message: "BUSY" }, 400);
+      const files = row.document.attachments || [];
+      if (op === "add") {
+        row.document.attachments = [...files, payload.attachment];
+      }
+      if (op === "remove") {
+        if (row.document.status === "uploading")
+          return json({ message: "BUSY" }, 400);
+        row.document.removedAttachments = [
+          ...(row.document.removedAttachments || []),
+          files.find((f: any) => f.id === payload.attachmentId),
+        ];
+        row.document.attachments = files.filter(
+          (f: any) => f.id !== payload.attachmentId,
+        );
+      }
+      row.document.minutesStale = Boolean(row.document.markdown);
+    }
     if (op === "append") {
       if (
         row.document.status !== "uploading" ||
@@ -125,10 +151,14 @@ globalThis.fetch = async (input, init: any) => {
       row.audioPath ||= payload.part.audioPath;
     }
     if (op === "complete" && row.document.status === "uploading") {
-      if (row.document.audioParts.length !== row.document.uploadPlan.length)
+      if (
+        row.document.audioParts.length !== row.document.uploadPlan.length ||
+        (row.document.attachments || []).length !==
+          (row.document.attachmentPlan || []).length
+      )
         return json({ message: "UPLOAD_INCOMPLETE" }, 400);
       Object.assign(row.document, {
-        status: "transcribing",
+        status: row.document.audioParts.length ? "transcribing" : "analyzing",
         partReady: true,
         runId: payload.runId,
       });
@@ -193,7 +223,21 @@ globalThis.fetch = async (input, init: any) => {
       assert.equal(body.store, true);
       assert.equal(body.text.format.type, "json_schema");
       assert.equal(body.text.format.strict, true);
-      return json({ id: `resp-${calls.length}`, status: "queued" });
+      const id = `resp-${calls.length}`;
+      const attachments = Array.isArray(body.input[1].content)
+        ? body.input[1].content
+            .filter((c: any) => c.type === "input_text")
+            .map((c: any) => JSON.parse(c.text))
+            .filter((c: any) => c.attachmentId)
+            .map((c: any) => ({ id: c.attachmentId, name: c.fileName }))
+        : [];
+      responses.set(id, {
+        ...(createDemo() as any).minutes,
+        ...(attachments.length
+          ? { documentReview: attachments.map(reviewFixture) }
+          : {}),
+      });
+      return json({ id, status: "queued" });
     }
     return json({
       status: "completed",
@@ -203,7 +247,9 @@ globalThis.fetch = async (input, init: any) => {
           content: [
             {
               type: "output_text",
-              text: JSON.stringify((createDemo() as any).minutes),
+              text: JSON.stringify(
+                responses.get(url.pathname.split("/").pop()!),
+              ),
             },
           ],
         },
@@ -217,7 +263,7 @@ globalThis.fetch = async (input, init: any) => {
       });
     if (init?.method === "DELETE") {
       for (const prefix of JSON.parse(init.body).prefixes)
-        audioObjects.delete(`/storage/v1/object/kotonoha-audio/${prefix}`);
+        audioObjects.delete(`${url.pathname}/${prefix}`);
       return json([]);
     }
     if (init?.method === "POST") {
@@ -641,6 +687,195 @@ Deno.test(
       );
       plan.sources[0].size++;
       assert.equal((await createUpload()).status, 400);
+      // Real PDF/DOCX/XLSX fixtures, shared access, private signed native file inputs.
+      const documents = documentFixtures();
+      const attachments = documents.map((f: any) => ({
+        id: crypto.randomUUID(),
+        name: f.name,
+        size: f.size,
+      }));
+      const docCreate = await request("/uploads", "valid-a", {
+        method: "POST",
+        body: JSON.stringify({
+          metadata: { title: "資料照合テスト", date: "2026-09-23" },
+          sources: [{ name: "添付会議.wav", size: 44 }],
+          parts: [
+            {
+              name: "recording-1-1.wav",
+              size: 44,
+              sourceIndex: 0,
+              partNumber: 1,
+              duration: 1,
+            },
+          ],
+          attachments,
+        }),
+      });
+      assert.equal(docCreate.status, 201, await docCreate.clone().text());
+      const documentMeeting = await docCreate.json();
+      const docRoute = `/meetings/${documentMeeting.id}`;
+      assert.equal(documentMeeting.attachmentPlan, undefined);
+      assert.equal(
+        (
+          await request(`${docRoute}/parts?index=0`, "valid-a", {
+            method: "POST",
+            body: new Blob([new Uint8Array(44)], { type: "audio/wav" }),
+            headers: { "Content-Type": "audio/wav" },
+          })
+        ).status,
+        200,
+      );
+      const uploadDocument = (file: File, id: string, token = "valid-a") => {
+        const form = new FormData();
+        form.set("attachment", file);
+        form.set("id", id);
+        return request(`${docRoute}/attachments`, token, {
+          method: "POST",
+          body: form,
+        });
+      };
+      assert.equal(
+        (await request(`${docRoute}/complete`, "valid-a", { method: "POST" }))
+          .status,
+        409,
+      );
+      assert.equal(
+        (await uploadDocument(documents[0], attachments[0].id, "invalid"))
+          .status,
+        401,
+      );
+      const aiBefore = calls.length;
+      for (const [index, file] of documents.entries()) {
+        const result = await uploadDocument(file, attachments[index].id);
+        assert.equal(result.status, 201, await result.clone().text());
+        const saved = await result.json();
+        assert.equal(saved.attachments[index].storagePath, undefined);
+        assert.equal(saved.attachments[index].name, file.name);
+        const path = rows.get(documentMeeting.id).document.attachments[index]
+          .storagePath;
+        const stored = audioObjects.get(
+          `/storage/v1/object/kotonoha-documents/${path}`,
+        )!;
+        assert.deepEqual(
+          new Uint8Array(await stored.arrayBuffer()),
+          new Uint8Array(await file.arrayBuffer()),
+        );
+      }
+      assert.equal(calls.length, aiBefore, "saving must not invoke AI");
+      assert.equal(
+        (await uploadDocument(documents[0], attachments[0].id)).status,
+        409,
+      );
+      const sharedDocs = await (await request(docRoute, "valid-b")).json();
+      assert.equal(sharedDocs.attachments.length, 3);
+      assert.equal(
+        (
+          await request(
+            `${docRoute}/attachments/${attachments[0].id}`,
+            "invalid",
+          )
+        ).status,
+        401,
+      );
+      assert.match(
+        (
+          await (
+            await request(
+              `${docRoute}/attachments/${attachments[0].id}`,
+              "valid-b",
+            )
+          ).json()
+        ).url,
+        /signed/,
+      );
+      assert.equal(
+        (await request(`${docRoute}/complete`, "valid-b", { method: "POST" }))
+          .status,
+        202,
+      );
+      await drain();
+      await request("/meetings");
+      await drain();
+      assert.equal(
+        (
+          await uploadDocument(
+            new File(["追加"], "note.txt"),
+            crypto.randomUUID(),
+          )
+        ).status,
+        409,
+      );
+      assert.equal(
+        (
+          await request(
+            `${docRoute}/attachments/${attachments[0].id}`,
+            "valid-a",
+            { method: "DELETE" },
+          )
+        ).status,
+        409,
+      );
+      const responseInput = calls
+        .filter((c) => c.route === "/v1/responses")
+        .at(-1)!.body;
+      const nativeFiles = responseInput.input[1].content.filter(
+        (c: any) => c.type === "input_file",
+      );
+      assert.equal(nativeFiles.length, 3);
+      assert.ok(
+        nativeFiles.every(
+          (c: any) => c.file_url.includes("?token=test") && !c.file_data,
+        ),
+      );
+      assert.ok(
+        responseInput.text.format.schema.required.includes("documentReview"),
+      );
+      await request("/meetings");
+      await drain();
+      const finished = await (await request(docRoute, "valid-b")).json();
+      assert.equal(finished.status, "done");
+      assert.equal(finished.minutes.documentReview.length, 3);
+      assert.match(finished.markdown, /添付資料との照合/);
+      const objectsBeforeUnlink = audioObjects.size;
+      const detached = await request(
+        `${docRoute}/attachments/${attachments[0].id}`,
+        "valid-b",
+        { method: "DELETE" },
+      );
+      assert.equal(detached.status, 200);
+      const changed = await detached.json();
+      assert.equal(changed.attachments.length, 2);
+      assert.equal(changed.minutesStale, true);
+      assert.equal(changed.removedAttachments, undefined);
+      assert.equal(
+        audioObjects.size,
+        objectsBeforeUnlink,
+        "unlink retains originals",
+      );
+      assert.equal(
+        (await request(`${docRoute}/attachments/${attachments[0].id}`)).status,
+        404,
+      );
+      const transcribedBefore = calls.filter((c) =>
+        c.route.endsWith("/transcriptions"),
+      ).length;
+      assert.equal(
+        (await request(`${docRoute}/retry`, "valid-b", { method: "POST" }))
+          .status,
+        202,
+      );
+      await drain();
+      await request("/meetings");
+      await drain();
+      assert.equal(
+        rows.get(documentMeeting.id).document.minutes.documentReview.length,
+        2,
+      );
+      assert.equal(rows.get(documentMeeting.id).document.minutesStale, false);
+      assert.equal(
+        calls.filter((c) => c.route.endsWith("/transcriptions")).length,
+        transcribedBefore,
+      );
       assert.equal(
         (await request("/auth/logout", loginSession.token, { method: "POST" }))
           .status,

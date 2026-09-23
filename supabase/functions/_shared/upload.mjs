@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { MetadataSchema, MAX_FILE_SIZE } from "./domain.mjs";
+import { MetadataSchema, MAX_FILE_SIZE, MAX_TEXT_LENGTH } from "./domain.mjs";
+import { AttachmentPlanSchema } from "./attachments.mjs";
 export const MAX_BATCH_SIZE = 100_000_000;
 const SourceSchema = z
   .object({
@@ -19,12 +20,16 @@ const PartSchema = z
 export const UploadSchema = z
   .object({
     metadata: MetadataSchema,
-    sources: z.array(SourceSchema).min(1).max(5),
-    parts: z.array(PartSchema).min(1).max(512),
+    sources: z.array(SourceSchema).max(5),
+    parts: z.array(PartSchema).max(512),
+    transcript: z.string().trim().max(MAX_TEXT_LENGTH).default(""),
+    attachments: AttachmentPlanSchema,
   })
   .strict()
   .superRefine((value, ctx) => {
     const bad = (message) => ctx.addIssue({ code: "custom", message });
+    if (Boolean(value.sources.length) === Boolean(value.transcript))
+      bad("音声または会話テキストのどちらか一方を入力してください。");
     if (value.sources.reduce((n, s) => n + s.size, 0) > MAX_BATCH_SIZE)
       bad("録音は合計100 MBまでです。");
     if (value.parts.reduce((n, p) => n + p.size, 0) > 110_000_000)
@@ -47,15 +52,17 @@ export function uploadDocument(input, id, model) {
     id,
     createdAt: new Date().toISOString(),
     status: "uploading",
-    source: "audio",
+    source: input.sources.length ? "audio" : "text",
     isDemo: false,
-    fileName: input.sources[0].name,
+    fileName: input.sources[0]?.name || null,
     sources: input.sources,
     uploadPlan: input.parts,
     audioParts: [],
+    attachmentPlan: input.attachments || [],
+    attachments: [],
     chunked: true,
     duration: null,
-    transcript: "",
+    transcript: input.transcript || "",
     segments: [],
     minutes: null,
     markdown: "",
@@ -64,7 +71,7 @@ export function uploadDocument(input, id, model) {
     error: null,
     minutesStale: false,
     minutesModel: model,
-    transcriptionModel: "gpt-4o-transcribe",
+    transcriptionModel: input.sources.length ? "gpt-4o-transcribe" : null,
   };
 }
 export function uploadPart(document, index) {

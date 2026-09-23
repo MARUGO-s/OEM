@@ -142,11 +142,12 @@ export default function App() {
     }
   }
   async function create(data: FormData, progress: (message: string) => void) {
-    const m = data.getAll("audio").length
-      ? await (
-          await import("./upload-recordings")
-        ).uploadRecordings(data, progress)
-      : await api<Meeting>("/meetings", { method: "POST", body: data });
+    const m =
+      data.getAll("audio").length || data.getAll("attachment").length
+        ? await (
+            await import("./upload-recordings")
+          ).uploadRecordings(data, progress)
+        : await api<Meeting>("/meetings", { method: "POST", body: data });
     updateMeeting(m);
     setNewOpen(false);
     openMeeting(m.id);
@@ -812,6 +813,10 @@ function Help({
             text: `録音を全文テキストに変換した後、議題・決定事項・アクション・継続検討事項を整理します。${isCloud ? "解析はクラウドで進みます。画面に戻ると結果を取り込みます。音声処理が時間切れになった場合は録音を分割してください。" : "処理中はアプリのサーバーを起動したままにしてください。"}`,
           },
           {
+            title: "会議資料を添えて、会話との関連性を解析",
+            text: "新しい会議の「会議の添付資料」からExcel・Word・PDF・PowerPoint・CSV・TXTを追加できます。資料は録音とは別枠で最大5ファイル・各10 MB・合計25 MB。既存会議では「添付資料」に保存後、「議事録を再生成」を押してください。関連性・参照箇所・相違点は議事録の「添付資料との照合」に残します。資料だけの記載は会議の決定と区別します。Excel・CSVは各シート先頭1,000行まで。Word・Excel・PowerPoint内の図表が重要な場合はPDFも添付し、パスワードは解除してください。",
+          },
+          {
             title: "内容を確認して、編集・書き出し",
             text: "「文字起こし」で音声を再生しながら内容を確認できます。修正した文字起こしから議事録の再生成も可能です。「書き出す」からMarkdown・テキスト・JSONを保存でき、ブラウザの印刷からPDFにもできます。",
           },
@@ -837,8 +842,8 @@ function Help({
           <h3>データの保存について</h3>
           <p>
             {isCloud
-              ? "会議と音声はSupabaseの会議録専用領域に保存し、ログインした全員で共有します。追加・編集・削除も共通です。他の人の変更は約10秒ごとに反映します（編集中を除く）。OpenAI APIキーはワークスペース共通で暗号化保存し、画面には再表示しません。AI解析時は音声とテキストをOpenAIに送信し、結果を一時保存するバックグラウンドAPIを使います。削除は論理削除で、復元・完全消去は管理者にご依頼ください。"
-              : "会議と音声はアプリの .data フォルダに保存されます。Dropboxの設定によってはクラウドにも同期されます。AI解析時は音声とテキストをOpenAIに送信します。削除した会議は .data/trash に移動します。"}
+              ? "会議・音声・資料はSupabaseの会議録専用領域に非公開で保存し、ログインした全員で共有します。追加・編集・削除も共通です。他の人の変更は約10秒ごとに反映します（編集中を除く）。OpenAI APIキーはワークスペース共通で暗号化保存し、画面には再表示しません。AI解析時は音声・テキスト・全添付資料をOpenAIに送信し、追加のAPI利用料がかかります。結果を一時保存するバックグラウンドAPIを使います。会議の削除・資料の関連付け解除後も資料は保持します。復元・完全消去は管理者にご依頼ください。"
+              : "会議・音声・資料はアプリの .data フォルダに保存されます。Dropboxの設定によってはクラウドにも同期されます。AI解析時は音声・テキスト・全添付資料をOpenAIに送信し、追加のAPI利用料がかかります。関連付けを解除した資料も保持します。削除した会議は .data/trash に移動します。"}
           </p>
         </div>
       </section>

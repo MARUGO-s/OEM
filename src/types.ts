@@ -9,6 +9,26 @@ export interface Minutes {
   decisions: string[];
   actions: Action[];
   openQuestions: string[];
+  documentReview?: {
+    attachmentId: string;
+    relevance: string;
+    summary: string;
+    references: {
+      location: string;
+      documentEvidence: string;
+      meetingEvidence: string;
+      interpretation: string;
+    }[];
+    conflicts: string[];
+    limitations: string[];
+  }[];
+}
+export interface Attachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  uploadedAt: string;
 }
 export interface Meeting {
   id: string;
@@ -23,6 +43,7 @@ export interface Meeting {
   hasAudio: boolean;
   fileName: string | null;
   recordings?: { fileName: string; transcribed: boolean }[];
+  attachments?: Attachment[];
   duration: number | null;
   transcript: string;
   markdown: string;

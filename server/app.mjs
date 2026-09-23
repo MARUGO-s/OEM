@@ -7,6 +7,15 @@ import { z } from "zod";
 import { MeetingStore } from "./store.mjs";
 import { createAI } from "./ai.mjs";
 import { createDemo } from "./demo.mjs";
+import { parseMinutes } from "../supabase/functions/_shared/summary.mjs";
+import {
+  MAX_ATTACHMENT_SIZE,
+  attachmentTypes,
+  attachmentExtension,
+  checkAttachmentAdd,
+  publicAttachments,
+  validateAttachmentBytes,
+} from "../supabase/functions/_shared/attachments.mjs";
 import {
   MAX_BATCH_SIZE,
   UploadSchema,
@@ -42,9 +51,22 @@ const working = (status) => ["transcribing", "analyzing"].includes(status);
 const fail = (status, message) =>
   Object.assign(new Error(message), { status, publicMessage: message });
 const publicRecord = (record) => {
-  const { audioFile, audioParts, uploadPlan, ...rest } = record;
+  const {
+    audioFile,
+    audioParts,
+    uploadPlan,
+    attachments,
+    attachmentPlan,
+    removedAttachments,
+    ...rest
+  } = record;
   const recordings = publicRecordings(recordingsFor(record));
-  return { ...rest, hasAudio: recordings.length > 0, recordings };
+  return {
+    ...rest,
+    hasAudio: recordings.length > 0,
+    recordings,
+    attachments: publicAttachments(record),
+  };
 };
 
 export async function createApp({
@@ -59,6 +81,8 @@ export async function createApp({
   await store.init();
   const uploadsDir = path.join(dataDir, "audio");
   await mkdir(uploadsDir, { recursive: true, mode: 0o700 });
+  const attachmentsDir = path.join(dataDir, "attachments");
+  await mkdir(attachmentsDir, { recursive: true, mode: 0o700 });
   const configPath = path.join(dataDir, "config.json");
   try {
     const config = JSON.parse(await readFile(configPath, "utf8"));
@@ -175,7 +199,21 @@ export async function createApp({
           transcriptionModel: "gpt-4o-transcribe",
         });
       }
-      const minutes = await ai.summarize(meeting);
+      const files = [];
+      for (const attachment of meeting.attachments || []) {
+        const data = await readFile(
+          path.join(attachmentsDir, attachment.localFile),
+        );
+        files.push({
+          attachment,
+          input: {
+            type: "input_file",
+            filename: attachment.name,
+            file_data: `data:${attachment.type};base64,${data.toString("base64")}`,
+          },
+        });
+      }
+      const minutes = parseMinutes(meeting, await ai.summarize(meeting, files));
       await store.save({
         ...meeting,
         status: "done",
@@ -307,9 +345,15 @@ export async function createApp({
       return res.status(202).json(publicRecord(doc));
     lock(doc.id);
     try {
-      if (doc.audioParts.length !== doc.uploadPlan.length)
-        throw fail(409, "音声の取り込みが未完了です。");
-      const next = await store.save({ ...doc, status: "transcribing" });
+      if (
+        doc.audioParts.length !== doc.uploadPlan.length ||
+        (doc.attachments || []).length !== (doc.attachmentPlan || []).length
+      )
+        throw fail(409, "音声・添付資料の取り込みが未完了です。");
+      const next = await store.save({
+        ...doc,
+        status: doc.audioParts.length ? "transcribing" : "analyzing",
+      });
       startJob(doc.id);
       res.status(202).json(publicRecord(next));
     } catch (error) {
@@ -471,6 +515,100 @@ export async function createApp({
       busy.delete(meeting.id);
     }
   });
+  const attachmentUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: MAX_ATTACHMENT_SIZE,
+      files: 1,
+      fields: 1,
+      fieldSize: 100,
+    },
+  });
+  app.post(
+    "/api/meetings/:id/attachments",
+    attachmentUpload.single("attachment"),
+    async (req, res) => {
+      const meetingId = req.params.id;
+      lock(meetingId);
+      let destination,
+        accepted = false;
+      try {
+        const meeting = getMeeting(meetingId),
+          file = req.file;
+        if (!file) throw fail(400, "添付資料を選択してください。");
+        const name = Buffer.from(file.originalname, "latin1").toString("utf8");
+        const attachment = {
+          id: z.uuid().parse(req.body.id),
+          name,
+          size: file.size,
+          type: attachmentTypes[attachmentExtension(name)],
+          uploadedAt: new Date().toISOString(),
+        };
+        checkAttachmentAdd(meeting, attachment);
+        validateAttachmentBytes(name, file.buffer);
+        const localFile = `${randomUUID()}${attachmentExtension(name)}`;
+        destination = path.join(attachmentsDir, localFile);
+        await writeFile(destination, file.buffer, { mode: 0o600 });
+        const saved = await store.save({
+          ...meeting,
+          attachments: [
+            ...(meeting.attachments || []),
+            { ...attachment, localFile },
+          ],
+          minutesStale: Boolean(meeting.markdown),
+        });
+        accepted = true;
+        res.status(201).json(publicRecord(saved));
+      } finally {
+        busy.delete(meetingId);
+        if (destination && !accepted) await unlink(destination).catch(() => {});
+      }
+    },
+  );
+  app.get("/api/meetings/:id/attachments/:attachmentId", (req, res) => {
+    const meeting = getMeeting(req.params.id),
+      attachment = meeting.attachments?.find(
+        (f) => f.id === req.params.attachmentId,
+      );
+    if (!attachment) throw fail(404, "資料が見つかりません。");
+    res.download(
+      path.join(attachmentsDir, attachment.localFile),
+      attachment.name,
+    );
+  });
+  app.delete(
+    "/api/meetings/:id/attachments/:attachmentId",
+    async (req, res) => {
+      const meetingId = req.params.id;
+      lock(meetingId);
+      try {
+        const meeting = getMeeting(meetingId);
+        if (working(meeting.status) || meeting.status === "uploading")
+          throw fail(409, "解析・取り込み中は資料を解除できません。");
+        const attachment = meeting.attachments?.find(
+          (f) => f.id === req.params.attachmentId,
+        );
+        if (!attachment) throw fail(404, "資料が見つかりません。");
+        res.json(
+          publicRecord(
+            await store.save({
+              ...meeting,
+              attachments: meeting.attachments.filter(
+                (f) => f.id !== attachment.id,
+              ),
+              removedAttachments: [
+                ...(meeting.removedAttachments || []),
+                { ...attachment, removedAt: new Date().toISOString() },
+              ],
+              minutesStale: Boolean(meeting.markdown),
+            }),
+          ),
+        );
+      } finally {
+        busy.delete(meetingId);
+      }
+    },
+  );
   app.get("/api/meetings/:id/audio", (req, res) => {
     const meeting = getMeeting(req.params.id);
     const index = Number(req.query.part ?? 0);
@@ -501,6 +639,14 @@ export async function createApp({
           path.join(uploadsDir, part.audioFile),
           path.join(trashDir, part.audioFile),
         );
+      for (const attachment of [
+        ...(meeting.attachments || []),
+        ...(meeting.removedAttachments || []),
+      ])
+        await rename(
+          path.join(attachmentsDir, attachment.localFile),
+          path.join(trashDir, attachment.localFile),
+        );
       await store.delete(meeting.id);
       res.status(204).end();
     } finally {
@@ -525,7 +671,9 @@ export async function createApp({
       return res.status(400).json({
         error:
           error.code === "LIMIT_FILE_SIZE"
-            ? "音声ファイルは24 MB以下にしてください。"
+            ? _req.path.includes("/attachments")
+              ? "添付資料は1ファイル10 MBまでです。"
+              : "音声ファイルは24 MB以下にしてください。"
             : "アップロードの制限を超えました。ファイルと入力内容をご確認ください。",
       });
     const status = error.status || 500;

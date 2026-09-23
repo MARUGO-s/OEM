@@ -106,6 +106,40 @@ export function minutesToMarkdown(meeting, minutes) {
       ? minutes.openQuestions.map((q) => `- ${q}`)
       : ["確認事項の記録はありません。"]),
   );
+  if (minutes.documentReview?.length) {
+    lines.push("", "## 添付資料との照合", "");
+    for (const review of minutes.documentReview) {
+      const attachment = meeting.attachments?.find(
+        (f) => f.id === review.attachmentId,
+      );
+      lines.push(
+        `### ${attachment?.name || "添付資料"} — ${review.relevance}`,
+        "",
+        review.summary,
+      );
+      for (const ref of review.references)
+        lines.push(
+          "",
+          `- 参照箇所：${ref.location}`,
+          `- 資料の根拠：${ref.documentEvidence}`,
+          `- 会話の根拠：${ref.meetingEvidence}`,
+          `- 照合結果：${ref.interpretation}`,
+        );
+      if (review.conflicts.length)
+        lines.push(
+          "",
+          "照合で見つかった相違・要確認",
+          ...review.conflicts.map((v) => `- ${v}`),
+        );
+      if (review.limitations.length)
+        lines.push(
+          "",
+          "読み取り範囲・注意",
+          ...review.limitations.map((v) => `- ${v}`),
+        );
+      lines.push("");
+    }
+  }
   return lines.join("\n");
 }
 
@@ -115,9 +149,9 @@ export function safeError(error) {
   if (error.status === 429)
     return "AIの利用上限または混雑により処理できませんでした。利用枠を確認して再試行してください。";
   if (error.status === 413)
-    return "音声が大きすぎます。24 MB以下のファイルを選択してください。";
+    return "AIへ送るデータが大きすぎます。資料を分けるか、録音を短くして再度取り込んでください。";
   if (error.status === 400)
-    return "AIへの入力が受け付けられませんでした。音声形式・長さ、モデルの利用条件を確認してください。";
+    return "AIへの入力が受け付けられませんでした。音声や資料の形式・サイズ、資料のパスワード保護、モデルの利用条件を確認してください。";
   if (error.status === 404)
     return "AIモデルを利用できません。モデル設定とAPIの利用権限を確認してください。";
   if (error.name === "APIConnectionTimeoutError" || error.name === "AbortError")

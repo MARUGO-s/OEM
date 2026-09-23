@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { Modal } from "./Modal";
+import { AttachmentPicker } from "./Attachments";
 import { today, modelName, type Settings } from "./types";
 
 const LIMIT = 100_000_000;
@@ -31,6 +32,7 @@ export function NewMeeting({
 }) {
   const [mode, setMode] = useState<"file" | "text">("file");
   const [files, setFiles] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(today());
   const [participants, setParticipants] = useState("");
@@ -100,6 +102,7 @@ export function NewMeeting({
       data.set("template", template);
       if (mode === "text") data.set("transcript", transcript);
       else files.forEach((file) => data.append("audio", file));
+      attachments.forEach((file) => data.append("attachment", file));
       await onCreate(data, setProgress);
     } catch (e) {
       setError((e as Error).message);
@@ -257,6 +260,11 @@ export function NewMeeting({
             </p>
           </div>
         )}
+        <AttachmentPicker
+          files={attachments}
+          onChange={setAttachments}
+          disabled={busy}
+        />
         <div className="form-grid">
           <label className="field full">
             会議名
@@ -305,7 +313,7 @@ export function NewMeeting({
             : modelName(settings?.model)}
           <br />
           <span>
-            音声・テキストをOpenAIに送信して処理します。API利用料がかかります。
+            音声・テキスト・添付資料をOpenAIに送信して処理します。API利用料がかかります。
           </span>
         </p>
         {!settings?.configured && (

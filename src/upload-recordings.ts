@@ -12,31 +12,37 @@ export async function uploadRecordings(
   progress: (message: string) => void,
 ) {
   const files = data.getAll("audio") as File[];
-  const worker = new Worker(new URL("./audio-worker.ts", import.meta.url), {
-    type: "module",
-  });
-  let parts: Part[];
-  progress("音声を確認し、自動分割しています…");
-  try {
-    parts = await new Promise<Part[]>((resolve, reject) => {
-      worker.onmessage = ({ data }) => {
-        if (data.error) reject(new Error(data.error));
-        else if (data.parts) resolve(data.parts);
-        else if (data.progress)
-          progress(
-            `録音${data.progress.sourceIndex + 1}/${files.length}を準備中 ${Math.round(data.progress.ratio * 100)}%`,
-          );
-      };
-      worker.onerror = () =>
-        reject(
-          new Error(
-            "音声の準備に失敗しました。ブラウザーを更新して再度お試しください。",
-          ),
-        );
-      worker.postMessage(files);
+  const attachments = (data.getAll("attachment") as File[]).map((file) => ({
+    file,
+    id: crypto.randomUUID(),
+  }));
+  let parts: Part[] = [];
+  if (files.length) {
+    const worker = new Worker(new URL("./audio-worker.ts", import.meta.url), {
+      type: "module",
     });
-  } finally {
-    worker.terminate();
+    progress("音声を確認し、自動分割しています…");
+    try {
+      parts = await new Promise<Part[]>((resolve, reject) => {
+        worker.onmessage = ({ data }) => {
+          if (data.error) reject(new Error(data.error));
+          else if (data.parts) resolve(data.parts);
+          else if (data.progress)
+            progress(
+              `録音${data.progress.sourceIndex + 1}/${files.length}を準備中 ${Math.round(data.progress.ratio * 100)}%`,
+            );
+        };
+        worker.onerror = () =>
+          reject(
+            new Error(
+              "音声の準備に失敗しました。ブラウザーを更新して再度お試しください。",
+            ),
+          );
+        worker.postMessage(files);
+      });
+    } finally {
+      worker.terminate();
+    }
   }
   const metadata = Object.fromEntries(
     ["title", "date", "participants", "template"].map((k) => [k, data.get(k)]),
@@ -46,6 +52,12 @@ export async function uploadRecordings(
     body: JSON.stringify({
       metadata,
       sources: files.map((f) => ({ name: f.name, size: f.size })),
+      transcript: data.get("transcript") || "",
+      attachments: attachments.map(({ file, id }) => ({
+        id,
+        name: file.name,
+        size: file.size,
+      })),
       parts: parts.map(({ blob, name, sourceIndex, partNumber, duration }) => ({
         name,
         size: blob.size,
@@ -70,13 +82,29 @@ export async function uploadRecordings(
       });
       sent += part.blob.size;
     }
-    progress("送信完了。文字起こしを開始しています…");
+    for (const [index, { file, id }] of attachments.entries()) {
+      progress(
+        `添付資料を保存中 ${index + 1}/${attachments.length}：${file.name}`,
+      );
+      const form = new FormData();
+      form.set("id", id);
+      form.set("attachment", file);
+      await api(`/meetings/${meeting.id}/attachments`, {
+        method: "POST",
+        body: form,
+      });
+    }
+    progress(
+      files.length
+        ? "送信完了。文字起こしを開始しています…"
+        : "送信完了。会話と資料の解析を開始しています…",
+    );
     return await api<Meeting>(`/meetings/${meeting.id}/complete`, {
       method: "POST",
     });
   } catch (error) {
     throw new Error(
-      `${(error as Error).message} 一覧に取り込み途中の会議が残る場合は、画面を更新し、会議を削除して再度取り込んでください。送信完了済みなら文字起こしが進行します。`,
+      `${(error as Error).message} 一覧に取り込み途中の会議が残る場合は、画面を更新し、会議を削除して再度取り込んでください。送信完了済みなら解析が進行します。`,
     );
   }
 }

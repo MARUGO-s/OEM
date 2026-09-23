@@ -12,9 +12,192 @@ import { createAI } from "../server/ai.mjs";
 import { MAX_FILE_SIZE } from "../server/domain.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
 import { splitRecordings } from "../src/split-recordings.mjs";
+import { randomUUID } from "node:crypto";
+import { documentFixtures, reviewFixture } from "./fixtures/documents.mjs";
 
 const sampleMinutes = createDemo().minutes;
 const key = "sk-test-only-not-a-real-api-key";
+
+test("資料を全件保存後に解析し、原本ダウンロード・再生成・関連解除・復元用保持ができる", async (t) => {
+  const fixtures = documentFixtures(),
+    attachmentPlan = fixtures.map((f) => ({
+      id: randomUUID(),
+      name: f.name,
+      size: f.size,
+    }));
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  let summaries = 0;
+  const { request, store, dataDir, waitForJobs } = await setup(t, {
+    apiKey: key,
+    aiFactory: () => ({
+      transcribe: async () => {
+        throw new Error("Text-only meeting must not transcribe");
+      },
+      summarize: async (meeting, files) => {
+        summaries++;
+        assert.equal(files.length, meeting.attachments.length);
+        for (const file of files) {
+          assert.match(file.input.file_data, /^data:.*;base64,/);
+          assert.equal(
+            Buffer.from(file.input.file_data.split(",")[1], "base64").length,
+            file.attachment.size,
+          );
+        }
+        await gate;
+        return {
+          ...sampleMinutes,
+          documentReview: meeting.attachments.map(reviewFixture),
+        };
+      },
+    }),
+  });
+  try {
+    const created = await request("/uploads", {
+      method: "POST",
+      body: JSON.stringify({
+        metadata: { title: "資料付き会議", date: "2026-09-23" },
+        sources: [],
+        parts: [],
+        transcript: "会議では開始日を10月15日に決定。予算60万円。広告は保留。",
+        attachments: attachmentPlan,
+      }),
+    });
+    assert.equal(created.status, 201);
+    const draft = await created.json();
+    const route = `/meetings/${draft.id}`;
+    const upload = (file, id) => {
+      const form = new FormData();
+      form.set("attachment", file);
+      form.set("id", id);
+      return request(`${route}/attachments`, { method: "POST", body: form });
+    };
+    assert.equal(
+      (await request(`${route}/complete`, { method: "POST" })).status,
+      409,
+    );
+    assert.equal((await upload(fixtures[0], randomUUID())).status, 400);
+    for (const [i, file] of fixtures.entries()) {
+      const result = await upload(file, attachmentPlan[i].id);
+      assert.equal(result.status, 201, await result.clone().text());
+      const body = await result.json();
+      assert.equal(body.attachments[i].localFile, undefined);
+      assert.equal(body.attachmentPlan, undefined);
+    }
+    assert.equal(summaries, 0);
+    assert.equal((await upload(fixtures[0], attachmentPlan[0].id)).status, 409);
+    const downloaded = await request(
+      `${route}/attachments/${attachmentPlan[0].id}`,
+    );
+    assert.match(downloaded.headers.get("content-disposition"), /attachment/);
+    assert.deepEqual(
+      new Uint8Array(await downloaded.arrayBuffer()),
+      new Uint8Array(await fixtures[0].arrayBuffer()),
+    );
+    assert.equal(
+      (await request(`${route}/complete`, { method: "POST" })).status,
+      202,
+    );
+    assert.equal(
+      (await upload(new File(["hello"], "note.txt"), randomUUID())).status,
+      409,
+    );
+    assert.equal(
+      (
+        await request(`${route}/attachments/${attachmentPlan[0].id}`, {
+          method: "DELETE",
+        })
+      ).status,
+      409,
+    );
+    release();
+    await waitForJobs();
+    assert.equal(store.get(draft.id).status, "done");
+    assert.equal(summaries, 1);
+    assert.equal(store.get(draft.id).minutes.documentReview.length, 3);
+    assert.match(store.get(draft.id).markdown, /添付資料との照合/);
+    const removed = await request(
+      `${route}/attachments/${attachmentPlan[0].id}`,
+      { method: "DELETE" },
+    );
+    assert.equal(removed.status, 200);
+    const result = await removed.json();
+    assert.equal(result.minutesStale, true);
+    assert.equal(result.attachments.length, 2);
+    assert.equal(result.removedAttachments, undefined);
+    assert.equal(
+      (await request(`${route}/attachments/${attachmentPlan[0].id}`)).status,
+      404,
+    );
+    assert.equal(
+      (await readdir(path.join(dataDir, "attachments"))).length,
+      3,
+      "unlinked document is retained",
+    );
+    assert.equal(
+      (await upload(new File(["追加の参考資料"], "note.txt"), randomUUID()))
+        .status,
+      201,
+    );
+    assert.equal(
+      (await request(`${route}/retry`, { method: "POST" })).status,
+      202,
+    );
+    await waitForJobs();
+    assert.equal(summaries, 2);
+    assert.equal(store.get(draft.id).minutesStale, false);
+    assert.equal(store.get(draft.id).minutes.documentReview.length, 3);
+    const saved = store.get(draft.id);
+    assert.equal((await request(route, { method: "DELETE" })).status, 204);
+    for (const f of [...saved.attachments, ...saved.removedAttachments])
+      assert.ok(
+        (await readFile(path.join(dataDir, "trash", draft.id, f.localFile)))
+          .length,
+      );
+  } finally {
+    release();
+  }
+});
+
+test("偽装資料・容量超過は保存せず、AIで未読資料が欠けた結果を成功扱いしない", async (t) => {
+  const { request, store, waitForJobs, dataDir } = await setup(t, {
+    apiKey: key,
+    aiFactory: () => ({ summarize: async () => sampleMinutes }),
+  });
+  const meeting = {
+    ...createDemo(),
+    id: randomUUID(),
+    isDemo: false,
+    status: "done",
+    attachments: [],
+  };
+  await store.save(meeting);
+  const route = `/meetings/${meeting.id}/attachments`;
+  const upload = (file) => {
+    const form = new FormData();
+    form.set("id", randomUUID());
+    form.set("attachment", file);
+    return request(route, { method: "POST", body: form });
+  };
+  assert.equal((await upload(new File(["not pdf"], "fake.pdf"))).status, 400);
+  assert.equal(
+    (await upload(new File([new Uint8Array(10_000_001)], "too-big.txt")))
+      .status,
+    400,
+  );
+  assert.deepEqual(await readdir(path.join(dataDir, "attachments")), []);
+  assert.equal((await upload(documentFixtures()[0])).status, 201);
+  assert.equal(
+    (await request(`/meetings/${meeting.id}/retry`, { method: "POST" })).status,
+    202,
+  );
+  await waitForJobs();
+  assert.equal(store.get(meeting.id).status, "error");
+  assert.equal(store.get(meeting.id).transcript, meeting.transcript);
+  assert.equal(store.get(meeting.id).attachments.length, 1);
+});
 
 test("段階アップロードは全音声保存後だけ開始し、順序・欠損・二重完了を検証する", async (t) => {
   const calls = [];

@@ -14,6 +14,17 @@
 
 ログイン後の「サンプルを開く」はOpenAIキー不要です。架空の固定データであり、AI処理をしたふりはしません。
 
+## 会議の添付資料
+
+- 新しい会議の「会議の添付資料」で録音・会話テキストと一緒に選択します。音声・全資料の保存が完了してから解析します。資料だけでは会議を作成できません。
+- 既存の会議にも「添付資料」から追加して保存できます。「議事録を再生成」を押すと、現在の全資料と保存済みの文字起こしを照合します。追加・解除後の議事録は未反映と表示します。解析中は資料を変更できません。
+- 対応: PDF、Excel（XLSX / XLS）、Word（DOCX / DOC）、PowerPoint（PPTX / PPT）、CSV、TXT。最大5ファイル、各10 MB、合計25 MB。録音の100 MBとは別枠です。パスワード保護は解除してください。
+- 元のファイルは専用の非公開 `kotonoha-documents` バケットに保存し、全員で共有します。ログイン後にダウンロード可能です（署名付きURLは10分有効、外部共有しないでください）。ブラウザー内でマクロ・添付ファイルのコードを実行しません。
+- OpenAI Responses APIへ全資料を `input_file` として渡します。クラウドは1時間有効の署名付きURL、ローカルはBase64入力です。資料の送信にも追加のAPI利用料がかかります。OpenAI Files APIへの別途永続アップロードは行いません。
+- 「添付資料との照合」に資料ごとの関連性、根拠、ページ・見出し・シート等の参照位置、会話との相違点、読取制限を残します。資料だけに書かれた予定・担当・承認を会議での決定とみなさないよう指示します。不明な位置や会話にない情報は推測しません。AIの照合結果は必ず原本と確認してください。
+- OpenAIの入力仕様により、Excel・CSVは各シート先頭1,000行までの解析です。Word・Excel・PowerPointはテキスト抽出が中心で、埋め込まれた画像やグラフは読み取りません。図表・レイアウトが重要な場合はPDFも添付してください。PDFは本文とページ画像を使用します。大きい・複雑な資料は文脈量やモデルの制限で失敗する場合があります。
+- 資料の「関連付けを解除」は解析対象から外す操作です。保存ファイルと旧メタデータは保持します。会議自体を削除しても資料は保持し、復元・完全消去は管理者対応です。ローカルでは資料を `.data/attachments/` に保存し、会議削除時は解除済み資料も `.data/trash/<ID>/` に移動します。
+
 ## データと安全性
 
 - Supabaseプロジェクト `hjhkccbktkscwtgzxjfq`（Recipe-Management）に間借りしています。会議録専用の非公開 `kotonoha` スキーマを使い、既存の業務テーブル・関数・Storageポリシー・Auth設定を変更しません。
@@ -22,7 +33,7 @@
 - ブラウザからテーブルや保存RPCを直接呼べません。`kotonoha-api` が専用セッションを検証してから、全員共通のワークスペースを操作します。共用Supabase Authにはユーザー追加や設定変更を行いません。
 - 音声は非公開バケット `kotonoha-audio` に保存し、ログイン済み利用者に1時間の署名付き再生URLを発行します。URLは外部へ共有しないでください。
 - OpenAIキーはワークスペース共通でAES-256-GCM暗号化し、会議録専用のサーバー鍵で保存します。他アプリの `OPENAI_API_KEY` は使用・変更しません。旧個人キーは共通キーへ自動転用しません。
-- AI解析時は音声とテキストをOpenAIへ送信します。議事録はResponses APIのStructured Outputs（medium）を使用。クラウド版は長い生成に対応するため `background: true, store: true` です。結果取得に必要なデータがOpenAI側にも保存されます。機密情報の利用可否を確認してください。
+- AI解析時は音声・テキスト・全添付資料をOpenAIへ送信します。議事録はResponses APIのStructured Outputs（medium）を使用。クラウド版は長い生成に対応するため `background: true, store: true` です。結果取得に必要なデータがOpenAI側にも保存されます。機密情報の利用可否を確認してください。
 - 削除は論理削除で、通常画面から非表示になります。音声は保持します。復元・完全消去は管理者対応で、自動消去はありません。
 - Supabaseの計算資源は共用なので、負荷や利用枠まで完全に分離するものではありません。同時AI処理は共有ワークスペース全体で2件です。
 - 共通ログイン情報を知っている人は全記録と設定を操作できます。利用者ごとの権限・監査ログはありません。共用端末では利用後にログアウトしてください。
@@ -77,6 +88,7 @@ Nodeテストはアップロード・保存・再試行・編集・削除・ア�
 ## 公式仕様
 
 - [Speech to text](https://developers.openai.com/api/docs/guides/speech-to-text)
+- [File inputs](https://developers.openai.com/api/docs/guides/file-inputs)
 - [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [Background mode](https://developers.openai.com/api/docs/guides/background)
 - [GPT-4o Transcribe](https://developers.openai.com/api/docs/models/gpt-4o-transcribe)

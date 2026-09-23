@@ -2890,6 +2890,96 @@ button {
     padding: 7px 17px 17px;
   }
 }
+.attachment-panel,
+.attachment-picker {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  background: #fff;
+}
+.attachment-panel {
+  margin: 0 0 22px;
+}
+.attachment-panel .field-hint,
+.attachment-picker .field-hint {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.85;
+}
+.attachment-picker {
+  margin: 18px 0;
+  background: #fafaff;
+}
+.attachment-heading,
+.attachment-heading > strong,
+.attachment-heading > h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.attachment-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.attachment-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.attachment-heading h3 > span {
+  color: var(--muted);
+  font-weight: 400;
+}
+.attachment-heading > strong {
+  font-size: 12px;
+}
+.attachment-notice {
+  line-height: 1.9;
+  margin-bottom: 0;
+}
+.attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border);
+}
+.attachment-row > svg {
+  flex-shrink: 0;
+  color: var(--purple);
+}
+.attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.attachment-name small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.attachment-row .text-button {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.attachment-item .notice {
+  flex-wrap: wrap;
+  line-height: 1.8;
+}
+@media (max-width: 600px) {
+  .attachment-panel,
+  .attachment-picker {
+    padding: 14px;
+  }
+  .attachment-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .attachment-row .attachment-name {
+    flex-basis: calc(100% - 35px);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
@@ -2903,6 +2993,7 @@ button {
     color: #222;
   }
   .sidebar,
+  .attachment-panel,
   .topbar,
   .detail-top,
   .meeting-insights,
