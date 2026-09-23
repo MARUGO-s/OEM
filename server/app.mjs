@@ -44,9 +44,12 @@ import {
 } from "./domain.mjs";
 
 const models = ["gpt-6-astra", "gpt-6-sol"];
+const transcriptionModels = ["gpt-4o-transcribe", "gemini-3.5-transcribe"];
 const settingsSchema = z.object({
   apiKey: z.string().trim().min(20).max(500).optional(),
+  geminiApiKey: z.string().trim().min(20).max(500).optional(),
   model: z.enum(models),
+  transcriptionModel: z.enum(transcriptionModels).default("gpt-4o-transcribe"),
 });
 const working = (status) => ["transcribing", "analyzing"].includes(status);
 const fail = (status, message) =>
@@ -73,7 +76,9 @@ const publicRecord = (record) => {
 export async function createApp({
   dataDir,
   apiKey = "",
+  geminiApiKey = "",
   model = "gpt-6-astra",
+  transcriptionModel = "gpt-4o-transcribe",
   aiFactory = createAI,
   staticDir,
 } = {}) {
@@ -88,13 +93,19 @@ export async function createApp({
   try {
     const config = JSON.parse(await readFile(configPath, "utf8"));
     if (models.includes(config.model)) model = config.model;
+    if (transcriptionModels.includes(config.transcriptionModel))
+      transcriptionModel = config.transcriptionModel;
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
   if (!models.includes(model))
     throw new Error("OPENAI_MINUTES_MODEL must be gpt-6-astra or gpt-6-sol");
+  if (!transcriptionModels.includes(transcriptionModel))
+    throw new Error("TRANSCRIPTION_MODEL is not supported");
   let currentKey = apiKey;
+  let currentGeminiKey = geminiApiKey;
   let currentModel = model;
+  let currentTranscriptionModel = transcriptionModel;
   const busy = new Set();
   const jobs = new Set();
   let settingsBusy = false;
@@ -174,9 +185,23 @@ export async function createApp({
       );
     busy.add(id);
   }
-  async function processMeeting(id, key, modelForJob) {
+  async function processMeeting(
+    id,
+    key,
+    geminiKey,
+    modelForJob,
+    transcriptionModelForJob,
+  ) {
     try {
-      const ai = aiFactory(key, modelForJob);
+      const ai = aiFactory(
+        key,
+        modelForJob,
+        {},
+        {
+          transcriptionModel: transcriptionModelForJob,
+          geminiApiKey: geminiKey,
+        },
+      );
       let meeting = getMeeting(id);
       if (needsTranscription(meeting) || !meeting.transcript) {
         let transcript;
@@ -197,7 +222,7 @@ export async function createApp({
           transcript,
           segments: [],
           status: "analyzing",
-          transcriptionModel: "gpt-4o-transcribe",
+          transcriptionModel: transcriptionModelForJob,
         });
       }
       const files = [];
@@ -243,7 +268,14 @@ export async function createApp({
     }
   }
   function startJob(id) {
-    const job = processMeeting(id, currentKey, currentModel);
+    const meeting = getMeeting(id);
+    const job = processMeeting(
+      id,
+      currentKey,
+      currentGeminiKey,
+      currentModel,
+      meeting.transcriptionModel || currentTranscriptionModel,
+    );
     jobs.add(job);
     // A storage error must not become an unhandled rejection or expose API content.
     job
@@ -254,8 +286,9 @@ export async function createApp({
   app.get("/api/settings", (_req, res) =>
     res.json({
       configured: Boolean(currentKey),
+      geminiConfigured: Boolean(currentGeminiKey),
       model: currentModel,
-      transcriptionModel: "gpt-4o-transcribe",
+      transcriptionModel: currentTranscriptionModel,
       maxFileSize: MAX_BATCH_SIZE,
     }),
   );
@@ -265,16 +298,32 @@ export async function createApp({
     settingsBusy = true;
     try {
       const temp = `${configPath}.tmp`;
-      await writeFile(temp, JSON.stringify({ model: input.model }), {
-        mode: 0o600,
-      });
+      if (
+        input.transcriptionModel === "gemini-3.5-transcribe" &&
+        !input.geminiApiKey &&
+        !currentGeminiKey
+      )
+        throw fail(428, "Gemini APIキーを入力してください。");
+      await writeFile(
+        temp,
+        JSON.stringify({
+          model: input.model,
+          transcriptionModel: input.transcriptionModel,
+        }),
+        {
+          mode: 0o600,
+        },
+      );
       await rename(temp, configPath);
       if (input.apiKey) currentKey = input.apiKey;
+      if (input.geminiApiKey) currentGeminiKey = input.geminiApiKey;
       currentModel = input.model;
+      currentTranscriptionModel = input.transcriptionModel;
       res.json({
         configured: Boolean(currentKey),
+        geminiConfigured: Boolean(currentGeminiKey),
         model: currentModel,
-        transcriptionModel: "gpt-4o-transcribe",
+        transcriptionModel: currentTranscriptionModel,
         maxFileSize: MAX_BATCH_SIZE,
       });
     } finally {
@@ -300,7 +349,18 @@ export async function createApp({
         429,
         "取り込み途中の会議を削除してから再度取り込んでください。",
       );
-    const doc = uploadDocument(input, randomUUID(), currentModel);
+    if (
+      input.sources.length &&
+      currentTranscriptionModel === "gemini-3.5-transcribe" &&
+      !currentGeminiKey
+    )
+      throw fail(428, "接続設定でGemini APIキーを設定してください。");
+    const doc = uploadDocument(
+      input,
+      randomUUID(),
+      currentModel,
+      currentTranscriptionModel,
+    );
     await store.save(doc);
     res.status(201).json(publicRecord(doc));
   });
@@ -351,6 +411,12 @@ export async function createApp({
         (doc.attachments || []).length !== (doc.attachmentPlan || []).length
       )
         throw fail(409, "音声・添付資料の取り込みが未完了です。");
+      if (
+        doc.audioParts.length &&
+        doc.transcriptionModel === "gemini-3.5-transcribe" &&
+        !currentGeminiKey
+      )
+        throw fail(428, "接続設定でGemini APIキーを設定してください。");
       const next = await store.save({
         ...doc,
         status: doc.audioParts.length ? "transcribing" : "analyzing",
@@ -381,6 +447,12 @@ export async function createApp({
           throw fail(400, "音声ファイルまたは会話テキストを入力してください。");
         if (files.length && transcript)
           throw fail(400, "音声とテキストはどちらか一方を選択してください。");
+        if (
+          files.length &&
+          currentTranscriptionModel === "gemini-3.5-transcribe" &&
+          !currentGeminiKey
+        )
+          throw fail(428, "接続設定でGemini APIキーを設定してください。");
         validateRecordings(
           files.map((file) => ({ name: file.originalname, size: file.size })),
         );
@@ -436,7 +508,7 @@ export async function createApp({
           error: null,
           minutesStale: false,
           minutesModel: currentModel,
-          transcriptionModel: files.length ? "gpt-4o-transcribe" : null,
+          transcriptionModel: files.length ? currentTranscriptionModel : null,
         };
         lock(meeting.id);
         try {
@@ -469,6 +541,12 @@ export async function createApp({
         400,
         "サンプル会議は再生成できません。新しい会議でお試しください。",
       );
+    if (
+      needsTranscription(meeting) &&
+      currentTranscriptionModel === "gemini-3.5-transcribe" &&
+      !currentGeminiKey
+    )
+      throw fail(428, "接続設定でGemini APIキーを設定してください。");
     lock(meeting.id);
     try {
       const next = await store.save({
@@ -476,6 +554,9 @@ export async function createApp({
         status: needsTranscription(meeting) ? "transcribing" : "analyzing",
         error: null,
         minutesModel: currentModel,
+        ...(needsTranscription(meeting)
+          ? { transcriptionModel: currentTranscriptionModel }
+          : {}),
       });
       startJob(meeting.id);
       res.status(202).json(publicRecord(next));

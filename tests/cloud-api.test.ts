@@ -38,6 +38,7 @@ const secret = btoa(
   String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
 );
 const apiKey = "sk-fake-only-not-a-real-api-key";
+const geminiApiKey = "AIza-fake-only-not-a-real-gemini-key";
 const rows = new Map<string, any>();
 const configs = new Map<string, any>();
 const jobs: Promise<unknown>[] = [];
@@ -89,6 +90,7 @@ globalThis.fetch = async (input, init: any) => {
   if (
     [
       "/rest/v1/rpc/kotonoha_store",
+      "/rest/v1/rpc/kotonoha_settings",
       "/rest/v1/rpc/kotonoha_audio_upload",
       "/rest/v1/rpc/kotonoha_attachments",
       "/rest/v1/rpc/kotonoha_calendar",
@@ -103,9 +105,12 @@ globalThis.fetch = async (input, init: any) => {
     const config = configs.get(user) || {
       model: "gpt-6-astra",
       encryptedKey: null,
+      transcriptionModel: "gpt-4o-transcribe",
+      encryptedGeminiKey: null,
     };
-    if (op === "settings_get") return json(config);
-    if (op === "settings_put") {
+    if (url.pathname.endsWith("kotonoha_settings") && op === "get")
+      return json(config);
+    if (url.pathname.endsWith("kotonoha_settings") && op === "put") {
       configs.set(user, { ...config, ...payload });
       return json(configs.get(user));
     }
@@ -202,6 +207,54 @@ globalThis.fetch = async (input, init: any) => {
       return json({ deleted: true });
     }
     return json(row);
+  }
+  if (
+    url.hostname === "generativelanguage.googleapis.com" &&
+    url.pathname === "/upload/v1beta/files"
+  ) {
+    assert.equal(url.searchParams.get("key"), geminiApiKey);
+    calls.push({ route: url.pathname, body: "start" });
+    return new Response(null, {
+      headers: {
+        "x-goog-upload-url": "https://gemini-upload.invalid/session",
+      },
+    });
+  }
+  if (url.hostname === "gemini-upload.invalid") {
+    assert.equal(headers.get("x-goog-upload-command"), "upload, finalize");
+    calls.push({ route: url.pathname, body: "upload" });
+    return json({
+      file: {
+        name: "files/test-audio",
+        uri: "https://generativelanguage.googleapis.com/v1beta/files/test-audio",
+      },
+    });
+  }
+  if (
+    url.hostname === "generativelanguage.googleapis.com" &&
+    url.pathname.endsWith(":generateContent")
+  ) {
+    assert.equal(headers.get("x-goog-api-key"), geminiApiKey);
+    const body = JSON.parse(init.body);
+    assert.deepEqual(
+      body.generationConfig.audioTranscriptionConfig.languageCodes,
+      ["ja-JP"],
+    );
+    calls.push({ route: url.pathname, body });
+    return json({
+      candidates: [
+        { content: { parts: [{ text: "Geminiで文字起こししました。" }] } },
+      ],
+    });
+  }
+  if (
+    url.hostname === "generativelanguage.googleapis.com" &&
+    url.pathname === "/v1beta/files/test-audio" &&
+    init?.method === "DELETE"
+  ) {
+    assert.equal(url.searchParams.get("key"), geminiApiKey);
+    calls.push({ route: url.pathname, body: "delete" });
+    return json({});
   }
   if (url.hostname === "api.openai.com") {
     assert.equal(headers.get("authorization"), `Bearer ${apiKey}`);
@@ -479,10 +532,79 @@ Deno.test(
         (await (await request("/settings", "valid-b")).json()).configured,
         true,
       );
+      const geminiSave = await request("/settings", "valid-a", {
+        method: "PUT",
+        body: JSON.stringify({
+          model: "gpt-6-astra",
+          transcriptionModel: "gemini-3.5-transcribe",
+          geminiApiKey,
+        }),
+      });
+      assert.equal(geminiSave.status, 200);
+      const geminiSettings = await geminiSave.json();
+      assert.equal(geminiSettings.geminiConfigured, true);
+      assert.ok(!JSON.stringify(geminiSettings).includes(geminiApiKey));
+      assert.equal(
+        await decryptApiKey(
+          configs.get(owner).encryptedGeminiKey,
+          owner,
+          secret,
+        ),
+        geminiApiKey,
+      );
+      const geminiForm = new FormData();
+      geminiForm.set("title", "Gemini文字起こし会議");
+      geminiForm.set("date", "2026-09-24");
+      geminiForm.set(
+        "audio",
+        new File([new Uint8Array(44)], "gemini.wav", {
+          type: "audio/wav",
+        }),
+      );
+      const geminiCreated = await request("/meetings", "valid-a", {
+        method: "POST",
+        body: geminiForm,
+      });
+      assert.equal(
+        geminiCreated.status,
+        202,
+        await geminiCreated.clone().text(),
+      );
+      const geminiMeeting = await geminiCreated.json();
+      await drain();
+      await request("/meetings");
+      await drain();
+      const geminiDone = await (
+        await request(`/meetings/${geminiMeeting.id}`)
+      ).json();
+      assert.equal(geminiDone.status, "done");
+      assert.equal(geminiDone.transcriptionModel, "gemini-3.5-transcribe");
+      assert.equal(geminiDone.transcript, "Geminiで文字起こししました。");
+      assert.ok(
+        calls.some((c) =>
+          c.route.includes("gemini-3.5-transcribe:generateContent"),
+        ),
+      );
+      assert.ok(
+        calls.some(
+          (c) => c.route === "/v1beta/files/test-audio" && c.body === "delete",
+        ),
+      );
+      assert.equal(
+        (
+          await request(`/meetings/${geminiMeeting.id}`, "valid-a", {
+            method: "DELETE",
+          })
+        ).status,
+        204,
+      );
       for (const model of ["gpt-6-astra", "gpt-6-sol"]) {
         await request("/settings", "valid-a", {
           method: "PUT",
-          body: JSON.stringify({ model }),
+          body: JSON.stringify({
+            model,
+            transcriptionModel: "gpt-4o-transcribe",
+          }),
         });
         const form = new FormData();
         form.set("title", "テスト会議");

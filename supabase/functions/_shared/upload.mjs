@@ -46,7 +46,12 @@ export const UploadSchema = z
     }
     if (index !== value.parts.length) bad("録音の順序が不正です。");
   });
-export function uploadDocument(input, id, model) {
+export function uploadDocument(
+  input,
+  id,
+  model,
+  transcriptionModel = "gpt-4o-transcribe",
+) {
   return {
     ...input.metadata,
     id,
@@ -71,7 +76,7 @@ export function uploadDocument(input, id, model) {
     error: null,
     minutesStale: false,
     minutesModel: model,
-    transcriptionModel: input.sources.length ? "gpt-4o-transcribe" : null,
+    transcriptionModel: input.sources.length ? transcriptionModel : null,
   };
 }
 export function uploadPart(document, index) {

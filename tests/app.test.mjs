@@ -409,7 +409,7 @@ test("APIキー未設定では会議を送信せず、サンプルだけ利用�
   assert.equal(second.id, demo.id);
 });
 
-test("キーを返却・永続化せず、Astra/Solモデル設定のみ再起動後も保持する", async (t) => {
+test("キーを返却・永続化せず、AIモデル設定のみ再起動後も保持する", async (t) => {
   const { request, dataDir } = await setup(t);
   const response = await request("/settings", {
     method: "PUT",
@@ -422,7 +422,34 @@ test("キーを返却・永続化せず、Astra/Solモデル設定のみ再起�
   assert.ok(!JSON.stringify(config).includes(key));
   assert.deepEqual(
     JSON.parse(await readFile(path.join(dataDir, "config.json"), "utf8")),
-    { model: "gpt-6-sol" },
+    {
+      model: "gpt-6-sol",
+      transcriptionModel: "gpt-4o-transcribe",
+    },
+  );
+  const missingGemini = await request("/settings", {
+    method: "PUT",
+    body: JSON.stringify({
+      model: "gpt-6-sol",
+      transcriptionModel: "gemini-3.5-transcribe",
+    }),
+  });
+  assert.equal(missingGemini.status, 428);
+  const geminiKey = "AIza-test-only-not-a-real-gemini-key";
+  const gemini = await request("/settings", {
+    method: "PUT",
+    body: JSON.stringify({
+      model: "gpt-6-sol",
+      transcriptionModel: "gemini-3.5-transcribe",
+      geminiApiKey: geminiKey,
+    }),
+  });
+  assert.equal(gemini.status, 200);
+  assert.equal((await gemini.json()).geminiConfigured, true);
+  assert.ok(
+    !(await readFile(path.join(dataDir, "config.json"), "utf8")).includes(
+      geminiKey,
+    ),
   );
   const invalid = await request("/settings", {
     method: "PUT",

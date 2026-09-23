@@ -22,7 +22,13 @@ import {
   X,
 } from "lucide-react";
 import { api, download, audioUrl } from "./api";
-import { clock, isWorking, modelName, type Meeting } from "./types";
+import {
+  clock,
+  isWorking,
+  modelName,
+  transcriptionModelName,
+  type Meeting,
+} from "./types";
 import { Modal } from "./Modal";
 import { AttachmentPanel } from "./Attachments";
 import { MeetingSchedule } from "./Calendar";
@@ -356,7 +362,7 @@ export function MeetingDetail({
             </strong>
             <p>
               {m.status === "transcribing"
-                ? "GPT-4o Transcribeが音声を読み取っています。"
+                ? `${transcriptionModelName(m.transcriptionModel)}が音声を読み取っています。`
                 : `${modelName(m.minutesModel)}が議題・決定事項・アクションを整理しています。`}{" "}
               完了分は保存されます。アプリを閉じた場合、残りの処理は次回開いたときに再開します。
             </p>
@@ -572,7 +578,7 @@ export function MeetingDetail({
                 <>
                   {m.source === "audio" && (
                     <p className="transcript-note">
-                      GPT-4o
+                      {transcriptionModelName(m.transcriptionModel)}
                       Transcribeの出力です。話者名・タイムスタンプは付与していません。
                     </p>
                   )}
@@ -652,6 +658,9 @@ export function MeetingDetail({
               {m.isDemo ? "サンプルデータ" : modelName(m.minutesModel)}
             </strong>
             <small>
+              {m.hasAudio
+                ? `文字起こし: ${transcriptionModelName(m.transcriptionModel)}。`
+                : "文字起こし済みテキストを使用。"}
               AIの出力は元の会話と照合し、必要に応じて編集してください。
             </small>
           </div>

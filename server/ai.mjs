@@ -1,4 +1,6 @@
 import { createReadStream } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { MAX_TEXT_LENGTH } from "./domain.mjs";
@@ -7,8 +9,17 @@ import {
   parseMinutes,
   summaryInput,
 } from "../supabase/functions/_shared/summary.mjs";
+import {
+  GEMINI_TRANSCRIPTION_MODEL,
+  transcribeWithGemini,
+} from "../supabase/functions/_shared/gemini-transcribe.mjs";
 
-export function createAI(apiKey, model, clientOptions = {}) {
+export function createAI(
+  apiKey,
+  model,
+  clientOptions = {},
+  { transcriptionModel = "gpt-4o-transcribe", geminiApiKey = "" } = {},
+) {
   const client = new OpenAI({
     apiKey,
     timeout: 15 * 60_000,
@@ -17,6 +28,15 @@ export function createAI(apiKey, model, clientOptions = {}) {
   });
   return {
     async transcribe(filePath) {
+      if (transcriptionModel === GEMINI_TRANSCRIPTION_MODEL) {
+        const bytes = await readFile(filePath);
+        const transcript = await transcribeWithGemini(
+          geminiApiKey,
+          new Blob([bytes]),
+          path.basename(filePath),
+        );
+        return { transcript, segments: [], duration: null };
+      }
       const response = await client.audio.transcriptions.create({
         file: createReadStream(filePath),
         model: "gpt-4o-transcribe",

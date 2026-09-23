@@ -12,7 +12,12 @@ import {
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { AttachmentPicker } from "./Attachments";
-import { today, modelName, type Settings } from "./types";
+import {
+  today,
+  modelName,
+  transcriptionModelName,
+  type Settings,
+} from "./types";
 
 const LIMIT = 100_000_000;
 const ACCEPT = ".mp3,.mp4,.mpeg,.mpga,.m4a,.aac,.wav,.webm,.ogg,.flac";
@@ -309,11 +314,11 @@ export function NewMeeting({
         <p className="processing-note">
           <Check size={15} />
           {mode === "file"
-            ? `GPT-4o Transcribe → ${modelName(settings?.model)}`
+            ? `${transcriptionModelName(settings?.transcriptionModel)} → ${modelName(settings?.model)}`
             : modelName(settings?.model)}
           <br />
           <span>
-            音声・テキスト・添付資料をOpenAIに送信して処理します。API利用料がかかります。
+            音声は選択した文字起こしサービスへ、テキストと添付資料はOpenAIへ送信して処理します。API利用料がかかります。
           </span>
         </p>
         {!settings?.configured && (
@@ -325,6 +330,18 @@ export function NewMeeting({
             </button>
           </div>
         )}
+        {settings?.configured &&
+          mode === "file" &&
+          settings.transcriptionModel === "gemini-3.5-transcribe" &&
+          !settings.geminiConfigured && (
+            <div className="notice">
+              Gemini文字起こしを使うにはGemini APIキーが必要です。
+              <button type="button" onClick={onSettings}>
+                接続設定を開く
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          )}
         {busy && (
           <p className="notice" role="status" aria-live="polite">
             {progress || "取り込み中…"}
@@ -344,6 +361,9 @@ export function NewMeeting({
             disabled={
               busy ||
               !settings?.configured ||
+              (mode === "file" &&
+                settings?.transcriptionModel === "gemini-3.5-transcribe" &&
+                !settings?.geminiConfigured) ||
               (mode === "text" ? !transcript.trim() : !files.length)
             }
           >

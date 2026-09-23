@@ -73,6 +73,7 @@ export interface Meeting {
 }
 export interface Settings {
   configured: boolean;
+  geminiConfigured: boolean;
   model: string;
   transcriptionModel: string;
   maxFileSize: number;
@@ -121,6 +122,10 @@ export const isWorking = (m: Meeting) =>
   ["transcribing", "analyzing"].includes(m.status);
 export const modelName = (id?: string) =>
   id === "gpt-6-sol" ? "GPT-6 Sol" : "GPT-6 Astra";
+export const transcriptionModelName = (id?: string) =>
+  id === "gemini-3.5-transcribe"
+    ? "Gemini 3.5 Transcribe"
+    : "GPT-4o Transcribe";
 export const today = () => new Intl.DateTimeFormat("sv-SE").format(new Date());
 export const formatDate = (date: string) =>
   new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric" }).format(

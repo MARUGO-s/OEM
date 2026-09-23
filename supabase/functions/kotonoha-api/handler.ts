@@ -39,6 +39,10 @@ import {
 } from "../_shared/audio.mjs";
 import { encryptApiKey, decryptApiKey } from "../_shared/key-crypto.mjs";
 import {
+  GEMINI_TRANSCRIPTION_MODEL,
+  transcribeWithGemini,
+} from "../_shared/gemini-transcribe.mjs";
+import {
   createToken,
   hashToken,
   validTokenFormat,
@@ -68,10 +72,15 @@ const service = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
 const encryptionSecret = Deno.env.get("KOTONOHA_KEY_ENCRYPTION_SECRET") || "";
+const OPENAI_TRANSCRIPTION_MODEL = "gpt-4o-transcribe";
 const settingsSchema = z
   .object({
     model: z.enum(["gpt-6-astra", "gpt-6-sol"]),
+    transcriptionModel: z
+      .enum([OPENAI_TRANSCRIPTION_MODEL, GEMINI_TRANSCRIPTION_MODEL])
+      .default(OPENAI_TRANSCRIPTION_MODEL),
     apiKey: z.string().trim().min(20).max(500).optional(),
+    geminiApiKey: z.string().trim().min(20).max(500).optional(),
   })
   .strict();
 const working = (doc: Doc) =>
@@ -158,29 +167,51 @@ function expose(record: RecordRow) {
 function exposeSettings(config: Doc) {
   return {
     configured: Boolean(config.encryptedKey && encryptionSecret),
+    geminiConfigured: Boolean(config.encryptedGeminiKey && encryptionSecret),
     model: config.model,
-    transcriptionModel: "gpt-4o-transcribe",
+    transcriptionModel: config.transcriptionModel || OPENAI_TRANSCRIPTION_MODEL,
     maxFileSize: MAX_BATCH_SIZE,
     cloud: true,
   };
 }
-async function getKey(owner: string, config?: Doc): Promise<string> {
-  const current = config || (await store("settings_get", owner));
-  if (!current.encryptedKey)
-    throw fail(428, "接続設定でOpenAI APIキーを設定してください。");
+async function getKey(
+  owner: string,
+  config: Doc,
+  provider: "openai" | "gemini",
+): Promise<string> {
+  const encrypted =
+    provider === "gemini" ? config.encryptedGeminiKey : config.encryptedKey;
+  if (!encrypted)
+    throw fail(
+      428,
+      `接続設定で${provider === "gemini" ? "Gemini" : "OpenAI"} APIキーを設定してください。`,
+    );
   if (!encryptionSecret)
     throw fail(
       503,
       "APIキー保存機能の初期設定が完了していません。管理者にご連絡ください。",
     );
   try {
-    return await decryptApiKey(current.encryptedKey, owner, encryptionSecret);
+    return await decryptApiKey(encrypted, owner, encryptionSecret);
   } catch {
     throw fail(
       428,
-      "APIキーを読み取れませんでした。接続設定から再入力してください。",
+      `${provider === "gemini" ? "Gemini" : "OpenAI"} APIキーを読み取れませんでした。接続設定から再入力してください。`,
     );
   }
+}
+async function getKeys(
+  owner: string,
+  config: Doc,
+  transcriptionModel?: string | null,
+) {
+  const openaiKey = await getKey(owner, config, "openai");
+  return {
+    openai: openaiKey,
+    ...(transcriptionModel === GEMINI_TRANSCRIPTION_MODEL
+      ? { gemini: await getKey(owner, config, "gemini") }
+      : {}),
+  };
 }
 async function bodyBytes(req: Request, limit: number) {
   if (Number(req.headers.get("content-length") || 0) > limit)
@@ -346,7 +377,11 @@ async function startSummary(owner: string, record: RecordRow, key: string) {
   );
   return finalize(owner, saved, result);
 }
-async function processMeeting(owner: string, initial: RecordRow, key: string) {
+async function processMeeting(
+  owner: string,
+  initial: RecordRow,
+  keys: { openai: string; gemini?: string },
+) {
   let record = initial;
   try {
     if (
@@ -361,21 +396,25 @@ async function processMeeting(owner: string, initial: RecordRow, key: string) {
             .from(BUCKET)
             .download(part.audioPath);
           if (error || !data) throw new Error("Audio unavailable");
+          const fileName = part.audioPath.split("/").pop() || "meeting.mp3";
+          const previous = record.document.audioParts?.[index - 1]?.transcript;
+          if (
+            record.document.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL
+          ) {
+            if (!keys.gemini)
+              throw fail(428, "接続設定でGemini APIキーを設定してください。");
+            return transcribeWithGemini(keys.gemini, data, fileName);
+          }
           const form = new FormData();
           // The display name may be .aac, while storage contains a remuxed .m4a.
-          form.set(
-            "file",
-            data,
-            part.audioPath.split("/").pop() || "meeting.mp3",
-          );
-          form.set("model", "gpt-4o-transcribe");
+          form.set("file", data, fileName);
+          form.set("model", OPENAI_TRANSCRIPTION_MODEL);
           form.set("response_format", "json");
           form.set("language", "ja");
-          const previous = record.document.audioParts?.[index - 1]?.transcript;
           if (record.document.chunked && previous)
             form.set("prompt", previous.slice(-1200));
           const result = await openai(
-            key,
+            keys.openai,
             "/audio/transcriptions",
             { method: "POST", body: form },
             110_000,
@@ -400,10 +439,11 @@ async function processMeeting(owner: string, initial: RecordRow, key: string) {
         transcript,
         status: "analyzing",
         segments: [],
-        transcriptionModel: "gpt-4o-transcribe",
+        transcriptionModel:
+          record.document.transcriptionModel || OPENAI_TRANSCRIPTION_MODEL,
       });
     }
-    await startSummary(owner, record, key);
+    await startSummary(owner, record, keys.openai);
   } catch (error) {
     const message =
       (error as Error).name === "TimeoutError"
@@ -420,10 +460,10 @@ async function processMeeting(owner: string, initial: RecordRow, key: string) {
 async function reconcile(
   owner: string,
   record: RecordRow,
-  key: string | null,
+  keys: { openai: string; gemini?: string } | null,
 ): Promise<RecordRow> {
   if (!working(record.document)) return record;
-  if (record.document.chunked && record.document.partReady && key) {
+  if (record.document.chunked && record.document.partReady && keys) {
     const next = await store(
       "next",
       owner,
@@ -433,17 +473,17 @@ async function reconcile(
     );
     if (next)
       EdgeRuntime.waitUntil(
-        processMeeting(owner, next, key).catch(() =>
+        processMeeting(owner, next, keys).catch(() =>
           console.error("kotonoha persistence failure"),
         ),
       );
     return next || record;
   }
-  if (record.responseId && key) {
+  if (record.responseId && keys) {
     let result: Doc;
     try {
       result = await openai(
-        key,
+        keys.openai,
         `/responses/${encodeURIComponent(record.responseId)}`,
       );
     } catch (error) {
@@ -590,36 +630,69 @@ export async function handler(req: Request) {
       return json(null, 204);
     }
     const owner = session.workspaceId;
-    const config = await store("settings_get", owner);
+    const config = await store("get", owner, null, {}, "kotonoha_settings");
     if (route === "/settings" && req.method === "GET")
       return json(exposeSettings(config));
     if (route === "/settings" && req.method === "PUT") {
       const input = settingsSchema.parse(await jsonBody(req));
-      if (input.apiKey && !encryptionSecret)
+      if ((input.apiKey || input.geminiApiKey) && !encryptionSecret)
         throw fail(503, "APIキー保存機能の初期設定が完了していません。");
-      const saved = await store("settings_put", owner, null, {
-        model: input.model,
-        ...(input.apiKey
-          ? {
-              encryptedKey: await encryptApiKey(
-                input.apiKey,
-                owner,
-                encryptionSecret,
-              ),
-            }
-          : {}),
-      });
+      if (
+        input.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL &&
+        !input.geminiApiKey &&
+        !config.encryptedGeminiKey
+      )
+        throw fail(428, "Gemini APIキーを入力してください。");
+      const saved = await store(
+        "put",
+        owner,
+        null,
+        {
+          model: input.model,
+          transcriptionModel: input.transcriptionModel,
+          ...(input.apiKey
+            ? {
+                encryptedKey: await encryptApiKey(
+                  input.apiKey,
+                  owner,
+                  encryptionSecret,
+                ),
+              }
+            : {}),
+          ...(input.geminiApiKey
+            ? {
+                encryptedGeminiKey: await encryptApiKey(
+                  input.geminiApiKey,
+                  owner,
+                  encryptionSecret,
+                ),
+              }
+            : {}),
+        },
+        "kotonoha_settings",
+      );
       return json(exposeSettings(saved));
     }
     if (route === "/meetings" && req.method === "GET") {
       const records: RecordRow[] = await store("list", owner);
-      const key = records.some(
+      const active = records.filter(
         (r) => working(r.document) && (r.responseId || r.document.partReady),
-      )
-        ? await getKey(owner, config)
+      );
+      const keys = active.length
+        ? await getKeys(
+            owner,
+            config,
+            active.some(
+              (r) =>
+                !r.responseId &&
+                r.document.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL,
+            )
+              ? GEMINI_TRANSCRIPTION_MODEL
+              : null,
+          )
         : null;
       const resolved = await Promise.all(
-        records.map((record) => reconcile(owner, record, key)),
+        records.map((record) => reconcile(owner, record, keys)),
       );
       return json(resolved.map(expose));
     }
@@ -631,20 +704,30 @@ export async function handler(req: Request) {
       );
     }
     if (route === "/uploads" && req.method === "POST") {
-      await getKey(owner, config);
       const input = UploadSchema.parse(await jsonBody(req));
+      await getKeys(
+        owner,
+        config,
+        input.sources.length ? config.transcriptionModel : null,
+      );
       const id = crypto.randomUUID();
       const record = await store(
         "create",
         owner,
         id,
-        { document: uploadDocument(input, id, config.model) },
+        {
+          document: uploadDocument(
+            input,
+            id,
+            config.model,
+            config.transcriptionModel,
+          ),
+        },
         "kotonoha_audio_upload",
       );
       return json(expose(record), 201);
     }
     if (route === "/meetings" && req.method === "POST") {
-      const key = await getKey(owner, config);
       const bytes = await bodyBytes(req, MAX_FILE_SIZE + 1_000_000);
       let form: FormData;
       try {
@@ -675,6 +758,11 @@ export async function handler(req: Request) {
         throw fail(400, "録音ファイルか会話テキストを入力してください。");
       if (audioFiles.length && transcript)
         throw fail(400, "録音とテキストはどちらか一方を選んでください。");
+      const keys = await getKeys(
+        owner,
+        config,
+        audioFiles.length ? config.transcriptionModel : null,
+      );
       const id = crypto.randomUUID();
       let audioPath: string | null = null;
       const audioParts: Doc[] = [];
@@ -720,7 +808,9 @@ export async function handler(req: Request) {
           error: null,
           minutesStale: false,
           minutesModel: config.model,
-          transcriptionModel: audioFiles.length ? "gpt-4o-transcribe" : null,
+          transcriptionModel: audioFiles.length
+            ? config.transcriptionModel
+            : null,
           runId: crypto.randomUUID(),
         };
         const record = await store("create", owner, id, {
@@ -728,7 +818,7 @@ export async function handler(req: Request) {
           audioPath,
         });
         EdgeRuntime.waitUntil(
-          processMeeting(owner, record, key).catch(() =>
+          processMeeting(owner, record, keys).catch(() =>
             console.error("kotonoha persistence failure"),
           ),
         );
@@ -928,7 +1018,11 @@ export async function handler(req: Request) {
       return json(expose(record));
     }
     if (match[2] === "complete" && req.method === "POST") {
-      const key = await getKey(owner, config);
+      const keys = await getKeys(
+        owner,
+        config,
+        record.document.transcriptionModel,
+      );
       record = await store(
         "complete",
         owner,
@@ -936,7 +1030,7 @@ export async function handler(req: Request) {
         { runId: crypto.randomUUID() },
         "kotonoha_attachments",
       );
-      record = await reconcile(owner, record, key);
+      record = await reconcile(owner, record, keys);
       return json(expose(record), 202);
     }
     if (match[2] === "audio" && req.method === "GET") {
@@ -961,8 +1055,14 @@ export async function handler(req: Request) {
         );
       if (record.document.isDemo)
         throw fail(400, "サンプルは再生成できません。");
-      const key = await getKey(owner, config);
-      record = await reconcile(owner, record, key);
+      const retryTranscriptionModel = needsTranscription(
+        record.document,
+        record.audioPath,
+      )
+        ? config.transcriptionModel
+        : record.document.transcriptionModel;
+      const keys = await getKeys(owner, config, retryTranscriptionModel);
+      record = await reconcile(owner, record, keys);
       if (working(record.document))
         throw fail(409, "まだ処理中です。完了をお待ちください。");
       record = await store("claim", owner, id, {
@@ -971,11 +1071,12 @@ export async function handler(req: Request) {
           : "analyzing",
         error: null,
         minutesModel: config.model,
+        transcriptionModel: retryTranscriptionModel,
         runId: crypto.randomUUID(),
         partReady: false,
       });
       EdgeRuntime.waitUntil(
-        processMeeting(owner, record, key).catch(() =>
+        processMeeting(owner, record, keys).catch(() =>
           console.error("kotonoha persistence failure"),
         ),
       );

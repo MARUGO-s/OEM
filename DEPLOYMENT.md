@@ -27,6 +27,8 @@ supabase functions deploy kotonoha-api --project-ref hjhkccbktkscwtgzxjfq --no-v
 
 カレンダー対応は `20260923000500_kotonoha_calendar.sql` のみを適用してからEdge Function・フロントを公開します。service_role限定 `public.kotonoha_calendar` を追加し、既存専用会議documentの `calendarOverrides` に1予定ずつ行ロックで保存します。共有の業務テーブル・Auth・Storageは変更しません。本文編集は従来のPATCHで保存し、予定とは独立しています。再生成時も手動変更を残します。
 
+Gemini文字起こし対応は `20260924000100_kotonoha_gemini_transcription.sql` のみを適用してからEdge Function・フロントを公開します。会議録専用 `kotonoha.settings` に文字起こしモデルと暗号化Geminiキー列を追加し、service_role限定 `public.kotonoha_settings` RPCで操作します。既存のOpenAIキー、業務テーブル、Auth、Storageには触れません。`gemini-1.5-flash` は提供終了済みのため `gemini-3.5-transcribe` を使用します。
+
 添付資料対応は `20260923000400_kotonoha_attachments.sql` のみを適用してからEdge Function・フロントを公開します。専用の非公開 `kotonoha-documents` バケット（各10 MB）とservice_role限定 `public.kotonoha_attachments` RPCを追加します。共用のStorageポリシー・Auth・業務テーブルは変更しません。資料のメタデータは既存専用会議documentの `attachments` / `attachmentPlan` に保存します。保存後の完了・変更は行ロックで排他制御し、同時追加でも個数・合計容量を超えません。
 
 関連付けを解除した資料は `document.removedAttachments` とStorageに保持します。復元時は対象の会議・資料ID・パスを照合して管理者がメタデータを戻します（最大5ファイル・25 MB制限を再確認）。完全消去時は `attachments` と `removedAttachments` の**両方**の保存パスを確認し、明示した対象だけを消去します。バケット全体を削除しないでください。解析中の変更は禁止です。過去の資料非対応版へ戻すと添付資料が解析されないため、ロールバックは添付資料対応版に限ります。

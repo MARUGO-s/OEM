@@ -31,6 +31,7 @@ import {
   formatDate,
   isWorking,
   modelName,
+  transcriptionModelName,
   today,
   type Meeting,
   type Settings,
@@ -679,15 +680,15 @@ export default function App() {
                 <span>
                   <ShieldCheck size={14} />
                   {isCloud
-                    ? "記録は専用クラウドで全員に共有。AI解析時はOpenAIへ送信。"
-                    : "記録はこのPCに保存。AI解析時のみOpenAIへ送信。"}
+                    ? `記録は専用クラウドで共有。音声は${transcriptionModelName(settings?.transcriptionModel)}で文字起こし。`
+                    : `記録はこのPCに保存。音声は${transcriptionModelName(settings?.transcriptionModel)}で文字起こし。`}
                 </span>
                 <button
                   className="text-button"
                   onClick={() => setSettingsOpen(true)}
                 >
                   {settings?.configured
-                    ? `${modelName(settings.model)} を使用`
+                    ? `${transcriptionModelName(settings.transcriptionModel)} → ${modelName(settings.model)}`
                     : "AIの接続設定をする"}
                   <ArrowRight size={13} />
                 </button>
@@ -822,7 +823,7 @@ function Help({
         {[
           {
             title: "AIの接続設定",
-            text: "OpenAIのAPIキーを設定し、議事録に使うGPT-6 AstraまたはGPT-6 Solを選択します。文字起こしにはGPT-4o Transcribeを使用します。",
+            text: "OpenAIのAPIキーを設定し、議事録に使うGPT-6 AstraまたはGPT-6 Solを選択します。文字起こしはGPT-4o TranscribeまたはGemini 3.5 Transcribeから選べます。Geminiを使う場合はGemini APIキーも設定してください。",
             action: "接続設定を開く",
             run: onSettings,
           },
@@ -870,8 +871,8 @@ function Help({
           <h3>データの保存について</h3>
           <p>
             {isCloud
-              ? "会議・音声・資料はSupabaseの会議録専用領域に非公開で保存し、ログインした全員で共有します。追加・編集・削除も共通です。他の人の変更は約10秒ごとに反映します（編集中を除く）。OpenAI APIキーはワークスペース共通で暗号化保存し、画面には再表示しません。AI解析時は音声・テキスト・全添付資料をOpenAIに送信し、追加のAPI利用料がかかります。結果を一時保存するバックグラウンドAPIを使います。会議の削除・資料の関連付け解除後も資料は保持します。復元・完全消去は管理者にご依頼ください。"
-              : "会議・音声・資料はアプリの .data フォルダに保存されます。Dropboxの設定によってはクラウドにも同期されます。AI解析時は音声・テキスト・全添付資料をOpenAIに送信し、追加のAPI利用料がかかります。関連付けを解除した資料も保持します。削除した会議は .data/trash に移動します。"}
+              ? "会議・音声・資料はSupabaseの会議録専用領域に非公開で保存し、ログインした全員で共有します。追加・編集・削除も共通です。他の人の変更は約10秒ごとに反映します（編集中を除く）。OpenAIとGeminiのAPIキーはワークスペース共通で別々に暗号化保存し、画面には再表示しません。Gemini文字起こしを選ぶと音声をGoogleへ送信し、文字起こし後に一時ファイルの削除を要求します。テキスト・全添付資料・議事録生成はOpenAIへ送信され、各APIの利用料がかかります。会議の削除・資料の関連付け解除後も資料は保持します。復元・完全消去は管理者にご依頼ください。"
+              : "会議・音声・資料はアプリの .data フォルダに保存されます。Dropboxの設定によってはクラウドにも同期されます。Gemini文字起こしを選ぶと音声をGoogleへ送信し、テキスト・全添付資料・議事録生成はOpenAIへ送信します。各APIの利用料がかかります。関連付けを解除した資料も保持します。削除した会議は .data/trash に移動します。"}
           </p>
         </div>
       </section>

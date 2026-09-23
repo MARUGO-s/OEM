@@ -15,7 +15,11 @@ export function SettingsDialog({
   onSave: (value: Settings) => void;
 }) {
   const [key, setKey] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
   const [model, setModel] = useState(settings?.model || "gpt-6-astra");
+  const [transcriptionModel, setTranscriptionModel] = useState(
+    settings?.transcriptionModel || "gpt-4o-transcribe",
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(e: FormEvent) {
@@ -27,10 +31,13 @@ export function SettingsDialog({
         method: "PUT",
         body: JSON.stringify({
           model,
+          transcriptionModel,
           ...(key.trim() ? { apiKey: key.trim() } : {}),
+          ...(geminiKey.trim() ? { geminiApiKey: geminiKey.trim() } : {}),
         }),
       });
       setKey("");
+      setGeminiKey("");
       onSave(next);
     } catch (e) {
       setError((e as Error).message);
@@ -76,13 +83,77 @@ export function SettingsDialog({
               : "キーはサーバーのメモリにだけ保持し、画面には再表示しません。再起動時は再設定が必要です。"}
           </span>
         </label>
-        <div className="field">
-          <span>文字起こし</span>
-          <div className="fixed-model">
-            <span className="status-dot" />
-            GPT-4o Transcribe<code>gpt-4o-transcribe</code>
+        <div className="provider-heading">
+          <span className="provider-icon">
+            <KeyRound size={20} />
+          </span>
+          <div>
+            <strong>Google Gemini API</strong>
+            <small>
+              {settings?.geminiConfigured
+                ? "APIキー設定済み"
+                : "Gemini使用時に設定"}
+            </small>
           </div>
+          {settings?.geminiConfigured && <Check size={18} className="green" />}
         </div>
+        <label className="field">
+          Gemini APIキー
+          <input
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={geminiKey}
+            onChange={(e) => setGeminiKey(e.target.value)}
+            placeholder={
+              settings?.geminiConfigured ? "変更する場合のみ入力" : "AIza…"
+            }
+            minLength={20}
+            required={
+              transcriptionModel === "gemini-3.5-transcribe" &&
+              !settings?.geminiConfigured
+            }
+          />
+          <span className="field-hint">
+            Geminiを選んだ場合のみ音声をGoogleへ送信します。キーはOpenAIキーとは別に保存します。
+          </span>
+        </label>
+        <fieldset className="model-options">
+          <legend>文字起こし</legend>
+          {[
+            {
+              id: "gpt-4o-transcribe",
+              title: "GPT-4o Transcribe",
+              detail: "OpenAIで音声を文字にする",
+              Icon: Zap,
+            },
+            {
+              id: "gemini-3.5-transcribe",
+              title: "Gemini 3.5 Transcribe",
+              detail: "Google Geminiで音声を文字にする",
+              Icon: Sparkles,
+            },
+          ].map(({ id, title, detail, Icon }) => (
+            <label
+              key={id}
+              className={transcriptionModel === id ? "chosen" : ""}
+            >
+              <input
+                type="radio"
+                name="transcriptionModel"
+                value={id}
+                checked={transcriptionModel === id}
+                onChange={() => setTranscriptionModel(id)}
+              />
+              <Icon size={22} />
+              <span>
+                <strong>{title}</strong>
+                <small>{detail}</small>
+                <code>{id}</code>
+              </span>
+            </label>
+          ))}
+        </fieldset>
         <fieldset className="model-options">
           <legend>会話解析・議事録</legend>
           {[
