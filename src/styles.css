@@ -5,7 +5,7 @@
   color: #252938;
   background: #f8f9fc;
   font-synthesis: none;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 400;
   --purple: #6960d8;
   --muted: #555b6e;
@@ -83,12 +83,12 @@ body {
   background: #fff9;
   padding: 12px;
   border-radius: 9px;
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .login-models {
   color: #797287;
-  font-size: 12px;
+  font-size: 14px;
   z-index: 1;
 }
 .login-form-panel {
@@ -110,7 +110,7 @@ body {
   margin-bottom: 22px;
 }
 .login-form-panel h2 {
-  font-size: 27px;
+  font-size: 31px;
   margin: 0 0 12px;
 }
 .login-form-panel .field {
@@ -139,7 +139,7 @@ body {
   margin-top: 4px;
 }
 .login-account-note p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.9;
   margin: 0;
 }
@@ -155,11 +155,11 @@ body {
     padding: 32px 0 22px;
   }
   .login-story h1 {
-    font-size: 30px;
+    font-size: 34px;
     margin: 10px 0;
   }
   .login-story-body > p {
-    font-size: 12px;
+    font-size: 14px;
   }
   .login-flow {
     margin-top: 18px;
@@ -169,7 +169,7 @@ body {
     padding: 8px;
   }
   .login-models {
-    font-size: 11px;
+    font-size: 13px;
   }
   .login-form-panel {
     padding: 36px 28px;
@@ -229,7 +229,7 @@ svg {
   stroke-width: 1.7;
 }
 small {
-  font-size: 12px;
+  font-size: 14px;
 }
 button {
   transition:
@@ -246,7 +246,7 @@ button {
   padding: 12px 17px;
   border-radius: 8px;
   font-weight: 550;
-  font-size: 13px;
+  font-size: 15px;
   white-space: nowrap;
   line-height: 1.5;
 }
@@ -272,7 +272,7 @@ button {
 }
 .button.small {
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .button.danger {
   color: #c03d55;
@@ -294,7 +294,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: 14px;
   padding: 5px 0;
   font-weight: 500;
   color: #555b6e;
@@ -375,7 +375,7 @@ button {
   box-shadow: 0 4px 12px #786dde22;
 }
 .brand > span:last-child {
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 750;
   line-height: 1;
   letter-spacing: -1.1px;
@@ -384,7 +384,7 @@ button {
   display: block;
   font-family: "Noto Sans JP", sans-serif;
   letter-spacing: 0.7px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 400;
   margin-top: 9px;
   color: #62687a;
@@ -396,7 +396,7 @@ button {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 9px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   margin-bottom: 20px;
 }
@@ -409,19 +409,19 @@ button {
   display: grid;
   place-items: center;
   border-radius: 7px;
-  font-size: 13px;
+  font-size: 15px;
 }
 .workspace-switch small {
   display: block;
   margin-top: 3px;
   color: #62687a;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 400;
 }
 .local-pill {
   color: #62687a;
   margin-left: auto;
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.6px;
 }
 .new-meeting-button {
@@ -429,7 +429,7 @@ button {
   margin-bottom: 32px;
 }
 .nav-label {
-  font-size: 10px;
+  font-size: 12px;
   color: #62687a;
   letter-spacing: 1px;
   padding: 0 13px;
@@ -449,7 +449,7 @@ button {
   text-align: left;
   padding: 12px 13px;
   border-radius: 7px;
-  font-size: 13px;
+  font-size: 15px;
   color: #4d5366;
 }
 .sidebar nav button.active {
@@ -465,7 +465,7 @@ button {
 }
 .nav-count {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 12px;
   color: #9991c5;
   background: #e4e0f7;
   min-width: 19px;
@@ -478,7 +478,7 @@ button {
   margin-top: 35px;
 }
 .sidebar-recents .nav-label {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.2px;
   margin-bottom: 13px;
 }
@@ -495,7 +495,7 @@ button {
   gap: 9px;
   padding: 10px 12px;
   text-align: left;
-  font-size: 12px;
+  font-size: 14px;
   color: #555b6e;
 }
 .sidebar-recents .recent-open span:not(.status-dot) {
@@ -526,7 +526,7 @@ button {
   color: var(--purple);
 }
 .sidebar-recents p {
-  font-size: 11px;
+  font-size: 13px;
   color: #62687a;
   line-height: 1.9;
   padding: 6px 13px;
@@ -546,12 +546,12 @@ button {
   color: #8c90a0;
 }
 .local-info strong {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   color: #505668;
 }
 .local-info small {
-  font-size: 10px;
+  font-size: 12px;
   display: block;
   margin-top: 4px;
   color: #62687a;
@@ -562,7 +562,7 @@ button {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: 14px;
   color: #505668;
 }
 .settings-link > .status-dot {
@@ -576,11 +576,11 @@ button {
   align-items: center;
   justify-content: space-between;
   color: #62687a;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.5px;
 }
 .sidebar-foot span:first-child {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.4px;
 }
@@ -597,7 +597,7 @@ button {
   justify-content: space-between;
   padding: 0 39px;
   color: #62687a;
-  font-size: 11px;
+  font-size: 13px;
 }
 .topbar > div {
   display: flex;
@@ -606,7 +606,7 @@ button {
 }
 .topbar strong {
   color: #4d5366;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
 }
 .topbar-date {
@@ -626,7 +626,7 @@ button {
   place-items: center;
   border-radius: 50%;
   color: #a1937d;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   margin-left: 6px;
 }
@@ -646,7 +646,7 @@ button {
   margin-bottom: 27px;
 }
 .eyebrow {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1.4px;
   font-weight: 600;
   color: #62687a;
@@ -656,13 +656,13 @@ button {
   gap: 12px;
 }
 .page-heading h1 {
-  font-size: 26px;
+  font-size: 30px;
   letter-spacing: 0.4px;
   font-weight: 650;
   line-height: 1.5;
 }
 .page-heading p {
-  font-size: 12px;
+  font-size: 14px;
   color: #555b6e;
   margin-top: 8px;
 }
@@ -692,7 +692,7 @@ button {
   background: #ffffff90;
   padding: 5px 9px;
   color: #645981;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 1.2px;
 }
 .hero-tag .status-dot {
@@ -701,7 +701,7 @@ button {
   background: #8b7cd5;
 }
 .hero-content h2 {
-  font-size: 32px;
+  font-size: 37px;
   font-weight: 650;
   line-height: 1.55;
   letter-spacing: 1.3px;
@@ -709,19 +709,19 @@ button {
   color: #423e60;
 }
 .hero-content p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.9;
   color: #55526b;
 }
 .hero-content .button {
   margin-top: 20px;
   padding: 11px 17px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .hero-formats {
   display: block;
   margin-top: 9px;
-  font-size: 10px;
+  font-size: 12px;
   color: #686276;
 }
 .hero-illustration {
@@ -772,7 +772,7 @@ button {
   color: #9280d6;
 }
 .floating-audio b {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   color: #747084;
 }
@@ -833,7 +833,7 @@ button {
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
-  font-size: 9px;
+  font-size: 10px;
   color: #6c627e;
 }
 .illustration-doc-title > span:first-child {
@@ -844,7 +844,7 @@ button {
   margin-left: auto;
   background: #e8f4ef;
   color: #83b29d;
-  font-size: 6px;
+  font-size: 7px;
   padding: 3px 6px;
   border-radius: 4px;
 }
@@ -873,7 +873,7 @@ button {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 8px;
+  font-size: 9px;
   color: #a08abf;
   margin-bottom: 10px;
 }
@@ -902,7 +902,7 @@ button {
   height: 16px;
   background: #e9efe9;
   border-radius: 50%;
-  font-size: 7px;
+  font-size: 8px;
   display: grid;
   place-items: center;
   color: #a6baa8;
@@ -916,7 +916,7 @@ button {
   gap: 6px;
   align-items: center;
   color: #a397b7;
-  font-size: 8px;
+  font-size: 9px;
   transform: rotate(-2deg);
 }
 .workflow-strip {
@@ -951,19 +951,19 @@ button {
   color: #8eae9d;
 }
 .step-number {
-  font-size: 8px;
+  font-size: 9px;
   color: #b7b0ca;
   display: inline;
   margin-right: 7px;
 }
 .workflow-step strong {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 550;
   color: #454a5c;
 }
 .workflow-step small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: #62687a;
   margin-top: 5px;
 }
@@ -1007,12 +1007,12 @@ button {
   color: #d2aa7d;
 }
 .stat-card > div > span {
-  font-size: 11px;
+  font-size: 13px;
   color: #555b6e;
 }
 .stat-card strong {
   display: block;
-  font-size: 27px;
+  font-size: 31px;
   font-weight: 600;
   line-height: 1.2;
   margin-top: 5px;
@@ -1020,14 +1020,14 @@ button {
   color: #33384a;
 }
 .stat-card strong small {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0;
   font-weight: 400;
   color: #62687a;
   margin-left: 6px;
 }
 .stat-note {
-  font-size: 9px;
+  font-size: 10px;
   color: #62687a;
   margin-left: auto;
   align-self: flex-end;
@@ -1052,7 +1052,7 @@ button {
   gap: 16px;
 }
 .section-heading h2 {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -1062,7 +1062,7 @@ button {
   background: #f0f0f6;
   color: #9997af;
   border-radius: 5px;
-  font-size: 9px;
+  font-size: 10px;
   padding: 2px 6px;
   font-weight: 500;
 }
@@ -1082,7 +1082,7 @@ button {
   background: none;
   min-width: 0;
   width: 100%;
-  font-size: 11px;
+  font-size: 13px;
   outline: none;
 }
 .search-box input::placeholder {
@@ -1099,7 +1099,7 @@ button {
   align-items: center;
 }
 .library-tabs button {
-  font-size: 11px;
+  font-size: 13px;
   padding: 0 2px 12px;
   color: #62687a;
   border-bottom: 2px solid transparent;
@@ -1111,7 +1111,7 @@ button {
 }
 .library-tabs > span {
   margin-left: auto;
-  font-size: 8px;
+  font-size: 9px;
   color: #b4b6c1;
   margin-bottom: 12px;
 }
@@ -1138,19 +1138,19 @@ button {
   color: #b5abd1;
 }
 .empty-state h3 {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   color: #818193;
   margin: 11px 0 8px;
 }
 .empty-state p {
-  font-size: 12px;
+  font-size: 14px;
   color: #62687a;
   line-height: 1.8;
 }
 .empty-state > .text-button {
   margin-top: 12px;
-  font-size: 9px;
+  font-size: 10px;
 }
 .empty-state .button {
   margin-top: 20px;
@@ -1168,7 +1168,7 @@ button {
   gap: 15px;
   margin-top: 19px;
   padding: 0 3px;
-  font-size: 8px;
+  font-size: 9px;
   color: #a4a7b3;
 }
 .page-footer > span {
@@ -1177,7 +1177,7 @@ button {
   align-items: center;
 }
 .page-footer .text-button {
-  font-size: 8px;
+  font-size: 9px;
 }
 .meeting-row {
   width: 100%;
@@ -1213,7 +1213,7 @@ button {
   flex: 1;
 }
 .meeting-row-info strong {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   color: #33384a;
   display: block;
@@ -1226,7 +1226,7 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 11px;
+  font-size: 13px;
   color: #62687a;
 }
 .meeting-row-info i {
@@ -1236,7 +1236,7 @@ button {
   border-radius: 50%;
 }
 .meeting-row-info em {
-  font-size: 8px;
+  font-size: 9px;
   font-style: normal;
   color: #b4a0cb;
 }
@@ -1244,7 +1244,7 @@ button {
   color: #c0bdcc;
 }
 .badge {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -1294,12 +1294,12 @@ button {
   margin-bottom: 24px;
 }
 .modal-heading h2 {
-  font-size: 19px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.1px;
 }
 .modal-heading p {
-  font-size: 12px;
+  font-size: 14px;
   color: #62687a;
   margin-top: 8px;
   line-height: 1.7;
@@ -1317,7 +1317,7 @@ button {
   margin-top: 23px;
 }
 .modal-footer > span {
-  font-size: 9px;
+  font-size: 10px;
   color: #aaa8b9;
 }
 .modal-footer > .button:only-child {
@@ -1340,7 +1340,7 @@ button {
   gap: 8px;
   align-items: center;
   border-radius: 5px;
-  font-size: 12px;
+  font-size: 14px;
   color: #5a6072;
 }
 .input-tabs button.active {
@@ -1364,17 +1364,17 @@ button {
   background: #f2edff;
 }
 .drop-zone strong {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   color: #505668;
   margin-top: 3px;
 }
 .drop-zone > span {
-  font-size: 9px;
+  font-size: 10px;
   color: #b9b3c5;
 }
 .drop-zone small {
-  font-size: 10px;
+  font-size: 12px;
   color: #62687a;
   margin-top: 5px;
   text-align: center;
@@ -1397,7 +1397,7 @@ button {
   min-width: 0;
 }
 .selected-audio strong {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1412,7 +1412,7 @@ button {
   flex-shrink: 0;
 }
 .selected-audio small {
-  font-size: 10px;
+  font-size: 12px;
   color: #62687a;
   display: block;
   margin-top: 4px;
@@ -1427,7 +1427,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: #4d5366;
   position: relative;
@@ -1442,7 +1442,7 @@ button {
   border: 1px solid #e6e2ed;
   border-radius: 6px;
   padding: 11px 12px;
-  font-size: 13px;
+  font-size: 15px;
   background: white;
   color: #303548;
   line-height: 1.6;
@@ -1456,7 +1456,7 @@ button {
 }
 .field-hint {
   color: #62687a;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 400;
   line-height: 1.8;
 }
@@ -1465,13 +1465,13 @@ button {
   top: 0;
   left: 45px;
   color: #62687a;
-  font-size: 10px;
+  font-size: 12px;
   border: 1px solid #eeebf3;
   border-radius: 3px;
   padding: 0 4px;
 }
 .processing-note {
-  font-size: 11px;
+  font-size: 13px;
   color: #53596b;
   margin-top: 20px;
   line-height: 1.9;
@@ -1482,14 +1482,14 @@ button {
   color: #ac9cd0;
 }
 .processing-note > span {
-  font-size: 10px;
+  font-size: 12px;
   color: #62687a;
 }
 .notice {
   background: #fffbf1;
   border: 1px solid #f0e6d0;
   color: #795e30;
-  font-size: 12px;
+  font-size: 14px;
   padding: 11px 14px;
   border-radius: 7px;
   margin-top: 15px;
@@ -1501,7 +1501,7 @@ button {
   gap: 5px;
   color: #8770bd;
   margin-left: 5px;
-  font-size: 10px;
+  font-size: 12px;
 }
 .notice .recover-actions {
   display: block;
@@ -1536,7 +1536,7 @@ button {
   color: var(--muted);
   padding: 7px 13px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
 }
 .record-mode-toggle button.active {
@@ -1552,13 +1552,13 @@ button {
   width: 100%;
 }
 .record-time {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 .record-time span {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: #b7862f;
 }
@@ -1594,12 +1594,12 @@ button {
   gap: 8px;
 }
 .record-mobile-warning strong {
-  font-size: 13px;
+  font-size: 15px;
   color: #6b4f1c;
 }
 .record-mobile-warning p {
   margin: 0;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.8;
 }
 .record-mobile-warning .record-controls {
@@ -1612,7 +1612,7 @@ button {
   color: #9a3339;
   padding: 12px 15px;
   border-radius: 7px;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.8;
   margin-top: 15px;
 }
@@ -1639,13 +1639,13 @@ button {
   color: #a491c5;
 }
 .provider-heading strong {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 .provider-heading small {
   display: block;
   color: #62687a;
-  font-size: 11px;
+  font-size: 13px;
   margin-top: 5px;
 }
 .provider-heading > svg {
@@ -1660,10 +1660,10 @@ button {
   border: 1px solid #eeeaf4;
   border-radius: 7px;
   color: #94859f;
-  font-size: 10px;
+  font-size: 12px;
 }
 .fixed-model code {
-  font-size: 8px;
+  font-size: 9px;
   color: #b5aaba;
   margin-left: auto;
 }
@@ -1676,7 +1676,7 @@ button {
   padding: 0;
 }
 .model-options legend {
-  font-size: 12px;
+  font-size: 14px;
   color: #505668;
   margin-bottom: 11px;
 }
@@ -1701,23 +1701,23 @@ button {
   margin: 0;
 }
 .model-options strong {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   display: block;
   color: #796588;
 }
 .model-options small {
-  font-size: 11px;
+  font-size: 13px;
   display: block;
   margin: 4px 0;
   color: #62687a;
 }
 .model-options code {
-  font-size: 10px;
+  font-size: 12px;
   color: #64677a;
 }
 .confirm-copy {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.9;
   color: #95889f;
 }
@@ -1736,7 +1736,7 @@ button {
   padding: 11px 14px 11px 18px;
   border-radius: 9px;
   color: #7f759c;
-  font-size: 11px;
+  font-size: 13px;
   max-width: calc(100vw - 35px);
 }
 .detail-view {
@@ -1757,7 +1757,7 @@ button {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 9px;
+  font-size: 10px;
   color: #a9a5b7;
 }
 .export-menu {
@@ -1786,7 +1786,7 @@ button {
   display: block;
   text-align: left;
   padding: 10px;
-  font-size: 10px;
+  font-size: 12px;
   width: 100%;
   color: #918199;
   border-radius: 5px;
@@ -1795,7 +1795,7 @@ button {
   background: #f8f5fd;
 }
 .meeting-heading h1 {
-  font-size: 25px;
+  font-size: 29px;
   font-weight: 600;
   line-height: 1.65;
   margin: 9px 0 15px;
@@ -1819,7 +1819,7 @@ button {
   flex-wrap: wrap;
   margin-bottom: 23px;
   color: #62687a;
-  font-size: 12px;
+  font-size: 14px;
 }
 .meeting-meta > span {
   display: flex;
@@ -1827,7 +1827,7 @@ button {
   gap: 6px;
 }
 .sample-note {
-  font-size: 9px;
+  font-size: 10px;
   background: #f7f4ee;
   border: 1px solid #eee7da;
   padding: 10px 13px;
@@ -1850,12 +1850,12 @@ button {
   color: #9b86c6;
 }
 .progress-panel strong {
-  font-size: 12px;
+  font-size: 14px;
   color: #8971b7;
   font-weight: 500;
 }
 .progress-panel p {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.8;
   margin-top: 7px;
   color: #af9dc5;
@@ -1893,7 +1893,7 @@ button {
   gap: 7px;
   border-bottom: 2px solid transparent;
   padding: 18px 1px 15px;
-  font-size: 12px;
+  font-size: 14px;
   color: #555b6e;
 }
 .document-tabs button.active {
@@ -1904,7 +1904,7 @@ button {
   border-radius: 4px;
   background: #f4f0fa;
   padding: 1px 5px;
-  font-size: 8px;
+  font-size: 9px;
 }
 .document-toolbar {
   display: flex;
@@ -1916,7 +1916,7 @@ button {
   min-height: 55px;
 }
 .document-toolbar > span {
-  font-size: 11px;
+  font-size: 13px;
   color: #62687a;
 }
 .document-toolbar > div {
@@ -1925,24 +1925,24 @@ button {
   gap: 12px;
 }
 .document-toolbar .text-button {
-  font-size: 11px;
+  font-size: 13px;
 }
 .markdown {
   padding: 30px 33px 42px;
   line-height: 2.1;
   color: #343848;
-  font-size: 13px;
+  font-size: 15px;
   overflow-wrap: anywhere;
 }
 .markdown h1 {
-  font-size: 21px;
+  font-size: 24px;
   line-height: 1.8;
   font-weight: 600;
   color: #282d3d;
   margin-bottom: 16px;
 }
 .markdown h2 {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   line-height: 1.8;
   margin: 21px 0 9px;
@@ -1951,7 +1951,7 @@ button {
   color: #343848;
 }
 .markdown h3 {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.8;
   margin-top: 15px;
 }
@@ -1981,13 +1981,13 @@ button {
   text-align: center;
 }
 .document-empty h3 {
-  font-size: 14px;
+  font-size: 16px;
   color: #9d8aaf;
   font-weight: 500;
   margin: 18px 0 10px;
 }
 .document-empty p {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.9;
   color: #bbafc7;
 }
@@ -2007,7 +2007,7 @@ button {
   border-color: #eee8f6;
 }
 .insight-card h3 {
-  font-size: 13px;
+  font-size: 15px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2023,11 +2023,11 @@ button {
   background: #f5f1fa;
   color: #b2a0c7;
   padding: 1px 5px;
-  font-size: 8px;
+  font-size: 9px;
   border-radius: 4px;
 }
 .insight-card > p {
-  font-size: 12px;
+  font-size: 14px;
   color: #4d5366;
   line-height: 2;
 }
@@ -2039,7 +2039,7 @@ button {
 .decision-list li {
   display: flex;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   color: #4d5366;
   line-height: 1.9;
   margin-top: 11px;
@@ -2087,7 +2087,7 @@ button {
 }
 .action-item strong {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   line-height: 1.9;
   color: #414658;
@@ -2102,7 +2102,7 @@ button {
   flex-wrap: wrap;
   gap: 5px;
   margin-top: 9px;
-  font-size: 10px;
+  font-size: 12px;
   color: #62687a;
 }
 .person-dot {
@@ -2113,7 +2113,7 @@ button {
   border-radius: 50%;
   background: #f0e9f5;
   color: #b2a0c1;
-  font-size: 7px;
+  font-size: 8px;
 }
 .action-due {
   display: flex;
@@ -2123,26 +2123,26 @@ button {
   color: #bfaecc;
 }
 .insight-card > .text-button {
-  font-size: 9px;
+  font-size: 10px;
   margin-top: 8px;
 }
 .source-note {
   padding: 4px 5px;
 }
 .source-note > span {
-  font-size: 8px;
+  font-size: 9px;
   color: #b6a8c3;
   display: block;
 }
 .source-note strong {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: #4d5366;
   margin: 6px 0 10px;
 }
 .source-note small {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.9;
   color: #62687a;
   display: block;
@@ -2155,7 +2155,7 @@ button {
   border-top: 1px solid #eee8f5;
 }
 .meeting-manage .text-button {
-  font-size: 9px;
+  font-size: 10px;
   color: #b3a5c0;
 }
 .meeting-manage .delete-button {
@@ -2165,7 +2165,7 @@ button {
   padding: 20px;
 }
 .editor-wrap > p {
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.8;
   color: #baa8c8;
   margin-bottom: 15px;
@@ -2179,7 +2179,7 @@ button {
   resize: vertical;
   min-height: 550px;
   color: #303548;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 2.1;
 }
 .transcript-content {
@@ -2197,7 +2197,7 @@ button {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 12px;
+  font-size: 14px;
   color: #555b6e;
 }
 .speaker-avatar {
@@ -2206,7 +2206,7 @@ button {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: 12px;
 }
 .color-0 {
   background: #efe8f8;
@@ -2221,25 +2221,25 @@ button {
   color: #bfa78a;
 }
 .time-code {
-  font-size: 11px;
+  font-size: 13px;
   color: #62687a;
   margin-left: 3px;
 }
 .transcript-segment p {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 2.1;
   color: #3d4355;
   margin: 9px 0 0 35px;
 }
 .transcript-note {
   color: #62687a;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.8;
   margin-bottom: 18px;
 }
 .transcript-text {
   white-space: pre-wrap;
-  font-size: 14px;
+  font-size: 16px;
   color: #343848;
   line-height: 2.2;
   overflow-wrap: anywhere;
@@ -2251,16 +2251,16 @@ button {
   padding: 20px 0;
 }
 .actions-content .action-item strong {
-  font-size: 12px;
+  font-size: 14px;
 }
 .actions-content .action-item > div > span {
-  font-size: 10px;
+  font-size: 12px;
 }
 .actions-content .action-due {
   margin-left: 20px;
 }
 .empty-inline {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.9;
 }
 .actions-group {
@@ -2276,13 +2276,13 @@ button {
   padding: 16px 0;
 }
 .actions-group .action-item strong {
-  font-size: 12px;
+  font-size: 14px;
 }
 .actions-group .section-heading {
   border-bottom: 1px solid var(--border);
 }
 .actions-group .section-heading .text-button {
-  font-size: 12px;
+  font-size: 14px;
   color: #8e779e;
 }
 .help-page {
@@ -2313,23 +2313,23 @@ button {
   color: #ac99cc;
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 14px;
   flex-shrink: 0;
 }
 .help-steps h2 {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 550;
   color: #8a749f;
   margin: 6px 0 10px;
 }
 .help-steps p {
-  font-size: 12px;
+  font-size: 14px;
   color: #4d5366;
   line-height: 2;
 }
 .help-steps .text-button {
   margin-top: 12px;
-  font-size: 10px;
+  font-size: 12px;
 }
 .help-note {
   display: flex;
@@ -2341,13 +2341,13 @@ button {
   color: #b0a2c2;
 }
 .help-note h3 {
-  font-size: 12px;
+  font-size: 14px;
   color: #9984aa;
   font-weight: 500;
   margin-bottom: 9px;
 }
 .help-note p {
-  font-size: 12px;
+  font-size: 14px;
   color: #555b6e;
   line-height: 2;
 }
@@ -2360,7 +2360,7 @@ button {
     padding: 35px 43px;
   }
   .hero-content h2 {
-    font-size: 37px;
+    font-size: 43px;
   }
   .hero-illustration {
     margin-right: 26px;
@@ -2396,7 +2396,7 @@ button {
     padding: 26px;
   }
   .hero-content h2 {
-    font-size: 28px;
+    font-size: 32px;
   }
   .hero-illustration {
     width: 42%;
@@ -2405,7 +2405,7 @@ button {
     margin-left: -17px;
   }
   .hero-content p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .stat-card {
     padding: 16px 13px;
@@ -2425,10 +2425,10 @@ button {
     height: 32px;
   }
   .workflow-step strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .workflow-step small {
-    font-size: 9px;
+    font-size: 10px;
   }
   .detail-grid {
     grid-template-columns: minmax(0, 1fr) 235px;
@@ -2439,7 +2439,7 @@ button {
     padding: 0 17px;
   }
   .document-tabs button {
-    font-size: 11px;
+    font-size: 13px;
   }
   .markdown {
     padding: 25px;
@@ -2464,7 +2464,7 @@ button {
     padding-left: 6px;
   }
   .brand > span:last-child {
-    font-size: 24px;
+    font-size: 28px;
   }
   .workspace-switch {
     padding: 10px 7px;
@@ -2483,26 +2483,26 @@ button {
     margin-left: -30px;
   }
   .hero-content h2 {
-    font-size: 27px;
+    font-size: 31px;
   }
   .hero-content p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .hero-content .button {
     padding: 10px 11px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .hero-card {
     min-height: 285px;
   }
   .page-heading h1 {
-    font-size: 23px;
+    font-size: 26px;
   }
   .page-heading p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .page-heading > .button {
-    font-size: 11px;
+    font-size: 13px;
     padding: 9px 11px;
   }
   .workflow-step small {
@@ -2530,10 +2530,10 @@ button {
     height: 33px;
   }
   .stat-card > div > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .stat-card strong {
-    font-size: 24px;
+    font-size: 28px;
   }
   .detail-grid {
     grid-template-columns: 1fr;
@@ -2546,7 +2546,7 @@ button {
     min-height: 500px;
   }
   .meeting-heading h1 {
-    font-size: 22px;
+    font-size: 25px;
   }
   .topbar-date {
     display: none;
@@ -2596,15 +2596,15 @@ button {
     gap: 12px;
   }
   .page-heading h1 {
-    font-size: 24px;
+    font-size: 28px;
   }
   .page-heading p {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.9;
     max-width: 250px;
   }
   .page-heading > .button {
-    font-size: 11px;
+    font-size: 13px;
     padding: 8px;
     gap: 5px;
     margin-top: 28px;
@@ -2624,14 +2624,14 @@ button {
     margin-right: 0;
   }
   .hero-content h2 {
-    font-size: 29px;
+    font-size: 33px;
   }
   .hero-content p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .hero-content .button {
     padding: 11px 15px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .hero-content {
     min-width: 230px;
@@ -2643,7 +2643,7 @@ button {
     align-items: flex-start;
   }
   .workflow-step strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .step-icon {
     width: 30px;
@@ -2660,12 +2660,12 @@ button {
     align-items: flex-start;
   }
   .page-footer > span {
-    font-size: 9px;
+    font-size: 10px;
     max-width: 250px;
     line-height: 1.8;
   }
   .page-footer .text-button {
-    font-size: 9px;
+    font-size: 10px;
   }
   .toast {
     left: 50%;
@@ -2675,7 +2675,7 @@ button {
     max-height: calc(100dvh - 30px);
   }
   .meeting-heading h1 {
-    font-size: 21px;
+    font-size: 24px;
   }
   .meeting-meta {
     gap: 12px;
@@ -2685,7 +2685,7 @@ button {
   }
   .sample-note {
     align-items: flex-start;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.8;
   }
   .help-steps {
@@ -2695,10 +2695,10 @@ button {
     gap: 15px;
   }
   .help-steps h2 {
-    font-size: 12px;
+    font-size: 14px;
   }
   .help-steps p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .help-note {
     padding: 20px;
@@ -2707,7 +2707,7 @@ button {
     padding: 17px;
   }
   .actions-group .section-heading .text-button {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 @media (max-width: 530px) {
@@ -2720,16 +2720,16 @@ button {
     margin-bottom: 22px;
   }
   .page-heading h1 {
-    font-size: 23px;
+    font-size: 26px;
   }
   .page-heading p {
     max-width: 100%;
-    font-size: 11px;
+    font-size: 13px;
   }
   .page-heading > .button {
     margin-top: 0;
     padding: 7px 10px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .hero-card {
     padding: 24px 22px;
@@ -2737,13 +2737,13 @@ button {
     display: block;
   }
   .hero-content h2 {
-    font-size: 29px;
+    font-size: 33px;
   }
   .hero-content p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .hero-content .button {
-    font-size: 11px;
+    font-size: 13px;
   }
   .hero-illustration {
     position: absolute;
@@ -2791,10 +2791,10 @@ button {
     margin: 0 auto 9px;
   }
   .workflow-step strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .workflow-step small {
-    font-size: 9px;
+    font-size: 10px;
     max-width: 100px;
     margin: 5px auto 0;
     line-height: 1.7;
@@ -2817,11 +2817,11 @@ button {
     width: 16px;
   }
   .stat-card > div > span {
-    font-size: 9px;
+    font-size: 10px;
     white-space: nowrap;
   }
   .stat-card strong {
-    font-size: 23px;
+    font-size: 26px;
     margin-top: 7px;
   }
   .stat-link {
@@ -2840,7 +2840,7 @@ button {
     gap: 14px;
   }
   .section-heading h2 {
-    font-size: 14px;
+    font-size: 16px;
   }
   .search-box {
     width: 100%;
@@ -2850,16 +2850,16 @@ button {
     gap: 22px;
   }
   .library-tabs button {
-    font-size: 11px;
+    font-size: 13px;
   }
   .empty-state {
     min-height: 225px;
   }
   .empty-state h3 {
-    font-size: 13px;
+    font-size: 15px;
   }
   .empty-state p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .page-footer {
     flex-direction: column;
@@ -2877,15 +2877,15 @@ button {
     width: 20px;
   }
   .meeting-row-info strong {
-    font-size: 12px;
+    font-size: 14px;
   }
   .meeting-row-info > span {
-    font-size: 10px;
+    font-size: 12px;
     gap: 6px;
     flex-wrap: wrap;
   }
   .meeting-row > .badge {
-    font-size: 9px;
+    font-size: 10px;
     padding: 4px 6px;
   }
   .meeting-row > svg {
@@ -2896,43 +2896,43 @@ button {
     border-radius: 12px;
   }
   .modal-heading h2 {
-    font-size: 17px;
+    font-size: 20px;
   }
   .modal-heading p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .modal-footer {
     flex-wrap: wrap;
   }
   .modal-footer > span {
-    font-size: 8px;
+    font-size: 9px;
     display: none;
   }
   .modal-footer > .primary {
     margin-left: auto;
   }
   .modal-footer .button {
-    font-size: 11px;
+    font-size: 13px;
   }
   .input-tabs button {
-    font-size: 11px;
+    font-size: 13px;
     padding: 8px 2px;
     gap: 5px;
   }
   .drop-zone strong {
-    font-size: 12px;
+    font-size: 14px;
   }
   .form-grid {
     gap: 15px;
   }
   .processing-note span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .fixed-model {
-    font-size: 11px;
+    font-size: 13px;
   }
   .fixed-model code {
-    font-size: 9px;
+    font-size: 10px;
   }
   .detail-view {
     padding-top: 18px;
@@ -2944,20 +2944,20 @@ button {
     gap: 10px;
   }
   .autosave {
-    font-size: 10px;
+    font-size: 12px;
   }
   .detail-top .text-button {
-    font-size: 11px;
+    font-size: 13px;
   }
   .detail-top .button {
-    font-size: 11px;
+    font-size: 13px;
     padding: 7px 9px;
   }
   .meeting-heading h1 {
-    font-size: 19px;
+    font-size: 22px;
   }
   .meeting-meta {
-    font-size: 11px;
+    font-size: 13px;
   }
   .meeting-insights {
     grid-template-columns: 1fr;
@@ -2967,7 +2967,7 @@ button {
     gap: 20px;
   }
   .document-tabs button {
-    font-size: 11px;
+    font-size: 13px;
     gap: 5px;
   }
   .document-tabs button svg {
@@ -2977,24 +2977,24 @@ button {
     padding: 11px 15px;
   }
   .document-toolbar > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .markdown {
     padding: 25px 22px;
-    font-size: 12px;
+    font-size: 14px;
   }
   .markdown h1 {
-    font-size: 17px;
+    font-size: 20px;
   }
   .markdown h2 {
-    font-size: 14px;
+    font-size: 16px;
   }
   .transcript-content {
     padding: 23px 20px;
   }
   .transcript-segment p {
     margin-left: 0;
-    font-size: 12px;
+    font-size: 14px;
   }
   .actions-content {
     padding: 23px 20px;
@@ -3004,10 +3004,10 @@ button {
     gap: 10px;
   }
   .progress-panel strong {
-    font-size: 12px;
+    font-size: 14px;
   }
   .progress-panel p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .detail-error {
     flex-direction: column;
@@ -3024,7 +3024,7 @@ button {
     gap: 12px;
   }
   .help-note p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .actions-group .section-heading {
     flex-direction: row;
@@ -3045,7 +3045,7 @@ button {
 }
 .attachment-panel .field-hint,
 .attachment-picker .field-hint {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   line-height: 1.85;
 }
@@ -3069,7 +3069,7 @@ button {
   border: 1px dashed #d3cbea;
   border-radius: 8px;
   color: #8674c9;
-  font-size: 12px;
+  font-size: 14px;
   text-align: center;
   pointer-events: none;
 }
@@ -3089,19 +3089,19 @@ button {
 }
 .attachment-heading h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 17px;
 }
 .attachment-heading h3 > span {
   color: var(--muted);
   font-weight: 400;
 }
 .attachment-heading > strong {
-  font-size: 13px;
+  font-size: 15px;
 }
 .attachment-heading .optional {
   position: static;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 400;
 }
 .attachment-notice {
@@ -3123,17 +3123,17 @@ button {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: 15px;
 }
 .attachment-name small {
   display: block;
   margin-top: 5px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 .attachment-row .text-button {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 14px;
 }
 .attachment-item .notice {
   flex-wrap: wrap;
@@ -3166,31 +3166,31 @@ button {
   flex-wrap: wrap;
   margin: 22px 0;
 }
-.usage-toolbar label { display: grid; gap: 7px; color: var(--muted); font-size: 13px; }
+.usage-toolbar label { display: grid; gap: 7px; color: var(--muted); font-size: 15px; }
 .usage-toolbar input { min-height: 39px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 9px; background: white; color: var(--ink); }
 .usage-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .usage-summary > div { display: grid; gap: 8px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: white; }
 .usage-summary span, .usage-muted { color: var(--muted); }
-.usage-summary strong { font-size: 24px; font-weight: 700; }
-.usage-note { max-width: 850px; color: var(--muted); line-height: 1.8; font-size: 13px; }
+.usage-summary strong { font-size: 28px; font-weight: 700; }
+.usage-note { max-width: 850px; color: var(--muted); line-height: 1.8; font-size: 15px; }
 .usage-groups { display: grid; gap: 12px; }
 .usage-group { border: 1px solid var(--border); border-radius: 14px; background: white; overflow: hidden; }
 .usage-group > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; cursor: pointer; }
 .usage-group > summary:hover { background: #fafaff; }
 .usage-group > summary span { display: grid; gap: 4px; }
-.usage-group > summary small { color: var(--muted); font-size: 13px; }
+.usage-group > summary small { color: var(--muted); font-size: 15px; }
 .usage-group-total { margin-left: auto; text-align: right; white-space: nowrap; }
-.usage-group-total strong { font-size: 20px; }
-.usage-group-meta { padding: 0 20px 16px; color: var(--muted); font-size: 13px; }
+.usage-group-total strong { font-size: 23px; }
+.usage-group-meta { padding: 0 20px 16px; color: var(--muted); font-size: 15px; }
 .usage-group .usage-table-wrap { border: 0; border-top: 1px solid var(--border); border-radius: 0; }
 .usage-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; background: white; }
 .usage-table { width: 100%; min-width: 760px; border-collapse: collapse; text-align: left; }
 .usage-table th, .usage-table td { padding: 15px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .usage-table tr:last-child td { border-bottom: 0; }
-.usage-table th { color: var(--muted); font-size: 13px; font-weight: 600; background: #fafaff; }
+.usage-table th { color: var(--muted); font-size: 15px; font-weight: 600; background: #fafaff; }
 .usage-table td { line-height: 1.55; }
 .usage-table td span, .usage-table td small { display: block; }
-.usage-table td small { color: var(--muted); font-size: 12px; }
+.usage-table td small { color: var(--muted); font-size: 14px; }
 .usage-table td:nth-child(2) { min-width: 170px; }
 .usage-table td:nth-child(4) { white-space: nowrap; }
 .usage-pagination { justify-content: flex-end; }
@@ -3198,9 +3198,9 @@ button {
 @media (max-width: 760px) {
   .usage-summary { grid-template-columns: 1fr; }
   .usage-summary > div { padding: 14px 17px; }
-  .usage-summary strong { font-size: 21px; }
+  .usage-summary strong { font-size: 24px; }
   .usage-group > summary { padding: 14px; }
-  .usage-group-total strong { font-size: 16px; }
+  .usage-group-total strong { font-size: 18px; }
 }
 @media print {
   body {

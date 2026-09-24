@@ -15,15 +15,15 @@
   gap: 12px;
 }
 .cal-summary span {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .cal-summary strong {
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 650;
 }
 .cal-summary small {
-  font-size: 12px;
+  font-size: 14px;
   margin-left: 7px;
   color: var(--muted);
   font-weight: 400;
@@ -55,7 +55,7 @@
   position: relative;
   min-width: 134px;
   justify-content: center;
-  font-size: 21px;
+  font-size: 24px;
   font-weight: 650;
 }
 .cal-month-label input {
@@ -92,7 +92,7 @@
   padding: 8px 13px;
   border-radius: 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 .cal-view-toggle button.active {
   background: white;
@@ -114,7 +114,7 @@
   padding: 10px;
   color: var(--ink);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   min-height: 40px;
 }
 .cal-delete-toolbar {
@@ -125,14 +125,14 @@
   margin: 0 0 16px;
 }
 .cal-delete-toolbar > span {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .cal-delete-toolbar > .button.danger {
   margin-left: auto;
 }
 .cal-legend {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   flex-wrap: wrap;
   margin-bottom: 14px;
@@ -185,7 +185,7 @@
   background: #f3f4f9;
   text-align: center;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   padding: 12px 0;
 }
 .cal-weekdays > div:last-child {
@@ -223,7 +223,7 @@
   width: 100%;
   padding: 0 3px 4px;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 14px;
 }
 .cal-day-button > span {
   width: 26px;
@@ -233,7 +233,7 @@
   border-radius: 50%;
 }
 .cal-day-button small {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
   padding-right: 3px;
 }
@@ -256,11 +256,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 4px;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.4;
 }
 .cal-chip span {
-  font-size: 10px;
+  font-size: 12px;
   margin-right: 4px;
   font-weight: 650;
 }
@@ -280,7 +280,7 @@
   border-color: #cca353;
 }
 .cal-more {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--purple);
   border: 0;
   background: none;
@@ -299,19 +299,19 @@
   border-bottom: 1px solid var(--border);
 }
 .cal-panel-heading > span {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--purple);
   letter-spacing: 0.12em;
 }
 .cal-panel-heading h2 {
-  font-size: 18px;
+  font-size: 21px;
   margin: 7px 0 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 .cal-panel-heading h2 small {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   color: var(--muted);
 }
@@ -342,7 +342,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 9px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
 }
 .cal-select-entry {
@@ -361,7 +361,7 @@
 .cal-status {
   padding: 3px 8px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 13px;
   background: #e8f4ee;
   color: #23694f;
 }
@@ -379,7 +379,7 @@
   gap: 3px;
 }
 .cal-entry h3 {
-  font-size: 14px;
+  font-size: 16px;
   margin: 12px 0;
   line-height: 1.7;
 }
@@ -388,7 +388,7 @@
   flex-wrap: wrap;
   gap: 7px 14px;
   margin: 8px 0;
-  font-size: 12px;
+  font-size: 14px;
   color: #5c6174;
 }
 .cal-entry-meta > span {
@@ -400,13 +400,13 @@
   flex-shrink: 0;
 }
 .cal-origin-date {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.7;
   color: var(--muted);
   margin: 14px 0 8px;
 }
 .cal-evidence {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.8;
   color: var(--muted);
 }
@@ -422,7 +422,7 @@
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.7;
   color: #856126;
   background: #fff9ee;
@@ -444,7 +444,7 @@
 }
 .cal-entry-actions > .text-button {
   min-width: 0;
-  font-size: 11px;
+  font-size: 13px;
   text-align: left;
   max-width: 100%;
 }
@@ -454,7 +454,7 @@
   white-space: nowrap;
 }
 .cal-entry-actions > .button {
-  font-size: 11px;
+  font-size: 13px;
 }
 .cal-entry-manage {
   display: flex;
@@ -470,7 +470,7 @@
   max-height: 160px;
   overflow: auto;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.8;
 }
 .cal-hidden {
@@ -516,12 +516,12 @@
   color: #bbb5da;
 }
 .cal-empty h3 {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   line-height: 1.8;
 }
 .cal-empty p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.8;
   margin: 0;
 }
@@ -546,11 +546,11 @@
   display: flex;
   gap: 9px;
   align-items: center;
-  font-size: 16px;
+  font-size: 18px;
 }
 .cal-undated > p,
 .cal-footnote {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   line-height: 1.9;
 }
@@ -578,7 +578,7 @@
   flex-shrink: 0;
 }
 .meeting-schedule h3 {
-  font-size: 13px;
+  font-size: 15px;
   margin: 0 0 5px;
 }
 .meeting-schedule h3 span {
@@ -586,7 +586,7 @@
   margin-left: 6px;
 }
 .meeting-schedule p {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   margin: 0;
   line-height: 1.8;
@@ -607,7 +607,7 @@
   border-radius: 8px;
   padding: 14px;
   margin-top: 18px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   line-height: 1.8;
   overflow-wrap: anywhere;
@@ -662,12 +662,12 @@
     display: block;
   }
   .cal-summary span {
-    font-size: 10px;
+    font-size: 12px;
     display: block;
     min-height: 30px;
   }
   .cal-summary strong {
-    font-size: 24px;
+    font-size: 28px;
   }
   .cal-timezone {
     margin-left: 0;
@@ -677,7 +677,7 @@
     gap: 6px;
   }
   .cal-month-label {
-    font-size: 18px;
+    font-size: 21px;
     min-width: 122px;
   }
   .cal-controls {
