@@ -64,7 +64,7 @@ export function NewMeeting({
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(today());
   const [participants, setParticipants] = useState("");
-  const [template, setTemplate] = useState("standard");
+  const [template, setTemplate] = useState("detailed");
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
