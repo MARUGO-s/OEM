@@ -324,13 +324,13 @@ export function NewMeeting({
                       onClick={() => setRecordingMode("mic+tab")}
                     >
                       <ScreenShare size={16} />
-                      マイク＋会議の音声
+                      マイク＋会議の音声（ブラウザーのタブ）
                     </button>
                   )}
                 </div>
                 <p className="field-hint">
                   {recordingMode === "mic+tab"
-                    ? "開始すると画面/タブ共有の選択画面が出ます。会議が開いているタブを選び、「タブの音声を共有」にチェックを入れてください。"
+                    ? "会議をブラウザーのタブで開いている場合のみ使えます（Google Meet、ブラウザー版Zoom/Teamsなど）。開始すると共有ダイアログが出るので「Chromeタブ」から会議のタブを選び、「タブの音声を共有」にチェックを入れてください。ZoomやTeamsの専用デスクトップアプリで参加している場合は音声を拾えません。"
                     : "この端末のマイクを録音します。オンライン会議の相手の声は、スピーカーの音量に左右されます。"}
                 </p>
                 {!caps.canRecordMic && (
