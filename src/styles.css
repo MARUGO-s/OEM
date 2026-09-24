@@ -1503,6 +1503,84 @@ button {
   margin-left: 5px;
   font-size: 10px;
 }
+.notice .recover-actions {
+  display: block;
+  margin-top: 4px;
+}
+.notice .text-button {
+  color: #9a3339;
+}
+.record-panel {
+  border: 1px dashed #d3cbea;
+  border-radius: 10px;
+  background: #fcfbff;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.record-mode-toggle {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.record-mode-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.record-mode-toggle button.active {
+  border-color: var(--purple);
+  background: #f2edff;
+  color: var(--purple);
+}
+.record-active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.record-time {
+  font-size: 24px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.record-time span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #b7862f;
+}
+.record-level {
+  width: 100%;
+  max-width: 280px;
+  height: 6px;
+  border-radius: 999px;
+  background: #ece8f7;
+  overflow: hidden;
+}
+.record-level-bar {
+  height: 100%;
+  background: var(--purple);
+  border-radius: 999px;
+  transition: width 90ms linear;
+}
+.record-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .error-message {
   border: 1px solid #f2d6d6;
   background: #fff5f4;

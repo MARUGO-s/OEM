@@ -7,6 +7,11 @@ import {
   FileAudio,
   FileText,
   LoaderCircle,
+  Mic,
+  Pause,
+  Play,
+  ScreenShare,
+  Square,
   UploadCloud,
   X,
 } from "lucide-react";
@@ -18,9 +23,26 @@ import {
   transcriptionModelName,
   type Settings,
 } from "./types";
+import {
+  discardSession,
+  getRecordingCapabilities,
+  listRecoverableSessions,
+  recoverSession,
+  startRecording,
+  type RecorderController,
+  type RecordingMode,
+  type RecordingSessionMeta,
+} from "./recording";
 
 const LIMIT = 100_000_000;
 const ACCEPT = ".mp3,.mp4,.mpeg,.mpga,.m4a,.aac,.wav,.webm,.ogg,.flac";
+function formatElapsed(totalSeconds: number) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
 export function NewMeeting({
   settings,
   onClose,
@@ -35,7 +57,7 @@ export function NewMeeting({
   ) => Promise<void>;
   onSettings: () => void;
 }) {
-  const [mode, setMode] = useState<"file" | "text">("file");
+  const [mode, setMode] = useState<"record" | "file" | "text">("file");
   const [files, setFiles] = useState<File[]>([]);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [title, setTitle] = useState("");
@@ -48,6 +70,50 @@ export function NewMeeting({
   const [progress, setProgress] = useState("");
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const caps = getRecordingCapabilities();
+  const [recordingMode, setRecordingMode] = useState<RecordingMode>("mic");
+  const [recordingState, setRecordingState] = useState<
+    "idle" | "starting" | "recording" | "paused" | "stopping"
+  >("idle");
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordingError, setRecordingError] = useState("");
+  const [level, setLevel] = useState(0);
+  const [recoverable, setRecoverable] = useState<RecordingSessionMeta[]>([]);
+  const recorderRef = useRef<RecorderController | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  useEffect(() => {
+    listRecoverableSessions()
+      .then(setRecoverable)
+      .catch(() => {});
+  }, []);
+  useEffect(
+    () => () => {
+      recorderRef.current?.cancel().catch(() => {});
+    },
+    [],
+  );
+  useEffect(() => {
+    if (recordingState !== "recording" && recordingState !== "paused") return;
+    let raf = 0;
+    let last = 0;
+    const data = new Uint8Array(analyserRef.current?.fftSize ?? 512);
+    const loop = (time: number) => {
+      const analyser = analyserRef.current;
+      if (analyser && time - last > 100) {
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (const v of data) {
+          const d = v - 128;
+          sum += d * d;
+        }
+        setLevel(Math.min(1, (Math.sqrt(sum / data.length) / 128) * 4));
+        last = time;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [recordingState]);
   useEffect(() => {
     if (!busy) return;
     const warn = (e: BeforeUnloadEvent) => {
@@ -56,7 +122,70 @@ export function NewMeeting({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [busy]);
-  function chooseFiles(selected: FileList | null) {
+  async function startRec() {
+    setRecordingError("");
+    setRecordingState("starting");
+    try {
+      const controller = await startRecording(recordingMode, setRecordingSeconds);
+      recorderRef.current = controller;
+      analyserRef.current = controller.getAnalyser();
+      setRecordingState("recording");
+    } catch (e) {
+      setRecordingError((e as Error).message);
+      setRecordingState("idle");
+    }
+  }
+  function pauseRec() {
+    recorderRef.current?.pause();
+    setRecordingState("paused");
+  }
+  function resumeRec() {
+    recorderRef.current?.resume();
+    setRecordingState("recording");
+  }
+  async function stopRec() {
+    const controller = recorderRef.current;
+    if (!controller) return;
+    setRecordingState("stopping");
+    try {
+      const file = await controller.stop();
+      chooseFiles([file]);
+      setMode("file");
+    } catch (e) {
+      setRecordingError((e as Error).message);
+    } finally {
+      recorderRef.current = null;
+      analyserRef.current = null;
+      setRecordingState("idle");
+      setRecordingSeconds(0);
+      setLevel(0);
+    }
+  }
+  async function cancelRec() {
+    const controller = recorderRef.current;
+    recorderRef.current = null;
+    analyserRef.current = null;
+    setRecordingState("idle");
+    setRecordingSeconds(0);
+    setLevel(0);
+    await controller?.cancel().catch(() => {});
+  }
+  async function recoverOne(meta: RecordingSessionMeta) {
+    try {
+      const file = await recoverSession(meta.id);
+      chooseFiles([file]);
+      setMode("file");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRecoverable((current) => current.filter((s) => s.id !== meta.id));
+    }
+  }
+  async function discardOne(id: string) {
+    await discardSession(id).catch(() => {});
+    setRecoverable((current) => current.filter((s) => s.id !== id));
+  }
+  function chooseFiles(selected: FileList | File[] | null) {
     if (!selected?.length) return;
     const next = [...files, ...Array.from(selected)];
     if (
@@ -119,14 +248,43 @@ export function NewMeeting({
     <Modal
       title="録音から議事録を作成"
       subtitle="分かれた録音も、順番につないで1つの議事録に。"
-      onClose={onClose}
+      onClose={() => {
+        if (recorderRef.current) cancelRec();
+        onClose();
+      }}
       locked={busy}
       wide
     >
       <form onSubmit={submit}>
+        {recoverable.length > 0 && (
+          <div className="notice">
+            前回中断した録音があります（
+            {recoverable
+              .map((s) => new Date(s.startedAt).toLocaleString("ja-JP"))
+              .join("、")}
+            ）。復元しますか？
+            <span className="recover-actions">
+              {recoverable.map((s) => (
+                <span key={s.id}>
+                  <button type="button" onClick={() => recoverOne(s)}>
+                    復元して追加
+                  </button>
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => discardOne(s.id)}
+                  >
+                    破棄
+                  </button>
+                </span>
+              ))}
+            </span>
+          </div>
+        )}
         <div className="input-tabs">
           {(
             [
+              ["record", Mic, "その場で録音"],
               ["file", UploadCloud, "録音ファイル"],
               ["text", FileText, "文字起こし済みテキスト"],
             ] as const
@@ -135,7 +293,7 @@ export function NewMeeting({
               type="button"
               key={id}
               className={mode === id ? "active" : ""}
-              disabled={busy}
+              disabled={busy || recordingState !== "idle"}
               onClick={() => {
                 setMode(id);
                 setError("");
@@ -146,6 +304,128 @@ export function NewMeeting({
             </button>
           ))}
         </div>
+        {mode === "record" && (
+          <div className="record-panel">
+            {recordingState === "idle" && (
+              <>
+                <div className="record-mode-toggle">
+                  <button
+                    type="button"
+                    className={recordingMode === "mic" ? "active" : ""}
+                    onClick={() => setRecordingMode("mic")}
+                  >
+                    <Mic size={16} />
+                    マイクのみ
+                  </button>
+                  {caps.canRecordMeeting && (
+                    <button
+                      type="button"
+                      className={recordingMode === "mic+tab" ? "active" : ""}
+                      onClick={() => setRecordingMode("mic+tab")}
+                    >
+                      <ScreenShare size={16} />
+                      マイク＋会議の音声
+                    </button>
+                  )}
+                </div>
+                <p className="field-hint">
+                  {recordingMode === "mic+tab"
+                    ? "開始すると画面/タブ共有の選択画面が出ます。会議が開いているタブを選び、「タブの音声を共有」にチェックを入れてください。"
+                    : "この端末のマイクを録音します。オンライン会議の相手の声は、スピーカーの音量に左右されます。"}
+                </p>
+                {!caps.canRecordMic && (
+                  <p className="error-message">
+                    このブラウザー・端末は録音に対応していません。録音ファイルを選ぶか、テキストを貼り付けてください。
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={!caps.canRecordMic}
+                  onClick={startRec}
+                >
+                  <Mic size={17} />
+                  録音を開始
+                </button>
+              </>
+            )}
+            {recordingState === "starting" && (
+              <p className="field-hint">
+                <LoaderCircle size={15} className="spin" />{" "}
+                {recordingMode === "mic+tab"
+                  ? "共有するタブを選んでください…"
+                  : "マイクを準備しています…"}
+              </p>
+            )}
+            {(recordingState === "recording" ||
+              recordingState === "paused" ||
+              recordingState === "stopping") && (
+              <div className="record-active">
+                <div className="record-time">
+                  {formatElapsed(recordingSeconds)}
+                  {recordingState === "paused" && <span> ・一時停止中</span>}
+                </div>
+                <div className="record-level">
+                  <div
+                    className="record-level-bar"
+                    style={{ width: `${level * 100}%` }}
+                  />
+                </div>
+                <div className="record-controls">
+                  {recordingState === "recording" && (
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="一時停止"
+                      onClick={pauseRec}
+                    >
+                      <Pause size={18} />
+                    </button>
+                  )}
+                  {recordingState === "paused" && (
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="再開"
+                      onClick={resumeRec}
+                    >
+                      <Play size={18} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="button danger"
+                    disabled={recordingState === "stopping"}
+                    onClick={stopRec}
+                  >
+                    {recordingState === "stopping" ? (
+                      <LoaderCircle size={16} className="spin" />
+                    ) : (
+                      <Square size={16} />
+                    )}
+                    停止して追加
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={recordingState === "stopping"}
+                    onClick={cancelRec}
+                  >
+                    キャンセル
+                  </button>
+                </div>
+                <p className="field-hint">
+                  停止すると録音が取り込み一覧に追加されます。画面を閉じても直近の数秒分以外は保持されますが、送信まではこの画面を開いたままにしてください。
+                </p>
+              </div>
+            )}
+            {recordingError && (
+              <div className="error-message" role="alert">
+                {recordingError}
+              </div>
+            )}
+          </div>
+        )}
         {mode === "file" && (
           <div
             className={`drop-zone ${drag ? "drag" : ""}`}
@@ -203,7 +483,7 @@ export function NewMeeting({
             </span>
           </label>
         )}
-        {files.length > 0 && mode === "file" && (
+        {files.length > 0 && mode !== "text" && (
           <div className="recording-list">
             <p className="field-hint">
               上から録音順に並べてください。{files.length}ファイル / 合計
@@ -313,7 +593,7 @@ export function NewMeeting({
         </div>
         <p className="processing-note">
           <Check size={15} />
-          {mode === "file"
+          {mode !== "text"
             ? `${transcriptionModelName(settings?.transcriptionModel)} → ${modelName(settings?.model)}`
             : modelName(settings?.model)}
           <br />
@@ -331,7 +611,7 @@ export function NewMeeting({
           </div>
         )}
         {settings?.configured &&
-          mode === "file" &&
+          mode !== "text" &&
           settings.transcriptionModel === "gemini-3.5-transcribe" &&
           !settings.geminiConfigured && (
             <div className="notice">
@@ -361,7 +641,7 @@ export function NewMeeting({
             disabled={
               busy ||
               !settings?.configured ||
-              (mode === "file" &&
+              (mode !== "text" &&
                 settings?.transcriptionModel === "gemini-3.5-transcribe" &&
                 !settings?.geminiConfigured) ||
               (mode === "text" ? !transcript.trim() : !files.length)
