@@ -32,6 +32,12 @@ export function Modal({
         e.preventDefault();
         if (!locked) onClose();
       }}
+      onClick={(e) => {
+        // A click that lands on the <dialog> element itself (not any of
+        // its children) is a click on the backdrop area outside the
+        // visible box, since the dialog's own box only covers its content.
+        if (e.target === ref.current && !locked) onClose();
+      }}
     >
       <div className="modal-heading">
         <div>
