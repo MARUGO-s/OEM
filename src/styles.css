@@ -1581,6 +1581,31 @@ button {
   align-items: center;
   gap: 10px;
 }
+.record-mobile-warning {
+  width: 100%;
+  background: #fffbf1;
+  border: 1px solid #f0e6d0;
+  color: #795e30;
+  border-radius: 8px;
+  padding: 14px 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.record-mobile-warning strong {
+  font-size: 13px;
+  color: #6b4f1c;
+}
+.record-mobile-warning p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.record-mobile-warning .record-controls {
+  justify-content: flex-end;
+  margin-top: 2px;
+}
 .error-message {
   border: 1px solid #f2d6d6;
   background: #fff5f4;

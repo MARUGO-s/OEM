@@ -138,7 +138,10 @@ export interface RecordingCapabilities {
   canRecordMeeting: boolean;
 }
 
-function isMobileDevice() {
+// Covers phones and tablets alike (iPad, Android tablets included via the
+// touch-pointer check), since both lose recording the same way when the
+// browser is backgrounded.
+export function isMobileDevice() {
   if (typeof navigator === "undefined") return false;
   if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return true;
   return matchMedia("(pointer: coarse)").matches;

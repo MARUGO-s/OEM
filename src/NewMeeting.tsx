@@ -26,6 +26,7 @@ import {
 import {
   discardSession,
   getRecordingCapabilities,
+  isMobileDevice,
   listRecoverableSessions,
   recoverSession,
   startRecording,
@@ -71,6 +72,8 @@ export function NewMeeting({
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const caps = getRecordingCapabilities();
+  const isMobile = isMobileDevice();
+  const [mobileWarning, setMobileWarning] = useState(false);
   const [recordingMode, setRecordingMode] = useState<RecordingMode>("mic");
   const [recordingState, setRecordingState] = useState<
     "idle" | "starting" | "recording" | "paused" | "stopping"
@@ -306,7 +309,35 @@ export function NewMeeting({
         </div>
         {mode === "record" && (
           <div className="record-panel">
-            {recordingState === "idle" && (
+            {recordingState === "idle" && mobileWarning && (
+              <div className="record-mobile-warning">
+                <strong>録音中はこの画面を開いたままにしてください</strong>
+                <p>
+                  スマートフォン・タブレットでは、バックグラウンドでの録音はできません。アプリを閉じたり、他のアプリ・ホーム画面に切り替えたりすると、その時点で録音が止まります。
+                </p>
+                <div className="record-controls">
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    onClick={() => setMobileWarning(false)}
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    className="button primary"
+                    onClick={() => {
+                      setMobileWarning(false);
+                      startRec();
+                    }}
+                  >
+                    <Mic size={17} />
+                    了解して録音を開始
+                  </button>
+                </div>
+              </div>
+            )}
+            {recordingState === "idle" && !mobileWarning && (
               <>
                 <div className="record-mode-toggle">
                   <button
@@ -342,7 +373,10 @@ export function NewMeeting({
                   type="button"
                   className="button primary"
                   disabled={!caps.canRecordMic}
-                  onClick={startRec}
+                  onClick={() => {
+                    if (isMobile) setMobileWarning(true);
+                    else startRec();
+                  }}
                 >
                   <Mic size={17} />
                   録音を開始
