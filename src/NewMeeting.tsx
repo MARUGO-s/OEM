@@ -632,7 +632,7 @@ export function NewMeeting({
             : modelName(settings?.model)}
           <br />
           <span>
-            音声は選択した文字起こしサービスへ、テキストと添付資料はOpenAIへ送信して処理します。API利用料がかかります。
+            音声は選択した文字起こしサービスへ、テキストはOpenAIへ送信して処理します。API利用料がかかります。添付資料は保存のみで、AIには送信しません。
           </span>
         </p>
         {!settings?.configured && (

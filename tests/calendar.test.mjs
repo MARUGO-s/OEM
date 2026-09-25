@@ -18,8 +18,8 @@ import {
   overlapsMonth,
 } from "../supabase/functions/_shared/calendar.mjs";
 import {
+  CalendarMinutesSchema,
   parseMinutes,
-  schemaForMeeting,
   summaryInput,
 } from "../supabase/functions/_shared/summary.mjs";
 import {
@@ -195,7 +195,7 @@ test("編集値の検証と厳密なフィールド制限", () => {
 });
 test("予定の構造化スキーマ・旧API実行中の結果との互換", () => {
   const m = calendarMeeting();
-  assert.ok(schemaForMeeting(m).shape.scheduleEvents);
+  assert.ok(CalendarMinutesSchema.shape.scheduleEvents);
   assert.match(summaryInput(m)[0].content, /来週まで/);
   assert.deepEqual(parseMinutes(m, m.minutes).scheduleEvents, [event]);
   delete m.minutes.scheduleEvents;

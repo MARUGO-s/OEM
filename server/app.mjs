@@ -300,22 +300,8 @@ export async function createApp({
           transcriptionModel: transcriptionModelForJob,
         });
       }
-      const files = [];
-      for (const attachment of meeting.attachments || []) {
-        const data = await readFile(
-          path.join(attachmentsDir, attachment.localFile),
-        );
-        files.push({
-          attachment,
-          input: {
-            type: "input_file",
-            filename: attachment.name,
-            file_data: `data:${attachment.type};base64,${data.toString("base64")}`,
-          },
-        });
-      }
       const minutes = parseMinutes(meeting, await ai.summarize(
-        meeting, files,
+        meeting,
         (response) => recordApiUsage("minutes", meeting, runId, modelForJob, response, null),
       ));
       await store.save({
@@ -799,7 +785,6 @@ export async function createApp({
             ...(meeting.attachments || []),
             { ...attachment, localFile },
           ],
-          minutesStale: Boolean(meeting.markdown),
         });
         accepted = true;
         res.status(201).json(publicRecord(saved));
@@ -844,7 +829,6 @@ export async function createApp({
                 ...(meeting.removedAttachments || []),
                 { ...attachment, removedAt: new Date().toISOString() },
               ],
-              minutesStale: Boolean(meeting.markdown),
             }),
           ),
         );

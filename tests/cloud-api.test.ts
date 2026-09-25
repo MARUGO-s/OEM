@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createDemo } from "../supabase/functions/_shared/demo.mjs";
 import { decryptApiKey } from "../supabase/functions/_shared/key-crypto.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
-import { documentFixtures, reviewFixture } from "./fixtures/documents.mjs";
+import { documentFixtures } from "./fixtures/documents.mjs";
 import { attachmentDigest } from "../supabase/functions/_shared/attachments.mjs";
 import {
   calendarMeeting,
@@ -228,7 +228,6 @@ globalThis.fetch = async (input, init: any) => {
           (f: any) => f.id !== payload.attachmentId,
         );
       }
-      row.document.minutesStale = Boolean(row.document.markdown);
     }
     if (op === "append") {
       if (
@@ -403,19 +402,7 @@ globalThis.fetch = async (input, init: any) => {
       assert.equal(body.text.format.type, "json_schema");
       assert.equal(body.text.format.strict, true);
       const id = `resp-${calls.length}`;
-      const attachments = Array.isArray(body.input[1].content)
-        ? body.input[1].content
-            .filter((c: any) => c.type === "input_text")
-            .map((c: any) => JSON.parse(c.text))
-            .filter((c: any) => c.attachmentId)
-            .map((c: any) => ({ id: c.attachmentId, name: c.fileName }))
-        : [];
-      responses.set(id, {
-        ...(createDemo() as any).minutes,
-        ...(attachments.length
-          ? { documentReview: attachments.map(reviewFixture) }
-          : {}),
-      });
+      responses.set(id, (createDemo() as any).minutes);
       return json({ id, status: "queued" });
     }
     return json({
@@ -1307,7 +1294,7 @@ Deno.test(
       );
       plan.sources[0].size++;
       assert.equal((await createUpload()).status, 400);
-      // Real PDF/DOCX/XLSX fixtures, shared access, private signed native file inputs.
+      // Real PDF/DOCX/XLSX fixtures are stored and shared but never sent to the AI.
       const documents = documentFixtures();
       const attachments = await Promise.all(documents.map(async (f: File) => ({
         id: crypto.randomUUID(),
@@ -1441,24 +1428,21 @@ Deno.test(
       const responseInput = calls
         .filter((c) => c.route === "/v1/responses")
         .at(-1)!.body;
-      const nativeFiles = responseInput.input[1].content.filter(
-        (c: any) => c.type === "input_file",
-      );
-      assert.equal(nativeFiles.length, 3);
+      assert.equal(typeof responseInput.input[1].content, "string");
+      const sentText = JSON.stringify(responseInput);
+      assert.ok(!sentText.includes("input_file"));
+      assert.ok(!sentText.includes("kotonoha-documents"));
+      for (const { name } of documents) assert.ok(!sentText.includes(name));
       assert.ok(
-        nativeFiles.every(
-          (c: any) => c.file_url.includes("?token=test") && !c.file_data,
-        ),
-      );
-      assert.ok(
-        responseInput.text.format.schema.required.includes("documentReview"),
+        !responseInput.text.format.schema.required.includes("documentReview"),
       );
       await request("/meetings");
       await drain();
       const finished = await (await request(docRoute, "valid-b")).json();
       assert.equal(finished.status, "done");
-      assert.equal(finished.minutes.documentReview.length, 3);
-      assert.match(finished.markdown, /添付資料との照合/);
+      assert.equal(finished.minutes.documentReview, undefined);
+      assert.doesNotMatch(finished.markdown, /添付資料との照合/);
+      assert.equal(finished.attachments.length, 3);
       const objectsBeforeUnlink = audioObjects.size;
       const detached = await request(
         `${docRoute}/attachments/${attachments[0].id}`,
@@ -1468,7 +1452,7 @@ Deno.test(
       assert.equal(detached.status, 200);
       const changed = await detached.json();
       assert.equal(changed.attachments.length, 2);
-      assert.equal(changed.minutesStale, true);
+      assert.equal(changed.minutesStale, false);
       assert.equal(changed.removedAttachments, undefined);
       assert.equal(
         audioObjects.size,
@@ -1491,8 +1475,8 @@ Deno.test(
       await request("/meetings");
       await drain();
       assert.equal(
-        rows.get(documentMeeting.id).document.minutes.documentReview.length,
-        2,
+        rows.get(documentMeeting.id).document.minutes.documentReview,
+        undefined,
       );
       assert.equal(rows.get(documentMeeting.id).document.minutesStale, false);
       assert.equal(
