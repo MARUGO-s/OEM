@@ -36,7 +36,8 @@ import {
 } from "./recording";
 
 const LIMIT = 100_000_000;
-const ACCEPT = ".mp3,.mp4,.mpeg,.mpga,.m4a,.aac,.wav,.webm,.ogg,.flac";
+const ACCEPT =
+  ".mp3,.mp4,.mpeg,.mpga,.m4a,.aac,.wav,.webm,.ogg,.flac,.mov,.m4v,.mkv,.ts,.mts,.m2ts,.3gp";
 function formatElapsed(totalSeconds: number) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -199,7 +200,9 @@ export function NewMeeting({
           ),
       )
     ) {
-      setError("AAC、MP3、M4A、WAVなどの対応音声ファイルを選んでください。");
+      setError(
+        "AAC、MP3、M4A、WAVなどの音声ファイル、またはMP4、MOV、MKV、MTSなどの動画ファイルを選んでください。",
+      );
       return;
     }
     if (next.length > 5) {
@@ -485,7 +488,11 @@ export function NewMeeting({
             >
               {files.length ? "ファイルを追加" : "ファイルを選択"}
             </button>
-            <small>AAC / MP3 / M4A / WAV / MP4 / WebM / OGG / FLAC</small>
+            <small>音声：AAC / MP3 / M4A / WAV / OGG / FLAC</small>
+            <small>
+              動画：MP4 / MOV / MKV / WebM / MTS / M2TS / TS /
+              3GP（音声のみ使用）
+            </small>
             <small>最大5ファイル・合計100 MBまで · 大きな録音は自動分割</small>
             <input
               ref={input}
