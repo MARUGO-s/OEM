@@ -484,6 +484,38 @@ test("キーを返却・永続化せず、AIモデル設定のみ再起動後も
   assert.equal(restarted.store.list().length, 0);
 });
 
+test("旧設定のgpt-4o-transcribeは起動を止めずGPT Transcribeとして扱う", async (t) => {
+  const { request, dataDir } = await setup(t, {
+    transcriptionModel: "gpt-4o-transcribe",
+  });
+  assert.equal(
+    (await (await request("/settings")).json()).transcriptionModel,
+    "gpt-transcribe",
+  );
+  await writeFile(
+    path.join(dataDir, "config.json"),
+    JSON.stringify({ model: "gpt-6-sol", transcriptionModel: "gpt-4o-transcribe" }),
+  );
+  const restarted = await createApp({
+    dataDir,
+    transcriptionModel: "gemini-3.5-transcribe",
+  });
+  const server = restarted.app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const settings = await (
+    await fetch(`http://127.0.0.1:${server.address().port}/api/settings`, {
+      headers: { "X-Kotonoha": "1" },
+    })
+  ).json();
+  assert.equal(settings.transcriptionModel, "gpt-transcribe");
+  const unknownDir = await mkdtemp(path.join(tmpdir(), "kotonoha-test-"));
+  t.after(() => rm(unknownDir, { recursive: true, force: true }));
+  await assert.rejects(
+    createApp({ dataDir: unknownDir, transcriptionModel: "whisper-1" }),
+    /TRANSCRIPTION_MODEL must be one of gpt-transcribe, gemini-3.5-transcribe/,
+  );
+});
 test("録音を文字起こしして議事録まで作成し、音声を再生できる", async (t) => {
   const calls = [];
   const { request, waitForJobs } = await setup(t, {

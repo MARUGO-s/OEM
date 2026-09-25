@@ -58,6 +58,11 @@ import {
 
 const models = ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"];
 const transcriptionModels = ["gpt-transcribe", "gemini-3.5-transcribe"];
+// .env files and config.json written before the GPT Transcribe upgrade; the
+// cloud migrates the same value in 20260924000200_kotonoha_gpt_transcribe.sql.
+const legacyTranscriptionModels = { "gpt-4o-transcribe": "gpt-transcribe" };
+const currentTranscriptionName = (value) =>
+  legacyTranscriptionModels[value] || value;
 const settingsSchema = z.object({
   apiKey: z.string().trim().min(20).max(500).optional(),
   geminiApiKey: z.string().trim().min(20).max(500).optional(),
@@ -105,18 +110,21 @@ export async function createApp({
   const attachmentsDir = path.join(dataDir, "attachments");
   await mkdir(attachmentsDir, { recursive: true, mode: 0o700 });
   const configPath = path.join(dataDir, "config.json");
+  transcriptionModel = currentTranscriptionName(transcriptionModel);
   try {
     const config = JSON.parse(await readFile(configPath, "utf8"));
     if (models.includes(config.model)) model = config.model;
-    if (transcriptionModels.includes(config.transcriptionModel))
-      transcriptionModel = config.transcriptionModel;
+    const saved = currentTranscriptionName(config.transcriptionModel);
+    if (transcriptionModels.includes(saved)) transcriptionModel = saved;
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
   if (!models.includes(model))
     throw new Error(`OPENAI_MINUTES_MODEL must be one of ${models.join(", ")}`);
   if (!transcriptionModels.includes(transcriptionModel))
-    throw new Error("TRANSCRIPTION_MODEL is not supported");
+    throw new Error(
+      `TRANSCRIPTION_MODEL must be one of ${transcriptionModels.join(", ")}`,
+    );
   let currentKey = apiKey;
   let currentGeminiKey = geminiApiKey;
   let currentModel = model;
