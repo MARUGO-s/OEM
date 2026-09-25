@@ -558,38 +558,68 @@
   margin: 26px 0 0;
 }
 .meeting-schedule {
-  margin: 0 0 20px;
-  padding: 17px 20px;
-  background: #f1effb;
-  border: 1px solid #e4def6;
-  border-radius: 12px;
-  display: flex;
-  gap: 15px;
+  padding: 16px 0 24px;
+}
+.schedule-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+.schedule-list li + li {
+  border-top: 1px solid var(--border);
+}
+.schedule-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 8px;
+  text-align: left;
+  border-radius: 8px;
 }
-.meeting-schedule > div {
+.schedule-row:hover:not(:disabled) {
+  background: #f7f6fd;
+}
+.schedule-date,
+.schedule-body {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
-.meeting-schedule > div > svg {
-  color: var(--purple);
-  flex-shrink: 0;
+.schedule-date {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
-.meeting-schedule h3 {
-  font-size: 15px;
-  margin: 0 0 5px;
-}
-.meeting-schedule h3 span {
-  color: var(--purple);
-  margin-left: 6px;
-}
-.meeting-schedule p {
-  font-size: 13px;
+.schedule-date small,
+.schedule-body small {
+  font-size: 12px;
+  font-weight: 400;
   color: var(--muted);
-  margin: 0;
-  line-height: 1.8;
+}
+.schedule-body strong {
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.schedule-row .cal-status {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.schedule-empty p {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+.schedule-empty p.muted {
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.schedule-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 12px;
 }
 .cal-editor fieldset {
   padding: 0;
@@ -698,10 +728,13 @@
   .cal-day-panel {
     display: block;
   }
-  .meeting-schedule {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 15px;
+  .schedule-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+  }
+  .schedule-body {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
   .cal-editor .form-grid {
     gap: 12px;

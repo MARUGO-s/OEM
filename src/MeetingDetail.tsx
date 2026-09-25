@@ -1,16 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
   Check,
-  CheckCheck,
   ChevronDown,
   Clipboard,
   Clock3,
   Download,
   FileText,
-  ListTodo,
   LoaderCircle,
   MessageSquareText,
   Pencil,
@@ -21,6 +19,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { meetingEvents } from "../supabase/functions/_shared/calendar.mjs";
 import { api, download, audioUrl } from "./api";
 import {
   clock,
@@ -33,10 +32,39 @@ import { Modal } from "./Modal";
 import { AttachmentPanel } from "./Attachments";
 import { MeetingSchedule } from "./Calendar";
 
-function Markdown({ content }: { content: string }) {
+type Tab = "minutes" | "transcript" | "actions" | "schedule" | "files";
+const tabLabels: Record<Tab, string> = {
+  minutes: "議事録",
+  transcript: "文字起こし",
+  actions: "アクション",
+  schedule: "予定・期限",
+  files: "添付資料",
+};
+const hasFiles = (event: { dataTransfer: DataTransfer }) =>
+  event.dataTransfer.types.includes("Files");
+
+function Markdown({ content, title }: { content: string; title: string }) {
   return (
     <div className="markdown">
-      {content.split("\n").map((line, i) => {
+      {content.split("\n").map((line, i, lines) => {
+        // The page heading already shows the title, date and participants;
+        // keep the generated header lines for print only.
+        const header =
+          lines[0] === `# ${title}` &&
+          i < 4 &&
+          (i === 0 || /^(日時|参加者)：/.test(line));
+        if (header && i === 0)
+          return (
+            <h1 key={i} className="print-only">
+              {line.slice(2)}
+            </h1>
+          );
+        if (header)
+          return (
+            <p key={i} className="print-only">
+              {line}
+            </p>
+          );
         if (line.startsWith("# ")) return <h1 key={i}>{line.slice(2)}</h1>;
         if (line.startsWith("## ")) return <h2 key={i}>{line.slice(3)}</h2>;
         if (line.startsWith("### ")) return <h3 key={i}>{line.slice(4)}</h3>;
@@ -156,9 +184,11 @@ export function MeetingDetail({
   notify: (s: string) => void;
   onEditingChange: (value: boolean) => void;
 }) {
-  const [tab, setTab] = useState<"minutes" | "transcript" | "actions">(
-    "minutes",
+  const [tab, setTab] = useState<Tab>("minutes");
+  const [dropped, setDropped] = useState<{ files: File[]; id: number } | null>(
+    null,
   );
+  const [showDecisions, setShowDecisions] = useState(false);
   const [editing, setEditing] = useState(false);
   const [attachmentsBusy, setAttachmentsBusy] = useState(false);
   const [draft, setDraft] = useState("");
@@ -182,6 +212,12 @@ export function MeetingDetail({
   const recordings = m.recordings?.length
     ? m.recordings
     : [{ fileName: m.fileName || "録音", transcribed: Boolean(m.transcript) }];
+  useEffect(() => {
+    // On narrow screens the tab row scrolls; keep the selected tab visible.
+    document
+      .getElementById(`meeting-tab-${tab}`)
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tab]);
   useEffect(() => {
     onEditingChange(editing || attachmentsBusy);
     return () => onEditingChange(false);
@@ -260,8 +296,62 @@ export function MeetingDetail({
     }
   }
   const displayText = tab === "transcript" ? m.transcript : m.markdown;
+  const tabs: Tab[] = m.isDemo
+    ? ["minutes", "transcript", "actions", "files"]
+    : ["minutes", "transcript", "actions", "schedule", "files"];
+  const counts: Partial<Record<Tab, number>> = {
+    actions: m.minutes?.actions.length || 0,
+    schedule: m.isDemo ? 0 : meetingEvents(m).length,
+    files: m.attachments?.length || 0,
+  };
+  const attachmentsLocked =
+    processing || editing || busy || m.status === "uploading";
+  const canDropFiles = !m.isDemo && !attachmentsLocked && !attachmentsBusy;
+  const fallbackParts = recordings.flatMap((part, index) =>
+    "fallbackModel" in part && part.transcribed ? [index + 1] : [],
+  );
+  const fallbackDetail = `${fallbackParts.map((n) => `録音${n}`).join("・")}はGeminiで文字起こしが完了しなかったため、GPT Transcribeで文字起こししました。この録音の音声はOpenAIにも送信されています。`;
+  function onTabKey(event: KeyboardEvent<HTMLDivElement>) {
+    const index = tabs.indexOf(tab);
+    const next =
+      event.key === "ArrowRight"
+        ? tabs[(index + 1) % tabs.length]
+        : event.key === "ArrowLeft"
+          ? tabs[(index - 1 + tabs.length) % tabs.length]
+          : event.key === "Home"
+            ? tabs[0]
+            : event.key === "End"
+              ? tabs[tabs.length - 1]
+              : null;
+    if (!next || editing) return;
+    event.preventDefault();
+    setTab(next);
+    document.getElementById(`meeting-tab-${next}`)?.focus();
+  }
   return (
-    <>
+    <div
+      className="meeting-detail"
+      onDragEnter={(event) => {
+        if (canDropFiles && hasFiles(event)) setTab("files");
+      }}
+      onDragOver={(event) => {
+        if (!canDropFiles || !hasFiles(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }}
+      onDrop={(event) => {
+        // Files dropped outside the attachment drop zone still go to the
+        // attachment tab instead of making the browser open the file.
+        if (!canDropFiles || !hasFiles(event) || event.isDefaultPrevented())
+          return;
+        event.preventDefault();
+        setTab("files");
+        setDropped({
+          files: Array.from(event.dataTransfer.files),
+          id: Date.now(),
+        });
+      }}
+    >
       <div className="detail-top">
         <button
           className="text-button"
@@ -360,6 +450,16 @@ export function MeetingDetail({
               {clock(m.duration)}
             </span>
           )}
+          {fallbackParts.length > 0 && (
+            <span className="meta-fallback" title={fallbackDetail}>
+              文字起こし：
+              {recordings.length > 1
+                ? `${fallbackParts.map((n) => `録音${n}`).join("・")}は`
+                : ""}
+              GPT Transcribe（Gemini失敗のため切替）
+              <span className="sr-only">{fallbackDetail}</span>
+            </span>
+          )}
         </div>
       </header>
       {m.isDemo && (
@@ -415,302 +515,304 @@ export function MeetingDetail({
           文字起こしが変更されています。現在の議事録は変更前の内容です。反映するには「再生成」を実行してください。
         </div>
       )}
-      {recordings.some(
-        (part) => "fallbackModel" in part && part.transcribed,
-      ) && (
-        <div className="notice">
-          {recordings
-            .flatMap((part, index) =>
-              "fallbackModel" in part && part.transcribed
-                ? [`録音${index + 1}`]
-                : [],
-            )
-            .join("・")}
-          はGeminiで文字起こしが完了しなかったため、GPT
-          Transcribeで文字起こししました（この録音の音声はOpenAIにも送信されています）。
-        </div>
-      )}
-      {!m.isDemo && (
-        <MeetingSchedule
-          meeting={m}
-          onOpen={onCalendar}
-          disabled={editing || attachmentsBusy || busy}
-        />
-      )}
-      <AttachmentPanel
-        meeting={m}
-        locked={processing || editing || busy || m.status === "uploading"}
-        onChange={onChange}
-        onBusyChange={setAttachmentsBusy}
-        notify={notify}
-      />
       <div className="detail-grid">
         <section className="document-panel">
-          <div className="document-tabs">
-            {(
-              [
-                ["minutes", FileText, "議事録"],
-                ["transcript", MessageSquareText, "文字起こし"],
-                ["actions", ListTodo, "アクション"],
-              ] as const
-            ).map(([id, Icon, label]) => (
+          <div
+            className="document-tabs"
+            role="tablist"
+            aria-label="会議の内容"
+            onKeyDown={onTabKey}
+          >
+            {tabs.map((id) => (
               <button
                 key={id}
-                disabled={editing}
+                id={`meeting-tab-${id}`}
+                role="tab"
+                aria-selected={tab === id}
+                aria-controls={`meeting-panel-${id}`}
+                tabIndex={tab === id ? 0 : -1}
+                disabled={editing && tab !== id}
                 className={tab === id ? "active" : ""}
                 onClick={() => setTab(id)}
               >
-                <Icon size={16} />
-                {label}
-                {id === "actions" && (
-                  <span>{m.minutes?.actions.length || 0}</span>
+                {tabLabels[id]}
+                {id in counts && (
+                  <span className="tab-count">{counts[id]}</span>
                 )}
               </button>
             ))}
           </div>
-          <div className="document-toolbar">
-            <span>
-              {tab === "minutes"
-                ? "会議の内容を、ひとつの記録に。"
-                : tab === "transcript"
-                  ? "取り込んだ会話の全文"
-                  : "次にやることを明確に。"}
-            </span>
-            <div>
-              {tab !== "actions" && (displayText || m.minutes || editing) && (
-                <>
-                  {editing ? (
-                    <>
-                      <button
-                        className="text-button"
-                        onClick={() => {
-                          if (
-                            draft === displayText ||
-                            window.confirm(
-                              "保存していない本文の変更を破棄しますか？",
-                            )
+          {(tab === "minutes" || tab === "transcript") &&
+            (displayText || m.minutes || editing) && (
+              <div className="document-toolbar">
+                {editing ? (
+                  <>
+                    <button
+                      className="button ghost small"
+                      onClick={() => {
+                        if (
+                          draft === displayText ||
+                          window.confirm(
+                            "保存していない本文の変更を破棄しますか？",
                           )
-                            setEditing(false);
-                        }}
-                        disabled={busy}
-                      >
-                        <X size={14} />
-                        取消
-                      </button>
-                      <button
-                        className="button primary small"
-                        onClick={save}
-                        disabled={
-                          busy || (tab === "transcript" && !draft.trim())
-                        }
-                      >
-                        <Save size={14} />
-                        保存
-                      </button>
+                        )
+                          setEditing(false);
+                      }}
+                      disabled={busy}
+                    >
+                      <X size={14} />
+                      取消
+                    </button>
+                    <button
+                      className="button primary small"
+                      onClick={save}
+                      disabled={busy || (tab === "transcript" && !draft.trim())}
+                    >
+                      <Save size={14} />
+                      保存
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="button ghost small"
+                      onClick={() =>
+                        navigator.clipboard
+                          .writeText(displayText)
+                          .then(() => notify("コピーしました"))
+                          .catch(() =>
+                            notify(
+                              "コピーできませんでした。書き出しをご利用ください。",
+                            ),
+                          )
+                      }
+                    >
+                      <Clipboard size={14} />
+                      コピー
+                    </button>
+                    <button
+                      className="button secondary small"
+                      onClick={beginEdit}
+                      disabled={processing || attachmentsBusy}
+                    >
+                      <Pencil size={14} />
+                      {tab === "minutes" ? "議事録を編集" : "文字起こしを編集"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          {tab !== "files" && (
+            <div
+              className="tab-panel"
+              role="tabpanel"
+              id={`meeting-panel-${tab}`}
+              aria-labelledby={`meeting-tab-${tab}`}
+            >
+              {editing ? (
+                <div className="editor-wrap">
+                  <p>
+                    {tab === "minutes"
+                      ? "見出しは「## 」、箇条書きは「- 」で記入できます。「保存」で全員に共有します。カレンダー・AI抽出の要点・決定事項・アクションは別管理のため、本文の変更は自動反映しません。再生成すると編集した本文は上書きされます。"
+                      : "文字起こしの修正後、議事録を再生成できます。"}
+                  </p>
+                  <textarea
+                    className="document-editor"
+                    aria-label={
+                      tab === "minutes" ? "議事録を編集" : "文字起こしを編集"
+                    }
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    maxLength={tab === "minutes" ? 150000 : 100000}
+                  />
+                </div>
+              ) : tab === "minutes" ? (
+                m.markdown ? (
+                  <Markdown content={m.markdown} title={m.title} />
+                ) : (
+                  <div className="document-empty">
+                    <FileText size={36} />
+                    <h3>
+                      {processing
+                        ? "議事録を準備しています"
+                        : "議事録はまだありません"}
+                    </h3>
+                    <p>解析が完了すると、ここに議事録が表示されます。</p>
+                  </div>
+                )
+              ) : tab === "transcript" ? (
+                <div className="transcript-content">
+                  {m.hasAudio && (
+                    <>
+                      {recordings.length > 1 && (
+                        <label className="field">
+                          再生する録音（全{recordings.length}ファイル）
+                          <select
+                            value={audioPart}
+                            onChange={(e) =>
+                              setAudioPart(Number(e.target.value))
+                            }
+                          >
+                            {recordings.map((part, index) => (
+                              <option key={index} value={index}>
+                                {index + 1}. {part.fileName}
+                                {part.transcribed ? "" : "（文字起こし未完了）"}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      <audio
+                        key={`${m.id}-${audioPart}`}
+                        ref={audio}
+                        controls
+                        src={audioSource || undefined}
+                        preload="metadata"
+                      />
+                    </>
+                  )}
+                  {m.segments.length ? (
+                    m.segments.map((s, i) => (
+                      <div className="transcript-segment" key={i}>
+                        <div>
+                          <span className={`speaker-avatar color-${i % 3}`}>
+                            {s.speaker.slice(0, 1)}
+                          </span>
+                          <strong>
+                            {m.speakerNames[s.speaker] || s.speaker}
+                          </strong>
+                          {s.start !== null && (
+                            <span className="time-code">{clock(s.start)}</span>
+                          )}
+                        </div>
+                        <p>{s.text}</p>
+                      </div>
+                    ))
+                  ) : m.transcript ? (
+                    <>
+                      {m.source === "audio" && (
+                        <p className="transcript-note">
+                          {transcriptionModelName(m.transcriptionModel)}
+                          Transcribeの出力です。話者名・タイムスタンプは付与していません。
+                        </p>
+                      )}
+                      <p className="transcript-text">{m.transcript}</p>
                     </>
                   ) : (
-                    <>
-                      <button
-                        className="icon-button"
-                        aria-label="内容をコピー"
-                        onClick={() =>
-                          navigator.clipboard
-                            .writeText(displayText)
-                            .then(() => notify("コピーしました"))
-                            .catch(() =>
-                              notify(
-                                "コピーできませんでした。書き出しをご利用ください。",
-                              ),
-                            )
-                        }
-                      >
-                        <Clipboard size={15} />
-                      </button>
-                      <button
-                        className="text-button"
-                        onClick={beginEdit}
-                        disabled={processing || attachmentsBusy}
-                      >
-                        <Pencil size={14} />
-                        {tab === "minutes"
-                          ? "議事録を編集"
-                          : "文字起こしを編集"}
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-          {editing ? (
-            <div className="editor-wrap">
-              <p>
-                {tab === "minutes"
-                  ? "見出しは「## 」、箇条書きは「- 」で記入できます。「保存」で全員に共有します。カレンダー・AI抽出の要点・決定事項・アクションは別管理のため、本文の変更は自動反映しません。再生成すると編集した本文は上書きされます。"
-                  : "文字起こしの修正後、議事録を再生成できます。"}
-              </p>
-              <textarea
-                className="document-editor"
-                aria-label={
-                  tab === "minutes" ? "議事録を編集" : "文字起こしを編集"
-                }
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                maxLength={tab === "minutes" ? 150000 : 100000}
-              />
-            </div>
-          ) : tab === "minutes" ? (
-            m.markdown ? (
-              <Markdown content={m.markdown} />
-            ) : (
-              <div className="document-empty">
-                <FileText size={36} />
-                <h3>
-                  {processing
-                    ? "議事録を準備しています"
-                    : "議事録はまだありません"}
-                </h3>
-                <p>解析が完了すると、ここに議事録が表示されます。</p>
-              </div>
-            )
-          ) : tab === "transcript" ? (
-            <div className="transcript-content">
-              {m.hasAudio && (
-                <>
-                  {recordings.length > 1 && (
-                    <label className="field">
-                      再生する録音（全{recordings.length}ファイル）
-                      <select
-                        value={audioPart}
-                        onChange={(e) => setAudioPart(Number(e.target.value))}
-                      >
-                        {recordings.map((part, index) => (
-                          <option key={index} value={index}>
-                            {index + 1}. {part.fileName}
-                            {part.transcribed ? "" : "（文字起こし未完了）"}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <audio
-                    key={`${m.id}-${audioPart}`}
-                    ref={audio}
-                    controls
-                    src={audioSource || undefined}
-                    preload="metadata"
-                  />
-                </>
-              )}
-              {m.segments.length ? (
-                m.segments.map((s, i) => (
-                  <div className="transcript-segment" key={i}>
-                    <div>
-                      <span className={`speaker-avatar color-${i % 3}`}>
-                        {s.speaker.slice(0, 1)}
-                      </span>
-                      <strong>{m.speakerNames[s.speaker] || s.speaker}</strong>
-                      {s.start !== null && (
-                        <span className="time-code">{clock(s.start)}</span>
-                      )}
+                    <div className="document-empty">
+                      <MessageSquareText size={32} />
+                      <p>文字起こしの完了をお待ちください。</p>
                     </div>
-                    <p>{s.text}</p>
-                  </div>
-                ))
-              ) : m.transcript ? (
-                <>
-                  {m.source === "audio" && (
-                    <p className="transcript-note">
-                      {transcriptionModelName(m.transcriptionModel)}
-                      Transcribeの出力です。話者名・タイムスタンプは付与していません。
-                    </p>
                   )}
-                  <p className="transcript-text">{m.transcript}</p>
-                </>
-              ) : (
-                <div className="document-empty">
-                  <MessageSquareText size={32} />
-                  <p>文字起こしの完了をお待ちください。</p>
                 </div>
+              ) : tab === "actions" ? (
+                <div className="actions-content">
+                  <ActionList
+                    meeting={m}
+                    onChange={onChange}
+                    notify={notify}
+                    disabled={editing || busy || attachmentsBusy}
+                  />
+                </div>
+              ) : (
+                <MeetingSchedule
+                  meeting={m}
+                  onOpen={onCalendar}
+                  disabled={editing || attachmentsBusy || busy}
+                />
               )}
-            </div>
-          ) : (
-            <div className="actions-content">
-              <ActionList
-                meeting={m}
-                onChange={onChange}
-                notify={notify}
-                disabled={editing || busy || attachmentsBusy}
-              />
             </div>
           )}
+          {/* Stay mounted so selected files and uploads survive tab changes. */}
+          <div
+            className="tab-panel"
+            role="tabpanel"
+            id="meeting-panel-files"
+            aria-labelledby="meeting-tab-files"
+            hidden={tab !== "files"}
+          >
+            <AttachmentPanel
+              meeting={m}
+              locked={attachmentsLocked}
+              onChange={onChange}
+              onBusyChange={setAttachmentsBusy}
+              notify={notify}
+              dropped={dropped}
+            />
+          </div>
         </section>
-        <aside className="meeting-insights">
-          <div className="insight-card">
+        <aside className="meeting-rail">
+          <section>
             <h3>
-              <Sparkles size={17} />
-              会議のポイント（AI抽出）
+              会議のポイント<span>AI抽出</span>
             </h3>
             <p>
               {m.minutes?.summary ||
                 "解析後に、会議の要点がここにまとまります。"}
             </p>
-          </div>
-          <div className="insight-card">
-            <h3>
-              <CheckCheck size={17} />
-              決まったこと（AI抽出）
-              <span>{m.minutes?.decisions.length || 0}</span>
-            </h3>
-            {m.minutes?.decisions.length ? (
+          </section>
+          <div className="rail-counts">
+            <button
+              className="rail-row"
+              aria-expanded={showDecisions}
+              disabled={!m.minutes?.decisions.length}
+              onClick={() => setShowDecisions((open) => !open)}
+            >
+              <span>決まったこと</span>
+              <span>
+                {m.minutes?.decisions.length || 0}
+                {!!m.minutes?.decisions.length && (
+                  <ChevronDown
+                    size={14}
+                    className={showDecisions ? "open" : ""}
+                  />
+                )}
+              </span>
+            </button>
+            {showDecisions && !!m.minutes?.decisions.length && (
               <ul className="decision-list">
                 {m.minutes.decisions.map((d, i) => (
                   <li key={i}>
-                    <Check size={14} />
+                    <Check size={13} />
                     {d}
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p>決定事項はまだありません。</p>
             )}
-          </div>
-          <div className="insight-card">
-            <h3>
-              <ListTodo size={17} />
-              次のアクション<span>{m.minutes?.actions.length || 0}</span>
-            </h3>
-            <ActionList
-              meeting={m}
-              onChange={onChange}
-              notify={notify}
-              disabled={editing || busy || attachmentsBusy}
-            />
             <button
-              className="text-button purple"
-              onClick={() => setTab("actions")}
+              className="rail-row"
               disabled={editing}
+              onClick={() => {
+                setTab("actions");
+                document.getElementById("meeting-tab-actions")?.focus();
+              }}
             >
-              アクションを確認
-              <ArrowRight size={14} />
+              <span>次のアクション</span>
+              <span>
+                {m.minutes?.actions.length || 0}
+                <ArrowRight size={14} />
+              </span>
             </button>
           </div>
-          <div className="source-note">
-            <span>解析モデル</span>
-            <strong>
+          <div className="rail-models">
+            <p>
+              <span>解析モデル</span>
               {m.isDemo ? "サンプルデータ" : modelName(m.minutesModel)}
-            </strong>
-            <small>
+            </p>
+            <p>
+              <span>文字起こし</span>
               {m.hasAudio
-                ? `文字起こし: ${transcriptionModelName(m.transcriptionModel)}。`
-                : "文字起こし済みテキストを使用。"}
+                ? transcriptionModelName(m.transcriptionModel)
+                : "文字起こし済みテキスト"}
+            </p>
+            <small>
               AIの出力は元の会話と照合し、必要に応じて編集してください。
             </small>
           </div>
-          <div className="meeting-manage">
+          <div className="rail-manage">
             {!m.isDemo && (
               <button
-                className="text-button"
+                className="text-button purple"
                 disabled={
                   processing ||
                   busy ||
@@ -720,7 +822,7 @@ export function MeetingDetail({
                 }
                 onClick={() => setConfirm("regenerate")}
               >
-                <RefreshCw size={14} />
+                <RefreshCw size={13} />
                 議事録を再生成
               </button>
             )}
@@ -729,7 +831,7 @@ export function MeetingDetail({
               disabled={processing || editing || attachmentsBusy}
               onClick={() => setConfirm("delete")}
             >
-              <Trash2 size={14} />
+              <Trash2 size={13} />
               会議を削除
             </button>
           </div>
@@ -771,6 +873,6 @@ export function MeetingDetail({
           </div>
         </Modal>
       )}
-    </>
+    </div>
   );
 }

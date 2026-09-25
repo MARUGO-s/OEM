@@ -25,11 +25,13 @@ export function AttachmentPicker({
   onChange,
   disabled = false,
   existing = [],
+  layout = "form",
 }: {
   files: File[];
   onChange: (files: File[]) => void;
   disabled?: boolean;
   existing?: Attachment[];
+  layout?: "form" | "dropzone";
 }) {
   const input = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -48,7 +50,7 @@ export function AttachmentPicker({
   }
   return (
     <div
-      className={`attachment-picker ${dragging && !disabled ? "drag" : ""}`}
+      className={`attachment-picker ${layout} ${dragging && !disabled ? "drag" : ""}`}
       onDragEnter={(event) => {
         if (disabled || !event.dataTransfer.types.includes("Files")) return;
         event.preventDefault();
@@ -66,33 +68,55 @@ export function AttachmentPicker({
       }}
       onDrop={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         dragDepth.current = 0;
         setDragging(false);
         addFiles(event.dataTransfer.files);
       }}
     >
-      <div className="attachment-heading">
-        <strong>
-          <Paperclip size={17} />
-          会議の添付資料 <span className="optional">任意</span>
-        </strong>
-        <button
-          type="button"
-          className="button secondary small"
-          disabled={disabled}
-          onClick={() => input.current?.click()}
-        >
-          資料ファイルを選択
-        </button>
-      </div>
-      <p className="field-hint">
-        Excel・Word・PDF・PowerPoint・CSV・TXT ／ 最大5ファイル・各10 MB・合計25
-        MB（録音とは別枠）
-      </p>
-      <div className="attachment-drop-hint">
-        <UploadCloud size={19} />
-        <span>資料をここにドラッグ＆ドロップ、または上のボタンから選択</span>
-      </div>
+      {layout === "dropzone" ? (
+        <div className="attachment-dropzone">
+          <UploadCloud size={22} />
+          <strong>資料をドラッグ＆ドロップ</strong>
+          <button
+            type="button"
+            className="button secondary small"
+            disabled={disabled}
+            onClick={() => input.current?.click()}
+          >
+            ファイルを選択
+          </button>
+          <p className="field-hint">
+            Excel・Word・PDF・PowerPoint・CSV・TXT ／
+            最大5ファイル・各10 MB・合計25 MB
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="attachment-heading">
+            <strong>
+              <Paperclip size={17} />
+              会議の添付資料 <span className="optional">任意</span>
+            </strong>
+            <button
+              type="button"
+              className="button secondary small"
+              disabled={disabled}
+              onClick={() => input.current?.click()}
+            >
+              資料ファイルを選択
+            </button>
+          </div>
+          <p className="field-hint">
+            Excel・Word・PDF・PowerPoint・CSV・TXT ／ 最大5ファイル・各10 MB・合計25
+            MB（録音とは別枠）
+          </p>
+          <div className="attachment-drop-hint">
+            <UploadCloud size={19} />
+            <span>資料をここにドラッグ＆ドロップ、または上のボタンから選択</span>
+          </div>
+        </>
+      )}
       <input
         hidden
         type="file"
@@ -131,7 +155,7 @@ export function AttachmentPicker({
           {error}
         </p>
       )}
-      <AttachmentNotice />
+      {layout === "form" && <AttachmentNotice />}
     </div>
   );
 }
@@ -142,18 +166,33 @@ export function AttachmentPanel({
   onChange,
   onBusyChange,
   notify,
+  dropped = null,
 }: {
   meeting: Meeting;
   locked: boolean;
   onChange: (m: Meeting) => void;
   onBusyChange: (v: boolean) => void;
   notify: (s: string) => void;
+  /** Files dropped elsewhere on the meeting screen. */
+  dropped?: { files: File[]; id: number } | null;
 }) {
   const [files, setFiles] = useState<File[]>([]),
     [busy, setBusy] = useState(false),
     [confirm, setConfirm] = useState<string | null>(null),
     [error, setError] = useState("");
   const saved = meeting.attachments || [];
+  // Runs once per drop, not on later meeting updates.
+  useEffect(() => {
+    if (!dropped?.files.length || locked || busy || meeting.isDemo) return;
+    const selected = [...files, ...dropped.files];
+    try {
+      validateAttachments([...saved, ...selected]);
+      setFiles(selected);
+      setError("");
+    } catch (error) {
+      setError((error as Error).message);
+    }
+  }, [dropped?.id]);
   useEffect(() => {
     if (!busy) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -222,18 +261,9 @@ export function AttachmentPanel({
   }
   return (
     <section className="attachment-panel" aria-label="保存した添付資料">
-      <div className="attachment-heading">
-        <h3>
-          <Paperclip size={19} />
-          添付資料 <span>{saved.length}</span>
-        </h3>
-        <span className="field-hint">
-          {isCloud ? "ログインした全員で共有" : "このPCに保存"}
-        </span>
-      </div>
-      {!saved.length && (
+      {meeting.isDemo && !saved.length && (
         <p className="field-hint">
-          会議の関連資料を保存し、あとからダウンロードできます。
+          サンプルには資料を追加できません。実際の会議で資料を保存し、あとからダウンロードできます。
         </p>
       )}
       {saved.map((file) => (
@@ -289,6 +319,7 @@ export function AttachmentPanel({
             onChange={setFiles}
             disabled={locked || busy}
             existing={saved}
+            layout="dropzone"
           />
           {!!files.length && (
             <button
@@ -307,6 +338,10 @@ export function AttachmentPanel({
           {error}
         </p>
       )}
+      <div className="attachment-footnote">
+        <span>AIには送信せず、議事録の解析にも使いません。</span>
+        <span>{isCloud ? "ログインした全員で共有" : "このPCに保存"}</span>
+      </div>
     </section>
   );
 }
