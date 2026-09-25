@@ -49,6 +49,7 @@ const responses = new Map<string, any>();
 const usageEvents = new Map<string, any>();
 let failSecondRecording = false;
 let geminiFailures = 0;
+let geminiIncomplete = 0;
 let geminiDailyLimit = false;
 let clockOffset = 0;
 const realNow = Date.now;
@@ -335,6 +336,20 @@ globalThis.fetch = async (input, init: any) => {
         },
         429,
       );
+    }
+    if (geminiIncomplete > 0) {
+      geminiIncomplete--;
+      return json({
+        id: `gemini-${calls.length}`,
+        status: "incomplete",
+        usage: { total_input_tokens: 1500, total_output_tokens: 175 },
+        steps: [
+          {
+            type: "model_output",
+            content: [{ type: "text", text: "途中まで" }],
+          },
+        ],
+      });
     }
     return json({
       id: `gemini-${calls.length}`,
@@ -945,7 +960,66 @@ Deno.test(
         204,
       );
       geminiDailyLimit = false;
+      // Gemini ends without a complete transcript: only that part moves to GPT
+      // Transcribe, in the next invocation, and Gemini is not asked again.
+      geminiIncomplete = 1;
+      const openaiTranscriptions = () =>
+        calls.filter((c) => c.route === "/v1/audio/transcriptions").length;
+      const incompleteGemini = geminiCount();
+      const incompleteOpenai = openaiTranscriptions();
+      const incompleteId = await createGeminiUpload(1);
+      advanceWait(incompleteId);
+      await pollTogether();
+      // Concurrent polls may already have run the OpenAI step; the mark persists.
+      const marked = rows.get(incompleteId).document;
+      assert.notEqual(marked.status, "error");
+      assert.equal(marked.error, null);
+      assert.equal(marked.diagnosticCode, "GEMINI_FALLBACK_INCOMPLETE");
+      assert.deepEqual(marked.audioParts[0].transcriptionFallback, {
+        model: "gpt-transcribe",
+        geminiStatus: "incomplete",
+      });
+      for (
+        let guard = 0;
+        guard < 10 && rows.get(incompleteId).document.status !== "done";
+        guard++
+      ) {
+        if (rows.get(incompleteId).document.transcriptionWait)
+          advanceWait(incompleteId);
+        await pollTogether();
+      }
+      const recovered = await (
+        await request(`/meetings/${incompleteId}`, "valid-b")
+      ).json();
+      assert.equal(recovered.status, "done");
+      assert.equal(
+        recovered.transcript,
+        "佐藤さんが来週までに企画書を作成します。",
+      );
+      assert.deepEqual(
+        recovered.recordings.map((r: any) => r.fallbackModel),
+        ["gpt-transcribe"],
+      );
+      assert.equal(geminiCount() - incompleteGemini, 1);
+      assert.equal(openaiTranscriptions() - incompleteOpenai, 1);
+      assert.ok(
+        [...usageEvents.values()].some(
+          (event: any) =>
+            event.meetingId === incompleteId &&
+            event.kind === "transcription" &&
+            event.model === "gpt-transcribe",
+        ),
+      );
+      assert.equal(
+        (
+          await request(`/meetings/${incompleteId}`, "valid-a", {
+            method: "DELETE",
+          })
+        ).status,
+        204,
+      );
       clockOffset = 0;
+      const openaiBeforeModels = openaiTranscriptions();
       for (const model of ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"]) {
         await request("/settings", "valid-a", {
           method: "PUT",
@@ -1034,10 +1108,7 @@ Deno.test(
           204,
         );
       }
-      assert.equal(
-        calls.filter((c) => c.route === "/v1/audio/transcriptions").length,
-        1,
-      );
+      assert.equal(openaiTranscriptions() - openaiBeforeModels, 1);
       const usageAfterDelete = await (await request(`/usage?month=${usageMonth}&page=0`)).json();
       assert.ok(usageAfterDelete.events.some((event: any) => event.meetingId === geminiMeeting.id),
         "deleting a meeting must preserve its API usage history");

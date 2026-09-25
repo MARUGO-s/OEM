@@ -103,9 +103,20 @@ function transcriptFromInteraction(interaction) {
     );
   }
   if (interaction.status !== "completed") {
-    throw geminiError(
-      "Gemini transcription did not complete",
-      "GEMINI_TRANSCRIPT_INCOMPLETE",
+    // Keep only the status keyword (e.g. "incomplete" at max_tokens); provider
+    // messages may quote the recording and stay private.
+    throw Object.assign(
+      geminiError(
+        "Gemini transcription did not complete",
+        "GEMINI_TRANSCRIPT_INCOMPLETE",
+      ),
+      {
+        geminiStatus:
+          typeof interaction.status === "string" &&
+          /^[a-z_]{1,30}$/.test(interaction.status)
+            ? interaction.status
+            : "unknown",
+      },
     );
   }
   let text;

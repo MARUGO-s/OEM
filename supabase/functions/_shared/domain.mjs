@@ -189,7 +189,11 @@ export function safeError(error) {
     return "Geminiへの音声送信は成功しましたが、文字起こし応答を読み取れませんでした。再試行してください。";
   }
   if (error.code === "GEMINI_TRANSCRIPT_INCOMPLETE") {
-    return "Geminiの文字起こしが完了しませんでした。保存済みの音声から再試行してください。";
+    return `Geminiの文字起こしが完了しませんでした（Geminiの状態：${error.geminiStatus || "unknown"}${
+      error.geminiStatus === "incomplete"
+        ? "。出力の上限に達したなどで結果が途中まででした"
+        : ""
+    }）。保存済みの音声から再試行してください。`;
   }
   if (error.code === "GEMINI_NO_TRANSCRIPT") {
     return "Geminiは処理を完了しましたが、文字起こしが空でした。録音を再生して確認し、再試行するか文字起こしモデルを変更してください。";

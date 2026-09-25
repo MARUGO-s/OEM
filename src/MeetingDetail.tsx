@@ -415,6 +415,21 @@ export function MeetingDetail({
           文字起こしが変更されています。現在の議事録は変更前の内容です。反映するには「再生成」を実行してください。
         </div>
       )}
+      {recordings.some(
+        (part) => "fallbackModel" in part && part.transcribed,
+      ) && (
+        <div className="notice">
+          {recordings
+            .flatMap((part, index) =>
+              "fallbackModel" in part && part.transcribed
+                ? [`録音${index + 1}`]
+                : [],
+            )
+            .join("・")}
+          はGeminiで文字起こしが完了しなかったため、GPT
+          Transcribeで文字起こししました（この録音の音声はOpenAIにも送信されています）。
+        </div>
+      )}
       {!m.isDemo && (
         <MeetingSchedule
           meeting={m}

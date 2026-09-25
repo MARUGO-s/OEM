@@ -86,21 +86,36 @@ test("Geminiのoutput_text形式も取得する", async (t) => {
   assert.ok(wasCleaned(calls));
 });
 
-for (const [name, response, code] of [
+for (const [name, response, code, geminiStatus] of [
   [
     "旧APIの応答",
     { candidates: [{ content: { parts: [part("本文")] } }] },
     "GEMINI_TRANSCRIPT_INCOMPLETE",
+    "unknown",
   ],
   [
     "未完了の部分結果",
     { ...completed([part("途中")]), status: "in_progress" },
     "GEMINI_TRANSCRIPT_INCOMPLETE",
+    "in_progress",
+  ],
+  [
+    "出力上限で途中までの結果",
+    { ...completed([part("途中まで")]), status: "incomplete" },
+    "GEMINI_TRANSCRIPT_INCOMPLETE",
+    "incomplete",
   ],
   [
     "失敗した応答",
     { status: "failed", error: { message: "private provider message" } },
     "GEMINI_TRANSCRIPT_INCOMPLETE",
+    "failed",
+  ],
+  [
+    "想定外の状態",
+    { status: "Private Provider Message" },
+    "GEMINI_TRANSCRIPT_INCOMPLETE",
+    "unknown",
   ],
   [
     "出力がない応答",
@@ -119,10 +134,13 @@ for (const [name, response, code] of [
     await assert.rejects(transcribe(), (error) => {
       assert.equal(error.code, code);
       assert.equal(error.provider, "gemini");
+      assert.equal(error.geminiStatus, geminiStatus);
       assert.doesNotMatch(
         safeError(error),
-        /発話を検出できません|private provider message/,
+        /発話を検出できません|private provider message|Private Provider/i,
       );
+      if (geminiStatus)
+        assert.match(safeError(error), new RegExp(`状態：${geminiStatus}`));
       return true;
     });
     assert.ok(wasCleaned(calls));

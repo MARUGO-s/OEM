@@ -234,12 +234,22 @@ export async function createApp({
       async function transcribePart(part) {
         const duration = part.duration || (recordingsFor(meeting).length === 1
           ? meeting.duration : null);
-        const onUsage = (response) => recordApiUsage(
-          "transcription", meeting, runId, transcriptionModelForJob, response, duration,
+        const file = path.join(uploadsDir, part.audioFile);
+        const usageFor = (model) => (response) => recordApiUsage(
+          "transcription", meeting, runId, model, response, duration,
         );
-        if (!gemini)
-          return (await ai.transcribe(path.join(uploadsDir, part.audioFile), onUsage))
-            .transcript;
+        const onUsage = usageFor(transcriptionModelForJob);
+        // A part Gemini could not finish is transcribed with GPT Transcribe.
+        const fallback = async (geminiStatus) => ({
+          transcript: (await aiFactory(key, modelForJob, {}, {
+            transcriptionModel: "gpt-transcribe",
+          }).transcribe(file, usageFor("gpt-transcribe"))).transcript,
+          transcriptionFallback: { model: "gpt-transcribe", geminiStatus },
+        });
+        if (!gemini) return (await ai.transcribe(file, onUsage)).transcript;
+        if (part.transcriptionFallback)
+          return fallback(part.transcriptionFallback.geminiStatus);
+        let incomplete;
         for (;;) {
           const release = await acquireGemini(async (until, reason) => {
             meeting = await store.save({
@@ -254,13 +264,14 @@ export async function createApp({
           let delayMs, reason;
           try {
             meeting = await store.save({ ...meeting, transcriptionWait: null });
-            const result = await ai.transcribe(
-              path.join(uploadsDir, part.audioFile),
-              onUsage,
-            );
+            const result = await ai.transcribe(file, onUsage);
             meeting = await store.save({ ...meeting, geminiRetryCount: 0 });
             return result.transcript;
           } catch (error) {
+            if (error.code === "GEMINI_TRANSCRIPT_INCOMPLETE") {
+              incomplete = error.geminiStatus || "unknown";
+              break;
+            }
             const retry = geminiRetryPlan(error, meeting.geminiRetryCount || 0);
             if (!retry) throw error;
             if (retry.stop) throw geminiRetryError(retry.stop);
@@ -279,6 +290,7 @@ export async function createApp({
             release(delayMs, reason);
           }
         }
+        return fallback(incomplete);
       }
       if (needsTranscription(meeting) || !meeting.transcript) {
         let transcript;
