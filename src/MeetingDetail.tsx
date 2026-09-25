@@ -384,9 +384,7 @@ export function MeetingDetail({
                   : "次の録音を送信するまで待機しています"
                 : m.status === "transcribing"
                   ? `録音を文字起こししています${recordings.length > 1 ? `（${recordings.filter((part) => part.transcribed).length}/${recordings.length} 完了）` : ""}`
-                  : m.attachments?.length
-                    ? "会話と添付資料を照合して議事録を作成しています"
-                    : "会話を解析して議事録を作成しています"}
+                  : "会話を解析して議事録を作成しています"}
             </strong>
             <p>
               {wait
@@ -414,7 +412,7 @@ export function MeetingDetail({
       )}
       {m.minutesStale && (
         <div className="notice">
-          文字起こし、または添付資料が変更されています。現在の議事録は変更前の内容です。反映するには「再生成」を実行してください。
+          文字起こしが変更されています。現在の議事録は変更前の内容です。反映するには「再生成」を実行してください。
         </div>
       )}
       {!m.isDemo && (
@@ -737,7 +735,7 @@ export function MeetingDetail({
               ? m.status === "uploading"
                 ? "取り込み途中の会議を一覧から取り除きます。クラウドに送信済みの未完了音声は完全に削除され、元に戻せません。元の録音ファイルから再度取り込めます。"
                 : "会議と音声を一覧から取り除き、アプリの保存先にあるゴミ箱へ移動します。"
-              : "現在の文字起こし・全添付資料と接続設定のモデルで再解析します。編集した議事録本文とアクションの完了状態は上書きされます。カレンダーの手動変更は保持します。API利用料がかかります。"}
+              : "現在の文字起こしと接続設定のモデルで再解析します。添付資料は解析に使いません。編集した議事録本文とアクションの完了状態は上書きされます。カレンダーの手動変更は保持します。API利用料がかかります。"}
           </p>
           <div className="modal-footer">
             <button

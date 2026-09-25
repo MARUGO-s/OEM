@@ -111,8 +111,7 @@ export function publicAttachments(document) {
     }),
   );
 }
-// Header validation does not execute or unpack Office documents. AI handles
-// content parsing; encrypted/corrupt documents produce an explicit analysis error.
+// Header validation does not execute or unpack Office documents.
 export function validateAttachmentBytes(name, bytes) {
   const ext = attachmentExtension(name),
     signature = (...values) => values.every((v, i) => bytes[i] === v);

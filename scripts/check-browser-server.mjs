@@ -6,10 +6,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { waveFile } from "../tests/fixtures/wav.mjs";
-import {
-  documentFixtures,
-  reviewFixture,
-} from "../tests/fixtures/documents.mjs";
+import { documentFixtures } from "../tests/fixtures/documents.mjs";
 const dir = await mkdtemp(path.join(tmpdir(), "kotonoha-100mb-ui-"));
 await writeFile(
   path.join(dir, "100MB.wav"),
@@ -29,12 +26,9 @@ const { app } = await createApp({
     transcribe: async () => ({
       transcript: `検証音声${++calls}。確認用の架空の会話です。`,
     }),
-    summarize: async (meeting) => ({
+    summarize: async () => ({
       ...createDemo().minutes,
       summary: `100 MBの分割送信を${calls}部分で確認しました。実際のAI解析ではありません。`,
-      ...(meeting.attachments?.length
-        ? { documentReview: meeting.attachments.map(reviewFixture) }
-        : {}),
     }),
   }),
 });

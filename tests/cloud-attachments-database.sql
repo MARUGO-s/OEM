@@ -29,7 +29,7 @@ begin
   perform public.kotonoha_store('job_update',owner,id,'{"runId":"test","patch":{"status":"done","markdown":"Synthetic result"}}');
   r:=public.kotonoha_attachments('remove',owner,id,jsonb_build_object('attachmentId',fid));
   if jsonb_array_length(r->'document'->'attachments')<>0 or
-     jsonb_array_length(r->'document'->'removedAttachments')<>1 or r->'document'->>'minutesStale'<>'true' then
+     jsonb_array_length(r->'document'->'removedAttachments')<>1 or coalesce((r->'document'->>'minutesStale')::boolean,false) then
     raise exception 'Logical unlink failed';
   end if;
   for i in 1..2 loop perform public.kotonoha_attachments('add',owner,id,jsonb_build_object('attachment',attachment||jsonb_build_object('id',gen_random_uuid()))); end loop;

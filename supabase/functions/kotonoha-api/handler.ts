@@ -26,8 +26,8 @@ import {
   validateAttachmentBytes,
 } from "../_shared/attachments.mjs";
 import {
+  CalendarMinutesSchema,
   parseMinutes,
-  schemaForMeeting,
   summaryInput,
 } from "../_shared/summary.mjs";
 import {
@@ -386,25 +386,7 @@ async function startSummary(owner: string, record: RecordRow, key: string) {
   if (m.transcript.length > MAX_TEXT_LENGTH) {
     throw Object.assign(new Error("too long"), { code: "TEXT_TOO_LONG" });
   }
-  const files = [];
-  for (const attachment of m.attachments || []) {
-    const { data, error } = await service.storage
-      .from(DOCUMENT_BUCKET)
-      .createSignedUrl(attachment.storagePath, 3600);
-    if (error || !data?.signedUrl) {
-      throw fail(
-        503,
-        "添付資料を読み込めませんでした。資料を確認し、再試行してください。",
-      );
-    }
-    // The model fetches only an expiring URL for the authorized meeting's file.
-    // No public bucket, Files API copy, or bulk base64 allocation in Edge memory.
-    files.push({
-      attachment,
-      input: { type: "input_file", file_url: data.signedUrl },
-    });
-  }
-  const { $schema: _, ...outputSchema } = z.toJSONSchema(schemaForMeeting(m));
+  const { $schema: _, ...outputSchema } = z.toJSONSchema(CalendarMinutesSchema);
   const result = await openai(key, "/responses", {
     method: "POST",
     body: JSON.stringify({
@@ -413,7 +395,7 @@ async function startSummary(owner: string, record: RecordRow, key: string) {
       max_output_tokens: 16000,
       background: true,
       store: true,
-      input: summaryInput(m, files),
+      input: summaryInput(m),
       text: {
         format: {
           type: "json_schema",

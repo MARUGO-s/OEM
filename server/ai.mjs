@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { MAX_TEXT_LENGTH } from "./domain.mjs";
 import {
-  schemaForMeeting,
+  CalendarMinutesSchema,
   parseMinutes,
   summaryInput,
 } from "../supabase/functions/_shared/summary.mjs";
@@ -51,7 +51,7 @@ export function createAI(
       // GPT Transcribe does not return speaker IDs or timestamps. Never invent them.
       return { transcript, segments: [], duration: null };
     },
-    async summarize(meeting, files = [], onUsage = () => {}) {
+    async summarize(meeting, onUsage = () => {}) {
       if (meeting.transcript.length > MAX_TEXT_LENGTH)
         throw Object.assign(new Error("too long"), { code: "TEXT_TOO_LONG" });
       const response = await client.responses.parse({
@@ -59,9 +59,9 @@ export function createAI(
         store: false,
         reasoning: { effort: "medium" },
         max_output_tokens: 16000,
-        input: summaryInput(meeting, files),
+        input: summaryInput(meeting),
         text: {
-          format: zodTextFormat(schemaForMeeting(meeting), "meeting_minutes"),
+          format: zodTextFormat(CalendarMinutesSchema, "meeting_minutes"),
         },
       });
       await onUsage(response);

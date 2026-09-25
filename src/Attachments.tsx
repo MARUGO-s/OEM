@@ -16,7 +16,7 @@ const fileSize = (bytes: number) =>
 export function AttachmentNotice() {
   return (
     <p className="field-hint attachment-notice">
-      資料は解析時にOpenAIへ送信され、追加のAPI利用料がかかります。Excel・CSVは各シート先頭1,000行までの解析です。Word・Excel・PowerPointの図表や画像が重要な場合はPDFも添付してください。パスワード付きの資料は解除してから選んでください。
+      資料は会議の参考資料として保存・共有するだけで、AIには送信せず、議事録の解析にも使いません。
     </p>
   );
 }
@@ -178,7 +178,7 @@ export function AttachmentPanel({
         );
         setFiles((current) => current.slice(1));
       }
-      notify("資料を保存しました。「議事録を再生成」で解析に反映できます。");
+      notify("資料を保存しました。");
     } catch (error) {
       setError((error as Error).message);
     } finally {
@@ -197,9 +197,7 @@ export function AttachmentPanel({
         }),
       );
       setConfirm(null);
-      notify(
-        "資料の関連付けを解除しました。議事録を再生成すると反映されます。",
-      );
+      notify("資料の関連付けを解除しました。");
     } catch (error) {
       setError((error as Error).message);
     } finally {
@@ -235,65 +233,55 @@ export function AttachmentPanel({
       </div>
       {!saved.length && (
         <p className="field-hint">
-          関連資料を保存すると、会話との関連性・相違点を照合した議事録を作れます。
+          会議の関連資料を保存し、あとからダウンロードできます。
         </p>
       )}
-      {saved.map((file) => {
-        const review = meeting.minutes?.documentReview?.find(
-          (r) => r.attachmentId === file.id,
-        );
-        return (
-          <div className="attachment-item" key={file.id}>
-            <div className="attachment-row">
-              <FileText size={19} />
-              <span className="attachment-name">
-                {file.name}
-                <small>
-                  {fileSize(file.size)}
-                  {review
-                    ? ` · ${meeting.minutesStale ? "以前の解析：" : ""}${review.relevance}`
-                    : " · 未解析"}
-                </small>
-              </span>
+      {saved.map((file) => (
+        <div className="attachment-item" key={file.id}>
+          <div className="attachment-row">
+            <FileText size={19} />
+            <span className="attachment-name">
+              {file.name}
+              <small>{fileSize(file.size)}</small>
+            </span>
+            <button
+              className="text-button"
+              disabled={busy}
+              onClick={() => void download(file)}
+            >
+              <Download size={15} />
+              ダウンロード
+            </button>
+            <button
+              className="icon-button"
+              aria-label={`${file.name}の関連付けを解除`}
+              disabled={locked || busy}
+              onClick={() => setConfirm(file.id)}
+            >
+              <X size={16} />
+            </button>
+          </div>
+          {confirm === file.id && (
+            <div className="notice">
+              この会議の資料一覧から外します。保存ファイルは保持され、管理者による復元が可能です。
               <button
                 className="text-button"
                 disabled={busy}
-                onClick={() => void download(file)}
+                onClick={() => setConfirm(null)}
               >
-                <Download size={15} />
-                ダウンロード
+                取消
               </button>
               <button
-                className="icon-button"
-                aria-label={`${file.name}の関連付けを解除`}
-                disabled={locked || busy}
-                onClick={() => setConfirm(file.id)}
+                className="text-button"
+                disabled={busy}
+                onClick={() => void remove(file.id)}
               >
-                <X size={16} />
+                関連付けを解除する
               </button>
             </div>
-            {confirm === file.id && (
-              <div className="notice">
-                この会議の解析対象から外します。保存ファイルは保持され、管理者による復元が可能です。
-                <button
-                  className="text-button"
-                  disabled={busy}
-                  onClick={() => setConfirm(null)}
-                >
-                  取消
-                </button>
-                <button
-                  className="text-button"
-                  disabled={busy}
-                  onClick={() => void remove(file.id)}
-                >
-                  関連付けを解除する
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
+          )}
+        </div>
+      ))}
       {!meeting.isDemo && (
         <>
           <AttachmentPicker
@@ -311,11 +299,6 @@ export function AttachmentPanel({
               {busy && <LoaderCircle size={16} className="spin" />}
               選択した資料を保存
             </button>
-          )}
-          {!!saved.length && (
-            <p className="field-hint">
-              保存だけではAI解析は実行しません。「議事録を再生成」で全資料を会話と一緒に解析します。照合結果は議事録の「添付資料との照合」に表示されます。
-            </p>
           )}
         </>
       )}
