@@ -5,6 +5,7 @@ import { splitRecordings } from "../src/split-recordings.mjs";
 import {
   validateAdts,
   transcribeRecordings,
+  publicRecordings,
 } from "../supabase/functions/_shared/audio.mjs";
 import { UploadSchema } from "../supabase/functions/_shared/upload.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
@@ -258,6 +259,43 @@ test("合計100 MBの境界、マニフェストの順序、件数、分割サ�
   await assert.rejects(
     splitRecordings([{ size: 50_000_000 }, { size: 50_000_001 }]),
     /100 MB/,
+  );
+});
+test("別モデルで文字起こしした録音を記録し、失敗した録音の番号を返す", async () => {
+  const fallback = { model: "gpt-transcribe", geminiStatus: "incomplete" };
+  let saved;
+  const text = await transcribeRecordings(
+    [{ fileName: "a.m4a" }, { fileName: "b.m4a" }],
+    async (_part, index) =>
+      index === 0
+        ? { transcript: "代わりのモデル", transcriptionFallback: fallback }
+        : "通常のモデル",
+    async (parts) => {
+      saved = parts;
+    },
+  );
+  assert.equal(text, "【録音 1】\n代わりのモデル\n\n【録音 2】\n通常のモデル");
+  assert.deepEqual(saved[0].transcriptionFallback, fallback);
+  assert.equal(saved[1].transcriptionFallback, undefined);
+  assert.deepEqual(publicRecordings(saved), [
+    { fileName: "a.m4a", transcribed: true, fallbackModel: "gpt-transcribe" },
+    { fileName: "b.m4a", transcribed: true },
+  ]);
+  await assert.rejects(
+    transcribeRecordings(
+      [{ fileName: "a.m4a", transcript: "済み" }, { fileName: "b.m4a" }],
+      async () => {
+        throw Object.assign(new Error("incomplete"), {
+          code: "GEMINI_TRANSCRIPT_INCOMPLETE",
+          geminiStatus: "incomplete",
+        });
+      },
+      async () => {},
+    ),
+    (error) =>
+      error.partIndex === 1 &&
+      error.cause.code === "GEMINI_TRANSCRIPT_INCOMPLETE" &&
+      /録音2.*状態：incomplete/.test(error.publicMessage),
   );
 });
 test("分割文字起こしは1回1本、保存済みをスキップし最終回だけ連結する", async () => {

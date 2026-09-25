@@ -531,6 +531,51 @@ test("録音を文字起こしして議事録まで作成し、音声を再生�
   assert.equal((await range.arrayBuffer()).byteLength, 10);
 });
 
+test("Geminiで完了しなかった録音はGPT Transcribeに切り替え、切り替えを記録する", async (t) => {
+  const models = [];
+  const { request, waitForJobs } = await setup(t, {
+    apiKey: key,
+    geminiApiKey: "AIza-test-only-not-a-real-gemini-key",
+    transcriptionModel: "gemini-3.5-transcribe",
+    aiFactory: (_key, _model, _options, { transcriptionModel }) => ({
+      async transcribe(_file, onUsage) {
+        models.push(transcriptionModel);
+        if (transcriptionModel === "gemini-3.5-transcribe")
+          throw Object.assign(new Error("Gemini transcription did not complete"), {
+            code: "GEMINI_TRANSCRIPT_INCOMPLETE",
+            provider: "gemini",
+            geminiStatus: "incomplete",
+          });
+        await onUsage({ usage: { seconds: 60 } });
+        return { transcript: "GPTで文字起こししました。", segments: [], duration: null };
+      },
+      summarize: async () => sampleMinutes,
+    }),
+  });
+  const created = await request("/meetings", {
+    method: "POST",
+    body: payload({ audio: true }),
+  });
+  assert.equal(created.status, 202);
+  const { id } = await created.json();
+  await waitForJobs();
+  const meeting = await (await request(`/meetings/${id}`)).json();
+  assert.equal(meeting.status, "done", meeting.error);
+  assert.equal(meeting.transcript, "GPTで文字起こししました。");
+  assert.deepEqual(models, ["gemini-3.5-transcribe", "gpt-transcribe"]);
+  assert.deepEqual(
+    meeting.recordings.map((r) => r.fallbackModel),
+    ["gpt-transcribe"],
+  );
+  const month = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit",
+  }).format(new Date());
+  const usage = await (await request(`/usage?month=${month}&page=0`)).json();
+  assert.ok(usage.events.some((event) =>
+    event.meetingId === id && event.kind === "transcription" &&
+    event.model === "gpt-transcribe"));
+});
+
 test("解析失敗後も文字起こしを保持し、Solへ変更して音声認識を繰り返さず再試行する", async (t) => {
   let transcriptions = 0;
   let attempts = 0;

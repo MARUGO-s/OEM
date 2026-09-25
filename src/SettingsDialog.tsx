@@ -115,7 +115,8 @@ export function SettingsDialog({
             }
           />
           <span className="field-hint">
-            Geminiを選んだ場合のみ音声をGoogleへ送信します。キーはOpenAIキーとは別に保存します。
+            Geminiを選んだ場合のみ音声をGoogleへ送信します。Geminiで文字起こしが完了しなかった録音は、自動でGPT
+            Transcribeに切り替えます（その録音の音声はOpenAIにも送信されます）。キーはOpenAIキーとは別に保存します。
           </span>
         </label>
         <fieldset className="model-options">
