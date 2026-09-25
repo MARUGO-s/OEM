@@ -12,6 +12,9 @@
   --border: #e9eaf1;
   --ink: #252938;
   --surface: #fff;
+  /* The app has one light design; keep native parts (dialogs, form
+     controls) light when the OS or a host page prefers dark. */
+  color-scheme: light;
 }
 * {
   box-sizing: border-box;
@@ -1276,6 +1279,7 @@ button {
   border-radius: 15px;
   width: min(500px, calc(100vw - 32px));
   max-height: calc(100dvh - 64px);
+  background: var(--surface);
   color: var(--ink);
   box-shadow: 0 20px 100px #23203030;
 }
