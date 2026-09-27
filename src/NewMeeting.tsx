@@ -740,7 +740,7 @@ export function NewMeeting({
             : modelName(settings?.model)}
           <br />
           <span>
-            音声は選択した文字起こしサービスへ、テキストはOpenAIへ送信して処理します。API利用料がかかります。添付資料は保存のみで、AIには送信しません。
+            音声は選択した文字起こしサービスへ、テキストはOpenAIへ送信して処理します。添付資料は保存のみで、AIには送信しません。
           </span>
         </p>
         {!settings?.configured && (
@@ -776,7 +776,7 @@ export function NewMeeting({
             {error}
           </div>
         )}
-        <p className="muted">議事録が完成すると、AIタグ候補を自動表示します。必要なタグだけを選んで保存できます。候補生成には追加のAPI利用料がかかります。</p>
+        <p className="muted">議事録が完成すると、AIタグ候補を自動表示します。必要なタグだけを選んで保存できます。</p>
         <div className="modal-footer">
           <span>取り込んだ音声はあとから再生できます</span>
           <button

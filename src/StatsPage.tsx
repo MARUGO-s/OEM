@@ -237,7 +237,7 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
             `対象：${selectedRange?.start} 〜 ${selectedRange?.end}（日本時間・両端の日付を含む）`}
         </p>
         <p className="muted summary-notice">
-          指定期間に開催した完了済み会議が対象です（今日まで・サンプルを除く）。生成にはAPI利用料がかかります。結果はこの画面を閉じると消えます。
+          指定期間に開催した完了済み会議が対象です（今日まで・サンプルを除く）。結果はこの画面を閉じると消えます。
         </p>
         {showSummary && (
           <div className="summary-content">

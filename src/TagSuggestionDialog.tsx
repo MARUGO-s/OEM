@@ -80,7 +80,7 @@ export function TagSuggestionDialog({
         議事録に付けたいタグを選び、「選んだタグを保存」を押してください。既存のタグは残ります。
       </p>
       <p className="muted">
-        候補生成にはAPI利用料がかかります。選ぶだけでは保存されません。
+        選ぶだけでは保存されません。
       </p>
       {loading && (
         <p role="status">
@@ -95,7 +95,7 @@ export function TagSuggestionDialog({
             className="button secondary"
             onClick={() => setAttempt((value) => value + 1)}
           >
-            候補を再取得（API利用料がかかります）
+            候補を再取得
           </button>
         </div>
       )}
