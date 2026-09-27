@@ -234,3 +234,80 @@ async function transcode(input, track, codec, durationLimit, addPart, report) {
     addPart(new Blob([buffer.buffer], { type }), extension, end - start);
   }
 }
+
+export const VIDEO_EXTENSIONS = [
+  ".mp4",
+  ".m4v",
+  ".mov",
+  ".webm",
+  ".mkv",
+  ".ts",
+  ".mts",
+  ".m2ts",
+  ".3gp",
+];
+
+async function convertAudio(file, { compress, onProgress }) {
+  const input = new Input({
+    source: new BlobSource(file),
+    formats: ALL_FORMATS,
+  });
+  try {
+    if (!compress && !(await input.getPrimaryVideoTrack())) return file;
+    const track = await input.getPrimaryAudioTrack();
+    if (!track) throw new Error("音声が含まれていません。");
+    let codec = await track.getCodec(),
+      audio;
+    if (
+      compress ||
+      !codec ||
+      !formatFor(codec).getSupportedAudioCodecs().includes(codec)
+    ) {
+      if (codec === "ac3" || codec === "eac3") await loadAc3Decoder();
+      const target =
+        codec && (await track.canDecode()) && (await getSpeechCodec());
+      if (!target) throw new Error(unsupported(codec));
+      codec = target;
+      audio = { ...SPEECH, codec, forceTranscode: true };
+    }
+    const { extension, type } = fileTypeFor(codec);
+    const target = new BufferTarget();
+    const conversion = await Conversion.init({
+      input,
+      output: new Output({ format: formatFor(codec), target }),
+      tracks: "primary",
+      video: { discard: true },
+      audio,
+      showWarnings: false,
+    });
+    if (!conversion.isValid) throw new Error(unsupported(codec));
+    if (onProgress) conversion.onProgress = onProgress;
+    await conversion.execute();
+    return new File(
+      [target.buffer],
+      file.name.replace(/\.[^.]+$/, "") + extension,
+      { type },
+    );
+  } catch (error) {
+    throw new Error(
+      `「${file.name}」: ${
+        error instanceof UnsupportedInputFormatError
+          ? "ファイル形式を読み取れません。MP4・MOV・MKV・WebM・MTSの動画か、M4A・MP3・WAVの音声で書き出してください。"
+          : error.message || "音声を読み込めませんでした。"
+      }`,
+    );
+  } finally {
+    input.dispose();
+  }
+}
+
+// Video files are far larger than their audio, so keep only the audio track
+// (copied without re-encoding when possible) before size limits are applied.
+export function extractAudio(file, onProgress) {
+  return convertAudio(file, { compress: false, onProgress });
+}
+
+// Re-encode as mono speech (about 14 MB per hour) when recordings are too large.
+export function compressAudio(file, onProgress) {
+  return convertAudio(file, { compress: true, onProgress });
+}

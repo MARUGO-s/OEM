@@ -34,6 +34,11 @@ import {
   type RecordingMode,
   type RecordingSessionMeta,
 } from "./recording";
+import {
+  compressAudio,
+  extractAudio,
+  VIDEO_EXTENSIONS,
+} from "./split-recordings.mjs";
 
 const LIMIT = 100_000_000;
 const ACCEPT =
@@ -71,6 +76,8 @@ export function NewMeeting({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [drag, setDrag] = useState(false);
+  const [preparing, setPreparing] = useState("");
+  const errorRef = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const caps = getRecordingCapabilities();
   const isMobile = isMobileDevice();
@@ -85,6 +92,10 @@ export function NewMeeting({
   const [recoverable, setRecoverable] = useState<RecordingSessionMeta[]>([]);
   const recorderRef = useRef<RecorderController | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  useEffect(() => {
+    if (error)
+      errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
   useEffect(() => {
     listRecoverableSessions()
       .then(setRecoverable)
@@ -130,7 +141,10 @@ export function NewMeeting({
     setRecordingError("");
     setRecordingState("starting");
     try {
-      const controller = await startRecording(recordingMode, setRecordingSeconds);
+      const controller = await startRecording(
+        recordingMode,
+        setRecordingSeconds,
+      );
       recorderRef.current = controller;
       analyserRef.current = controller.getAnalyser();
       setRecordingState("recording");
@@ -189,31 +203,62 @@ export function NewMeeting({
     await discardSession(id).catch(() => {});
     setRecoverable((current) => current.filter((s) => s.id !== id));
   }
-  function chooseFiles(selected: FileList | File[] | null) {
+  async function chooseFiles(selected: FileList | File[] | null) {
     if (!selected?.length) return;
-    const next = [...files, ...Array.from(selected)];
-    if (
-      next.some(
-        (file) =>
-          !ACCEPT.split(",").includes(
-            `.${file.name.split(".").pop()?.toLowerCase()}`,
-          ),
-      )
-    ) {
+    const extension = (file: File) =>
+      `.${file.name.split(".").pop()?.toLowerCase()}`;
+    const picked = Array.from(selected);
+    if (picked.some((file) => !ACCEPT.split(",").includes(extension(file)))) {
       setError(
         "AAC、MP3、M4A、WAVなどの音声ファイル、またはMP4、MOV、MKV、MTSなどの動画ファイルを選んでください。",
       );
       return;
     }
-    if (next.length > 5) {
+    if (files.length + picked.length > 5) {
       setError("1つの会議に取り込める録音は5ファイルまでです。");
       return;
     }
-    if (
-      next.some((file) => file.size === 0) ||
-      next.reduce((n, file) => n + file.size, 0) > LIMIT
-    ) {
-      setError("空ではない音声ファイルを、合計100 MB以下で選んでください。");
+    const percent = (ratio: number) => `${Math.round(ratio * 100)}%`;
+    const added = [...picked];
+    const total = () =>
+      [...files, ...added].reduce((n, file) => n + file.size, 0);
+    setError("");
+    try {
+      for (const [i, file] of added.entries()) {
+        if (!VIDEO_EXTENSIONS.includes(extension(file))) continue;
+        setPreparing("動画から音声を取り出しています…");
+        added[i] = await extractAudio(file, (ratio: number) =>
+          setPreparing(`動画から音声を取り出しています… ${percent(ratio)}`),
+        );
+      }
+      // Largest first, stopping as soon as the batch fits the upload limit.
+      const order = added
+        .map((_, i) => i)
+        .sort((x, y) => added[y].size - added[x].size);
+      for (const i of order) {
+        if (total() <= LIMIT) break;
+        setPreparing("容量が大きいため音声を圧縮しています…");
+        added[i] = await compressAudio(added[i], (ratio: number) =>
+          setPreparing(
+            `容量が大きいため音声を圧縮しています… ${percent(ratio)}`,
+          ),
+        );
+      }
+    } catch (e) {
+      setError((e as Error).message || "音声を読み込めませんでした。");
+      return;
+    } finally {
+      setPreparing("");
+    }
+    const next = [...files, ...added];
+    if (next.some((file) => file.size === 0)) {
+      setError("空ではない音声ファイルを選んでください。");
+      return;
+    }
+    if (total() > LIMIT) {
+      setError(
+        "圧縮しても合計100 MBを超えます。録音を複数の会議に分けてください。",
+      );
       return;
     }
     setFiles(next);
@@ -474,7 +519,7 @@ export function NewMeeting({
             onDrop={(e) => {
               e.preventDefault();
               setDrag(false);
-              if (!busy) chooseFiles(e.dataTransfer.files);
+              if (!busy && !preparing) void chooseFiles(e.dataTransfer.files);
             }}
           >
             <UploadCloud size={32} />
@@ -483,16 +528,25 @@ export function NewMeeting({
             <button
               type="button"
               className="button secondary small"
-              disabled={busy}
+              disabled={busy || !!preparing}
               onClick={() => input.current?.click()}
             >
-              {files.length ? "ファイルを追加" : "ファイルを選択"}
+              {preparing ? (
+                <>
+                  <LoaderCircle size={15} className="spin" /> {preparing}
+                </>
+              ) : files.length ? (
+                "ファイルを追加"
+              ) : (
+                "ファイルを選択"
+              )}
             </button>
             <small>音声：AAC / MP3 / M4A / WAV / OGG / FLAC</small>
             <small>
               動画：MP4 / MOV / MKV / WebM / MTS / M2TS / TS /
-              3GP（音声のみ使用）
+              3GP（音声だけを取り出して使用）
             </small>
+            <small>合計100 MBを超える場合は、音声を自動で圧縮します</small>
             <small>最大5ファイル・合計100 MBまで · 大きな録音は自動分割</small>
             <input
               ref={input}
@@ -502,8 +556,9 @@ export function NewMeeting({
               accept={ACCEPT}
               hidden
               onChange={(e) => {
-                chooseFiles(e.target.files);
+                const selected = Array.from(e.target.files || []);
                 e.target.value = "";
+                void chooseFiles(selected);
               }}
             />
           </div>
@@ -671,7 +726,7 @@ export function NewMeeting({
           </p>
         )}
         {error && (
-          <div className="error-message" role="alert">
+          <div ref={errorRef} className="error-message" role="alert">
             {error}
           </div>
         )}
@@ -681,6 +736,7 @@ export function NewMeeting({
             className="button primary"
             disabled={
               busy ||
+              !!preparing ||
               !settings?.configured ||
               (mode !== "text" &&
                 settings?.transcriptionModel === "gemini-3.5-transcribe" &&
