@@ -37,76 +37,91 @@ function openDb(): Promise<IDBDatabase> {
 
 async function putChunk(sessionId: string, index: number, blob: Blob) {
   const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(CHUNK_STORE, "readwrite");
-    tx.objectStore(CHUNK_STORE).put({
-      key: `${sessionId}#${String(index).padStart(6, "0")}`,
-      sessionId,
-      index,
-      blob,
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(CHUNK_STORE, "readwrite");
+      tx.objectStore(CHUNK_STORE).put({
+        key: `${sessionId}#${String(index).padStart(6, "0")}`,
+        sessionId,
+        index,
+        blob,
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
+  } finally {
+    db.close();
+  }
 }
 
 async function getChunks(sessionId: string): Promise<Blob[]> {
   const db = await openDb();
-  const chunks = await new Promise<{ index: number; blob: Blob }[]>(
-    (resolve, reject) => {
-      const tx = db.transaction(CHUNK_STORE, "readonly");
-      const req = tx.objectStore(CHUNK_STORE).index("bySession").getAll(sessionId);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    },
-  );
-  db.close();
-  return chunks.sort((a, b) => a.index - b.index).map((c) => c.blob);
+  try {
+    const chunks = await new Promise<{ index: number; blob: Blob }[]>(
+      (resolve, reject) => {
+        const tx = db.transaction(CHUNK_STORE, "readonly");
+        const req = tx.objectStore(CHUNK_STORE).index("bySession").getAll(sessionId);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      },
+    );
+    return chunks.sort((a, b) => a.index - b.index).map((c) => c.blob);
+  } finally {
+    db.close();
+  }
 }
 
 async function deleteSession(sessionId: string) {
   const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction([CHUNK_STORE, SESSION_STORE], "readwrite");
-    const chunkStore = tx.objectStore(CHUNK_STORE);
-    const range = tx.objectStore(CHUNK_STORE).index("bySession");
-    const req = range.getAllKeys(sessionId);
-    req.onsuccess = () => {
-      for (const key of req.result) chunkStore.delete(key as IDBValidKey);
-    };
-    tx.objectStore(SESSION_STORE).delete(sessionId);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([CHUNK_STORE, SESSION_STORE], "readwrite");
+      const chunkStore = tx.objectStore(CHUNK_STORE);
+      const range = tx.objectStore(CHUNK_STORE).index("bySession");
+      const req = range.getAllKeys(sessionId);
+      req.onsuccess = () => {
+        for (const key of req.result) chunkStore.delete(key as IDBValidKey);
+      };
+      tx.objectStore(SESSION_STORE).delete(sessionId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
 }
 
 async function putSessionMeta(meta: RecordingSessionMeta) {
   const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(SESSION_STORE, "readwrite");
-    tx.objectStore(SESSION_STORE).put(meta);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(SESSION_STORE, "readwrite");
+      tx.objectStore(SESSION_STORE).put(meta);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
 }
 
 export async function listRecoverableSessions(): Promise<
   RecordingSessionMeta[]
 > {
   const db = await openDb();
-  const sessions = await new Promise<RecordingSessionMeta[]>(
-    (resolve, reject) => {
-      const tx = db.transaction(SESSION_STORE, "readonly");
-      const req = tx.objectStore(SESSION_STORE).getAll();
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    },
-  );
-  db.close();
-  return sessions;
+  try {
+    const sessions = await new Promise<RecordingSessionMeta[]>(
+      (resolve, reject) => {
+        const tx = db.transaction(SESSION_STORE, "readonly");
+        const req = tx.objectStore(SESSION_STORE).getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      },
+    );
+    return sessions;
+  } finally {
+    db.close();
+  }
 }
 
 function fileName(meta: RecordingSessionMeta) {
@@ -306,9 +321,9 @@ export async function startRecording(
     clearInterval(interval);
     document.removeEventListener("visibilitychange", onVisibilityChange);
     wakeLock?.release().catch(() => {});
-    micStream.getTracks().forEach((t) => t.stop());
+    micStream?.getTracks().forEach((t) => t.stop());
     displayStream?.getTracks().forEach((t) => t.stop());
-    audioContext.close().catch(() => {});
+    audioContext.close().catch((e) => console.error("AudioContext close failed:", e));
   };
 
   return {

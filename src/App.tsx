@@ -112,7 +112,7 @@ export default function App() {
       setSettings(config);
       setError("");
     } catch (e) {
-      setError((e as Error).message);
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -135,16 +135,16 @@ export default function App() {
           setError("");
         }
       } catch (e) {
-        if (!stop) setError((e as Error).message);
+        if (!stop) setError(e instanceof Error ? e.message : String(e));
       }
       if (!stop) timer = setTimeout(poll, processing ? 2500 : 10000);
     }
     timer = setTimeout(poll, processing ? 2500 : 10000);
     return () => {
       stop = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
     };
-  }, [processing, editing, renameTarget]);
+  }, [processing, editing, renameTarget, isCloud]);
   function updateMeeting(next: Meeting) {
     setMeetings((prev) =>
       prev.some((m) => m.id === next.id)
@@ -161,7 +161,7 @@ export default function App() {
   async function saveRename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const title = renameDraft.trim();
-    if (!renameTarget || !title || title.length > 160) return;
+    if (!renameTarget || !title || title.length === 0 || title.length > 160) return;
     setRenameBusy(true);
     setRenameError("");
     try {
@@ -173,7 +173,7 @@ export default function App() {
       setRenameTarget(null);
       notify("会議名を変更しました。共有画面にも反映されます。");
     } catch (e) {
-      setRenameError((e as Error).message);
+      setRenameError(e instanceof Error ? e.message : String(e));
     } finally {
       setRenameBusy(false);
     }

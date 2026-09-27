@@ -164,10 +164,13 @@ export const modelName = (id?: string) =>
 export const transcriptionModelName = (id?: string) =>
   id === "gemini-3.5-transcribe" ? "Gemini 3.5 Transcribe" : "GPT Transcribe";
 export const today = () => new Intl.DateTimeFormat("sv-SE").format(new Date());
-export const formatDate = (date: string) =>
-  new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric" }).format(
-    new Date(`${date}T12:00:00`),
-  );
+export const formatDate = (date: string) => {
+  const dateObj = new Date(`${date}T12:00:00`);
+  if (isNaN(dateObj.getTime())) {
+    return "無効な日付";
+  }
+  return new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric" }).format(dateObj);
+};
 export const clock = (value: number) =>
   `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(Math.floor(value % 60)).padStart(2, "0")}`;
 

@@ -115,6 +115,7 @@ export function ActionList({
   const isOverdue = (due: string) => {
     if (!due) return false;
     const dueDate = new Date(due);
+    if (isNaN(dueDate.getTime())) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return dueDate < today;
@@ -140,7 +141,7 @@ export function ActionList({
         }),
       );
     } catch (e) {
-      notify((e as Error).message);
+      notify(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
