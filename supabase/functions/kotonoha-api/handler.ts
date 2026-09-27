@@ -1357,6 +1357,113 @@ export async function handler(req: Request) {
       }
       return json(null, 204);
     }
+    // 自動サマリー生成エンドポイント
+    if (match[2] === "summary" && req.method === "GET") {
+      const period = new URL(req.url).searchParams.get("period") || "month";
+      const listResult = await store("list", owner);
+      const meetings = listResult?.records || [];
+      const now = new Date();
+      let startDate: Date;
+      
+      if (period === "week") {
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+      
+      const filteredMeetings = meetings.filter((r: RecordRow) => {
+        const meetingDate = new Date(r.document.date);
+        return meetingDate >= startDate && r.document.status === "done";
+      });
+      
+      if (filteredMeetings.length === 0) {
+        return json({ summary: "対象期間の会議がありません。" });
+      }
+      
+      const openaiKey = await getKey(owner, config, "openai");
+      const meetingData = filteredMeetings.map((r: RecordRow) => ({
+        title: r.document.title,
+        date: r.document.date,
+        participants: r.document.participants,
+        summary: r.document.minutes?.summary || "",
+        decisions: r.document.minutes?.decisions || [],
+        actions: r.document.minutes?.actions || [],
+      }));
+      
+      const prompt = `以下の会議データに基づいて、${period === "week" ? "週次" : "月次"}のサマリーを作成してください：
+
+${JSON.stringify(meetingData, null, 2)}
+
+以下の形式で出力してください：
+## 要約
+全体の概要
+
+## 重要な決定事項
+- 決定1
+- 決定2
+
+## 主なアクションアイテム
+- アクション1
+- アクション2
+
+## 課題・懸念事項
+- 課題1
+- 課題2`;
+      
+      const result = await openai(openaiKey, "/chat/completions", {
+        method: "POST",
+        body: JSON.stringify({
+          model: config.model,
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: 2000,
+        }),
+      });
+      
+      const summary = result.choices?.[0]?.message?.content || "サマリーの生成に失敗しました。";
+      return json({ summary, meetingCount: filteredMeetings.length, period });
+    }
+    // 自動タグ付けエンドポイント
+    if (match[2] === "suggest-tags" && req.method === "POST") {
+      const body = await jsonBody(req);
+      const { meetingId } = body;
+      const record = await store("read", owner, meetingId);
+      
+      if (!record || !record.document.minutes) {
+        throw fail(404, "会議が見つかりません。");
+      }
+      
+      const openaiKey = await getKey(owner, config, "openai");
+      const prompt = `以下の会議の内容に基づいて、3〜5個の適切なタグを提案してください。
+タグは日本語で、短く分かりやすく、キーワードを推奨します。
+
+会議タイトル: ${record.document.title}
+参加者: ${record.document.participants}
+要約: ${record.document.minutes.summary || "なし"}
+トピック: ${record.document.minutes.topics?.map((t: Doc) => t.title).join(", ") || "なし"}
+
+以下のJSON形式で出力してください（タグのみ）：
+{
+  "tags": ["タグ1", "タグ2", "タグ3"]
+}`;
+      
+      const result = await openai(openaiKey, "/chat/completions", {
+        method: "POST",
+        body: JSON.stringify({
+          model: config.model,
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: 500,
+        }),
+      });
+      
+      const response = result.choices?.[0]?.message?.content || "[]";
+      try {
+        const parsed = JSON.parse(response);
+        return json({ tags: parsed.tags || [] });
+      } catch {
+        const tags = response.match(/「([^」]+)」/g)?.map((t: string) => t.replace(/[「」]/g, "")) || [];
+        return json({ tags });
+      }
+    }
     throw fail(405, "この操作には対応していません。");
   } catch (error) {
     if (error instanceof z.ZodError) {
