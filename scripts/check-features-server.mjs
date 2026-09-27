@@ -37,9 +37,9 @@ const { app, store } = await createApp({
   dataDir,
   apiKey: "sk-fixture-never-sent",
   aiFactory: () => ({
-    async summarize() {
+    async summarize(meeting) {
       await new Promise(resolve => setTimeout(resolve, 700));
-      return createDemo().minutes;
+      return { ...createDemo().minutes, summary: `詳しさ「${meeting.template}」で再生成した検証用議事録です（模擬AI）。` };
     },
     async insight(request, onUsage) {
       const input = JSON.parse(request.input[1].content);

@@ -1554,8 +1554,13 @@ Deno.test(
       const transcribedBefore = calls.filter((c) =>
         c.route.endsWith("/transcriptions"),
       ).length;
+      const templateBefore = rows.get(documentMeeting.id).document.template;
+      for (const body of ['{"template":"invalid"}', '{"template":null}', '{"template":"brief","status":"done"}', 'null']) {
+        assert.equal((await request(`${docRoute}/retry`, "valid-b", { method: "POST", body })).status, 400);
+        assert.equal(rows.get(documentMeeting.id).document.template, templateBefore);
+      }
       assert.equal(
-        (await request(`${docRoute}/retry`, "valid-b", { method: "POST" }))
+        (await request(`${docRoute}/retry`, "valid-b", { method: "POST", body: JSON.stringify({ template: "detailed" }) }))
           .status,
         202,
       );
@@ -1567,6 +1572,8 @@ Deno.test(
         undefined,
       );
       assert.equal(rows.get(documentMeeting.id).document.minutesStale, false);
+      assert.equal(rows.get(documentMeeting.id).document.template, "detailed");
+      assert.match(calls.filter(c => c.route === "/v1/responses").at(-1)!.body.input[0].content, /背景、理由、異論も詳しく/);
       assert.equal(
         calls.filter((c) => c.route.endsWith("/transcriptions")).length,
         transcribedBefore,

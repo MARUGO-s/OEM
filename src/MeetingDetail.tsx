@@ -233,6 +233,7 @@ export function MeetingDetail({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"delete" | "regenerate" | null>(null);
+  const [retryTemplate, setRetryTemplate] = useState<Meeting["template"]>(m.template);
   const audio = useRef<HTMLAudioElement>(null);
   const [audioSource, setAudioSource] = useState("");
   const [audioPart, setAudioPart] = useState(0);
@@ -313,7 +314,10 @@ export function MeetingDetail({
     setBusy(true);
     try {
       onChange(
-        await api<Meeting>(`/meetings/${m.id}/retry`, { method: "POST" }),
+        await api<Meeting>(`/meetings/${m.id}/retry`, {
+          method: "POST",
+          body: confirm === "regenerate" ? JSON.stringify({ template: retryTemplate }) : undefined,
+        }),
       );
       setConfirm(null);
     } catch (e) {
@@ -896,6 +900,10 @@ export function MeetingDetail({
           </div>
           <div className="rail-models">
             <p>
+              <span>議事録の詳しさ（解析設定）</span>
+              {{ standard: "標準", brief: "要点を簡潔に", detailed: "背景も詳しく" }[m.template]}
+            </p>
+            <p>
               <span>解析モデル</span>
               {m.isDemo ? "サンプルデータ" : modelName(m.minutesModel)}
             </p>
@@ -920,10 +928,13 @@ export function MeetingDetail({
                   attachmentsBusy ||
                   m.status === "uploading"
                 }
-                onClick={() => setConfirm("regenerate")}
+                onClick={() => {
+                  setRetryTemplate(m.template);
+                  setConfirm("regenerate");
+                }}
               >
                 <RefreshCw size={13} />
-                議事録を再生成
+                詳しさを変えて再生成
               </button>
             )}
             <button
@@ -947,12 +958,27 @@ export function MeetingDetail({
           onClose={() => setConfirm(null)}
           locked={busy}
         >
+          {confirm === "regenerate" && (
+            <label className="field">
+              議事録の詳しさ
+              <select
+                value={retryTemplate}
+                onChange={(event) => setRetryTemplate(event.target.value as Meeting["template"])}
+                disabled={busy}
+              >
+                <option value="standard">標準</option>
+                <option value="brief">要点を簡潔に</option>
+                <option value="detailed">背景も詳しく</option>
+              </select>
+              <small>詳しくする場合も、会話に含まれる背景・理由・異論を整理します。会話にない内容は補いません。</small>
+            </label>
+          )}
           <p className="confirm-copy">
             {confirm === "delete"
               ? m.status === "uploading"
                 ? "取り込み途中の会議を一覧から取り除きます。クラウドに送信済みの未完了音声は完全に削除され、元に戻せません。元の録音ファイルから再度取り込めます。"
                 : "会議と音声を一覧から取り除き、アプリの保存先にあるゴミ箱へ移動します。"
-              : "現在の文字起こしと接続設定のモデルで再解析します。添付資料は解析に使いません。編集した議事録本文とアクションの完了状態は上書きされます。カレンダーの手動変更は保持します。API利用料がかかります。"}
+              : "選んだ詳しさと接続設定のモデルで再解析します。保存済みの文字起こしは再利用し、未完了の音声がある場合のみ文字起こしを行います。添付資料は解析に使いません。編集した議事録本文とアクションの完了状態は上書きされます。カレンダーの手動変更と既存のタグは保持します。API利用料がかかります。"}
           </p>
           <div className="modal-footer">
             <button

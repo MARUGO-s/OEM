@@ -30,6 +30,11 @@ export const MetadataSchema = z.object({
   template: z.enum(["standard", "brief", "detailed"]).default("standard"),
 });
 
+// Omitted options preserve the saved depth for older clients and error retries.
+export const RetrySchema = z.object({
+  template: MetadataSchema.shape.template.removeDefault().optional(),
+}).strict();
+
 // Tag names are the persisted identity; there is no separate tag-ID registry.
 export const TagNameSchema = z.string().trim().min(1).max(50);
 export const MeetingTagsSchema = z.array(TagNameSchema).max(50)
