@@ -42,6 +42,8 @@ import {
   type Settings,
   type MeetingFilters,
   type MeetingTag,
+  type SearchOptions,
+  type MeetingTemplate,
 } from "./types";
 import { NewMeeting } from "./NewMeeting";
 import { SettingsDialog } from "./SettingsDialog";
@@ -62,6 +64,17 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [searchOptions, setSearchOptions] = useState<SearchOptions>({
+    query: "",
+    searchIn: {
+      title: true,
+      transcript: true,
+      minutes: true,
+      actions: true,
+    },
+    caseSensitive: false,
+  });
+  const [showSearchOptions, setShowSearchOptions] = useState(false);
   const [filter, setFilter] = useState("all");
   const [advancedFilters, setAdvancedFilters] = useState<MeetingFilters>({
     dateRange: null,
@@ -75,6 +88,8 @@ export default function App() {
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#6960d8");
   const [tagAssignmentTarget, setTagAssignmentTarget] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<MeetingTemplate[]>([]);
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -85,6 +100,40 @@ export default function App() {
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameError, setRenameError] = useState("");
   const renameInput = useRef<HTMLInputElement>(null);
+
+  // デフォルトテンプレート
+  useEffect(() => {
+    const defaultTemplates: MeetingTemplate[] = [
+      {
+        id: "weekly",
+        name: "週次定例会議",
+        description: "週次の進捗確認・課題共有",
+        defaultParticipants: "",
+        defaultTopics: ["前回の振り返り", "今週の進捗", "課題・懸念事項", "来週の予定"],
+        templateType: "standard",
+        isDefault: true,
+      },
+      {
+        id: "project",
+        name: "プロジェクト進捗",
+        description: "プロジェクト全体の進捗確認",
+        defaultParticipants: "",
+        defaultTopics: ["マイルストーンの進捗", "リスク管理", "リソース状況", "次回のアクション"],
+        templateType: "detailed",
+        isDefault: true,
+      },
+      {
+        id: "brainstorm",
+        name: "ブレインストーミング",
+        description: "アイデア出し・創造的な議論",
+        defaultParticipants: "",
+        defaultTopics: ["テーマの共有", "アイデア出し", "アイデアの整理", "次のステップ"],
+        templateType: "brief",
+        isDefault: true,
+      },
+    ];
+    setTemplates(defaultTemplates);
+  }, []);
   useEffect(() => {
     if (!renameTarget) return;
     const frame = requestAnimationFrame(() => renameInput.current?.select());
@@ -259,11 +308,27 @@ export default function App() {
       (filter === "done" ? m.status === "done" : isWorking(m)) ||
       (filter === "processing" ? isWorking(m) : false);
 
-    // 検索フィルター
-    const searchFilter =
-      `${m.title} ${m.participants} ${m.transcript} ${m.markdown}`
-        .toLowerCase()
-        .includes(search.toLowerCase());
+    // 詳細検索フィルター
+    const searchFilter = (() => {
+      if (!search && !searchOptions.query) return true;
+      const query = (search || searchOptions.query).trim();
+      if (!query) return true;
+      
+      const searchTargets: string[] = [];
+      if (searchOptions.searchIn.title) searchTargets.push(m.title);
+      if (searchOptions.searchIn.transcript) searchTargets.push(m.transcript);
+      if (searchOptions.searchIn.minutes) searchTargets.push(m.markdown);
+      if (searchOptions.searchIn.actions) {
+        const actions = m.minutes?.actions?.map(a => a.task).join(" ") || "";
+        searchTargets.push(actions);
+      }
+      
+      const targetText = searchTargets.join(" ");
+      const compareQuery = searchOptions.caseSensitive ? query : query.toLowerCase();
+      const compareTarget = searchOptions.caseSensitive ? targetText : targetText.toLowerCase();
+      
+      return compareTarget.includes(compareQuery);
+    })();
 
     // 高度なフィルター
     const statusFilter =
@@ -704,6 +769,13 @@ export default function App() {
                       )}
                     </label>
                     <button
+                      className={`icon-button ${showSearchOptions ? "active" : ""}`}
+                      aria-label="検索オプション"
+                      onClick={() => setShowSearchOptions(!showSearchOptions)}
+                    >
+                      <Settings2 size={16} />
+                    </button>
+                    <button
                       className={`icon-button ${showAdvancedFilters ? "active" : ""}`}
                       aria-label="高度なフィルター"
                       onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
@@ -712,6 +784,79 @@ export default function App() {
                     </button>
                   </div>
                 </div>
+                {showSearchOptions && (
+                  <div className="search-options-panel">
+                    <div className="filter-row">
+                      <label>検索対象</label>
+                      <div className="checkbox-group">
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={searchOptions.searchIn.title}
+                            onChange={(e) =>
+                              setSearchOptions({
+                                ...searchOptions,
+                                searchIn: { ...searchOptions.searchIn, title: e.target.checked },
+                              })
+                            }
+                          />
+                          会議名
+                        </label>
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={searchOptions.searchIn.transcript}
+                            onChange={(e) =>
+                              setSearchOptions({
+                                ...searchOptions,
+                                searchIn: { ...searchOptions.searchIn, transcript: e.target.checked },
+                              })
+                            }
+                          />
+                          文字起こし
+                        </label>
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={searchOptions.searchIn.minutes}
+                            onChange={(e) =>
+                              setSearchOptions({
+                                ...searchOptions,
+                                searchIn: { ...searchOptions.searchIn, minutes: e.target.checked },
+                              })
+                            }
+                          />
+                          議事録
+                        </label>
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={searchOptions.searchIn.actions}
+                            onChange={(e) =>
+                              setSearchOptions({
+                                ...searchOptions,
+                                searchIn: { ...searchOptions.searchIn, actions: e.target.checked },
+                              })
+                            }
+                          />
+                          アクション
+                        </label>
+                      </div>
+                    </div>
+                    <div className="filter-row">
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={searchOptions.caseSensitive}
+                          onChange={(e) =>
+                            setSearchOptions({ ...searchOptions, caseSensitive: e.target.checked })
+                          }
+                        />
+                        大文字・小文字を区別
+                      </label>
+                    </div>
+                  </div>
+                )}
                 {showAdvancedFilters && (
                   <div className="advanced-filters-panel">
                     <div className="filter-row">

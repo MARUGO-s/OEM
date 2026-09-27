@@ -180,8 +180,29 @@ export interface MeetingFilters {
   status: "all" | "done" | "working" | "error";
 }
 
+export interface SearchOptions {
+  query: string;
+  searchIn: {
+    title: boolean;
+    transcript: boolean;
+    minutes: boolean;
+    actions: boolean;
+  };
+  caseSensitive: boolean;
+}
+
 export interface MeetingTag {
   id: string;
   name: string;
   color: string;
+}
+
+export interface MeetingTemplate {
+  id: string;
+  name: string;
+  description: string;
+  defaultParticipants: string;
+  defaultTopics: string[];
+  templateType: "standard" | "brief" | "detailed";
+  isDefault: boolean;
 }
