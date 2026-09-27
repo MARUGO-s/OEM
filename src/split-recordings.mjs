@@ -12,6 +12,9 @@ import {
   FlacOutputFormat,
   EncodedPacketSink,
   EncodedAudioPacketSource,
+  Conversion,
+  Quality,
+  canEncodeAudio,
 } from "mediabunny";
 import { validateAdts } from "../supabase/functions/_shared/audio.mjs";
 
@@ -151,4 +154,87 @@ export async function splitRecordings(
     }
   }
   return parts;
+}
+
+export const VIDEO_EXTENSIONS = [".mp4", ".m4v", ".mov", ".webm", ".mkv"];
+// Mono 48 kbps keeps speech intelligible at roughly 22 MB per hour.
+const COMPRESSED_BITRATE = 48_000;
+
+function audioOutputFor(codec) {
+  if (codec === "aac")
+    return {
+      format: new Mp4OutputFormat({ fastStart: false }),
+      extension: ".m4a",
+      type: "audio/mp4",
+    };
+  const format =
+    codec === "mp3"
+      ? new Mp3OutputFormat()
+      : codec === "flac"
+        ? new FlacOutputFormat()
+        : ["opus", "vorbis"].includes(codec)
+          ? new OggOutputFormat()
+          : new WavOutputFormat();
+  return {
+    format,
+    extension: format.fileExtension,
+    type: ["opus", "vorbis"].includes(codec) ? "audio/ogg" : format.mimeType,
+  };
+}
+
+async function convertAudio(file, { compress, onProgress }) {
+  const input = new Input({
+    source: new BlobSource(file),
+    formats: ALL_FORMATS,
+  });
+  try {
+    if (!compress && !(await input.getPrimaryVideoTrack())) return file;
+    const track = await input.getPrimaryAudioTrack();
+    if (!track) throw new Error(`「${file.name}」に音声が含まれていません。`);
+    let audio;
+    let codec = await track.getCodec();
+    if (compress) {
+      const quality = new Quality(COMPRESSED_BITRATE);
+      const options = { numberOfChannels: 1, sampleRate: 48_000, quality };
+      codec = (await canEncodeAudio("aac", options)) ? "aac" : "opus";
+      if (!(await canEncodeAudio(codec, options)))
+        throw new Error(
+          "このブラウザでは音声を圧縮できません。Chrome・Edge・Safariの最新版をお使いください。",
+        );
+      audio = { ...options, codec, forceTranscode: true };
+    }
+    const { format, extension, type } = audioOutputFor(codec);
+    const target = new BufferTarget();
+    const conversion = await Conversion.init({
+      input,
+      output: new Output({ format, target }),
+      video: { discard: true },
+      audio,
+      showWarnings: false,
+    });
+    if (!conversion.isValid)
+      throw new Error(
+        `「${file.name}」の音声を取り出せませんでした。音声ファイルに書き出してから選んでください。`,
+      );
+    if (onProgress) conversion.onProgress = onProgress;
+    await conversion.execute();
+    return new File(
+      [target.buffer],
+      file.name.replace(/\.[^.]+$/, "") + extension,
+      { type },
+    );
+  } finally {
+    input.dispose();
+  }
+}
+
+// Video files are far larger than their audio, so keep only the audio track
+// (copied without re-encoding) before the size limits are applied.
+export function extractAudio(file, onProgress) {
+  return convertAudio(file, { compress: false, onProgress });
+}
+
+// Re-encode to low-bitrate mono when a recording is too large to upload.
+export function compressAudio(file, onProgress) {
+  return convertAudio(file, { compress: true, onProgress });
 }
