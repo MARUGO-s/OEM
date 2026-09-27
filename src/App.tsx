@@ -9,6 +9,7 @@ import {
   CheckCheck,
   ChevronRight,
   CircleHelp,
+  Clock3,
   FileAudio,
   FileText,
   FolderOpen,
@@ -33,6 +34,7 @@ import {
   GitCompare,
 } from "lucide-react";
 import { api, download, exportMultipleMeetings } from "./api";
+import { formatDuration } from "../supabase/functions/_shared/duration.mjs";
 import { isCloud, signOut } from "./cloud";
 import {
   formatDate,
@@ -1296,9 +1298,13 @@ export default function App() {
                             <strong>{m.title}</strong>
                           </button>
                           <span>
-                            {formatDate(m.date)}
-                            <i />
-                            {m.participants || "参加者未記入"}
+                            <span>{formatDate(m.date)}</span>
+                            <i aria-hidden="true" />
+                            <span className="meeting-participants">{m.participants || "参加者未記入"}</span>
+                            <span className="meeting-duration">
+                              <Clock3 size={14} aria-hidden="true" />
+                              録音 {formatDuration(m.duration)}
+                            </span>
                             {m.isDemo && <em>サンプル</em>}
                           </span>
                           {m.tags && m.tags.length > 0 && (
