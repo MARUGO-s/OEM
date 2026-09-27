@@ -29,6 +29,7 @@ import {
   Filter,
   Tag as TagIcon,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
 import { api } from "./api";
 import { isCloud, signOut } from "./cloud";
@@ -50,10 +51,11 @@ import { SettingsDialog } from "./SettingsDialog";
 import { ActionList, MeetingDetail } from "./MeetingDetail";
 import { Calendar } from "./Calendar";
 import { UsagePage } from "./UsagePage";
+import { StatsPage } from "./StatsPage";
 import { Modal } from "./Modal";
 import { tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
 
-type Page = "meetings" | "calendar" | "actions" | "usage" | "help";
+type Page = "meetings" | "calendar" | "actions" | "usage" | "stats" | "help";
 export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -90,6 +92,7 @@ export default function App() {
   const [tagAssignmentTarget, setTagAssignmentTarget] = useState<string | null>(null);
   const [templates, setTemplates] = useState<MeetingTemplate[]>([]);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -134,6 +137,58 @@ export default function App() {
     ];
     setTemplates(defaultTemplates);
   }, []);
+
+  // 通知権限のチェック
+  useEffect(() => {
+    if ("Notification" in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  // 期限切れアクションのチェックと通知
+  useEffect(() => {
+    if (notificationPermission !== "granted") return;
+    
+    const checkOverdueActions = () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      let overdueCount = 0;
+      meetings.forEach((m) => {
+        if (m.minutes?.actions) {
+          m.minutes.actions.forEach((action, index) => {
+            if (!m.completedActions?.includes(index) && action.due) {
+              const dueDate = new Date(action.due);
+              if (dueDate < today) {
+                overdueCount++;
+              }
+            }
+          });
+        }
+      });
+      
+      if (overdueCount > 0) {
+        new Notification("期限切れのアクションがあります", {
+          body: `${overdueCount}件のアクションが期限切れです`,
+          icon: "/favicon.ico",
+        });
+      }
+    };
+    
+    // 1時間ごとにチェック
+    const interval = setInterval(checkOverdueActions, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [notificationPermission, meetings]);
+
+  async function requestNotificationPermission() {
+    if ("Notification" in window) {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === "granted") {
+        notify("通知を有効にしました");
+      }
+    }
+  }
   useEffect(() => {
     if (!renameTarget) return;
     const frame = requestAnimationFrame(() => renameInput.current?.select());
@@ -360,7 +415,9 @@ export default function App() {
           ? "使い方ガイド"
           : page === "usage"
             ? "API使用料"
-          : "会議ワークスペース";
+            : page === "stats"
+              ? "統計ダッシュボード"
+              : "会議ワークスペース";
   return (
     <div className="app-shell">
       {sidebarOpen && (
@@ -408,6 +465,7 @@ export default function App() {
               { id: "meetings", Icon: LayoutGrid, label: "すべての会議" },
               { id: "calendar", Icon: CalendarDays, label: "カレンダー" },
               { id: "actions", Icon: ListTodo, label: "アクション" },
+              { id: "stats", Icon: TrendingUp, label: "統計" },
               { id: "usage", Icon: ReceiptText, label: "API使用料" },
               { id: "help", Icon: BookOpen, label: "使い方ガイド" },
             ] as const
@@ -1278,6 +1336,8 @@ export default function App() {
             </>
           ) : page === "usage" ? (
             <UsagePage meetings={meetings} />
+          ) : page === "stats" ? (
+            <StatsPage meetings={meetings} />
           ) : (
             <Help
               onNew={() => setNewOpen(true)}
@@ -1292,6 +1352,7 @@ export default function App() {
           onClose={() => setNewOpen(false)}
           onCreate={create}
           onSettings={() => setSettingsOpen(true)}
+          templates={templates}
         />
       )}
       {settingsOpen && (
@@ -1303,6 +1364,8 @@ export default function App() {
             setSettingsOpen(false);
             notify("AIの接続設定を保存しました");
           }}
+          onRequestNotification={requestNotificationPermission}
+          notificationPermission={notificationPermission}
         />
       )}
       {renameTarget && (

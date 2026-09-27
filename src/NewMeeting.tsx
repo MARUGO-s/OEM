@@ -14,6 +14,7 @@ import {
   Square,
   UploadCloud,
   X,
+  LayoutTemplate,
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { AttachmentPicker } from "./Attachments";
@@ -22,6 +23,7 @@ import {
   modelName,
   transcriptionModelName,
   type Settings,
+  type MeetingTemplate,
 } from "./types";
 import {
   discardSession,
@@ -55,6 +57,7 @@ export function NewMeeting({
   onClose,
   onCreate,
   onSettings,
+  templates,
 }: {
   settings: Settings | null;
   onClose: () => void;
@@ -63,8 +66,11 @@ export function NewMeeting({
     progress: (message: string) => void,
   ) => Promise<void>;
   onSettings: () => void;
+  templates: MeetingTemplate[];
 }) {
   const [mode, setMode] = useState<"record" | "file" | "text">("file");
+  const [showTemplateSelector, setShowTemplateSelector] = useState(templates.length > 0);
+  const [selectedTemplate, setSelectedTemplate] = useState<MeetingTemplate | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [title, setTitle] = useState("");
@@ -203,6 +209,15 @@ export function NewMeeting({
     await discardSession(id).catch(() => {});
     setRecoverable((current) => current.filter((s) => s.id !== id));
   }
+
+  function applyTemplate(t: MeetingTemplate) {
+    setSelectedTemplate(t);
+    setTitle(t.name);
+    setParticipants(t.defaultParticipants);
+    setTemplate(t.templateType);
+    setShowTemplateSelector(false);
+  }
+
   async function chooseFiles(selected: FileList | File[] | null) {
     if (!selected?.length) return;
     const extension = (file: File) =>
@@ -307,6 +322,37 @@ export function NewMeeting({
       wide
     >
       <form onSubmit={submit}>
+        {showTemplateSelector && (
+          <div className="template-selector">
+            <h3>テンプレートを選択</h3>
+            <div className="template-grid">
+              {templates.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`template-card ${selectedTemplate?.id === t.id ? "selected" : ""}`}
+                  onClick={() => applyTemplate(t)}
+                >
+                  <LayoutTemplate size={24} />
+                  <strong>{t.name}</strong>
+                  <p>{t.description}</p>
+                  <span className="template-type">
+                    {t.templateType === "standard" ? "標準" : t.templateType === "brief" ? "簡易" : "詳細"}
+                  </span>
+                </button>
+              ))}
+              <button
+                type="button"
+                className="template-card template-skip"
+                onClick={() => setShowTemplateSelector(false)}
+              >
+                <LayoutTemplate size={24} />
+                <strong>テンプレートなし</strong>
+                <p>空白から会議を作成</p>
+              </button>
+            </div>
+          </div>
+        )}
         {recoverable.length > 0 && (
           <div className="notice">
             前回中断した録音があります（

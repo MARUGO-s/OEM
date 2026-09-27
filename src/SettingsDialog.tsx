@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Check, KeyRound, LoaderCircle, Sparkles, Zap } from "lucide-react";
+import { Check, KeyRound, LoaderCircle, Sparkles, Zap, Bell } from "lucide-react";
 import { Modal } from "./Modal";
 import { api } from "./api";
 import type { Settings } from "./types";
@@ -9,10 +9,14 @@ export function SettingsDialog({
   settings,
   onClose,
   onSave,
+  onRequestNotification,
+  notificationPermission,
 }: {
   settings: Settings | null;
   onClose: () => void;
   onSave: (value: Settings) => void;
+  onRequestNotification: () => void;
+  notificationPermission: NotificationPermission;
 }) {
   const [key, setKey] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
@@ -193,6 +197,30 @@ export function SettingsDialog({
               </span>
             </label>
           ))}
+        </fieldset>
+        <fieldset className="model-options">
+          <legend>通知設定</legend>
+          <label className="chosen">
+            <Bell size={22} />
+            <span>
+              <strong>アクション期限リマインダー</strong>
+              <small>
+                期限切れのアクションを通知します
+              </small>
+              <span className="notification-status">
+                {notificationPermission === "granted" ? "有効" : notificationPermission === "denied" ? "無効" : "未設定"}
+              </span>
+            </span>
+            {notificationPermission !== "granted" && (
+              <button
+                type="button"
+                className="button secondary small"
+                onClick={onRequestNotification}
+              >
+                有効にする
+              </button>
+            )}
+          </label>
         </fieldset>
         <p className="field-hint">
           モデルの利用可否はAPI実行時に確認されます。ChatGPTの契約とは別にAPIの利用枠が必要です。
