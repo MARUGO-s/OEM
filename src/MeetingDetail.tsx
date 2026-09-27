@@ -206,6 +206,7 @@ export function MeetingDetail({
   backLabel,
   onCalendar,
   onRename,
+  onChooseTags,
   onChange,
   onDelete,
   notify,
@@ -216,6 +217,7 @@ export function MeetingDetail({
   backLabel: string;
   onCalendar: (date?: string) => void;
   onRename: (meeting: Meeting) => void;
+  onChooseTags: (meeting: Meeting) => void;
   onChange: (m: Meeting) => void;
   onDelete: (id: string) => void;
   notify: (s: string) => void;
@@ -227,8 +229,6 @@ export function MeetingDetail({
   );
   const [showDecisions, setShowDecisions] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [suggestingTags, setSuggestingTags] = useState(false);
-  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const [attachmentsBusy, setAttachmentsBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -332,20 +332,6 @@ export function MeetingDetail({
       notify((e as Error).message);
     } finally {
       setBusy(false);
-    }
-  }
-  async function suggestTags() {
-    setSuggestingTags(true);
-    try {
-      const result = await api<{ tags: string[] }>("/suggest-tags", {
-        method: "POST",
-        body: JSON.stringify({ meetingId: m.id }),
-      });
-      setSuggestedTags(result.tags);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "タグの提案に失敗しました。");
-    } finally {
-      setSuggestingTags(false);
     }
   }
   
@@ -855,43 +841,14 @@ export function MeetingDetail({
               </h3>
               <button
                 className="button secondary small"
-                onClick={suggestTags}
-                disabled={suggestingTags || busy || editing || attachmentsBusy}
+                onClick={() => onChooseTags(m)}
+                disabled={busy || editing || attachmentsBusy}
               >
-                {suggestingTags ? (
-                  <>
-                    <LoaderCircle size={14} className="spin" />
-                    提案中...
-                  </>
-                ) : (
-                  <>
-                    <Lightbulb size={14} />
-                    タグを提案
-                  </>
-                )}
+                <Lightbulb size={14} />
+                タグ候補を開く
               </button>
-              <p className="muted">提案にはAPI利用料がかかります。候補を押すと会議に保存します。</p>
-              {suggestedTags.length > 0 && (
-                <div className="suggested-tags">
-                  <p className="muted">提案されたタグ:</p>
-                  {suggestedTags.map((tag, i) => (
-                    <button key={i} className="suggested-tag"
-                      disabled={busy || editing || attachmentsBusy || m.tags?.includes(tag)}
-                      onClick={async () => {
-                        setBusy(true);
-                        try {
-                          onChange(await api<Meeting>(`/meetings/${m.id}`, {
-                            method: "PATCH", body: JSON.stringify({ tags: [...new Set([...(m.tags || []), tag])] }),
-                          }));
-                          notify("タグを保存しました。");
-                        } catch (e) { notify(e instanceof Error ? e.message : "タグを保存できませんでした。"); }
-                        finally { setBusy(false); }
-                      }}>
-                      {tag}{m.tags?.includes(tag) ? " ✓" : " ＋"}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <p className="muted">解析完了後に候補を自動表示します。閉じた場合もここから選べます。候補生成にはAPI利用料がかかり、選択後に保存すると会議に紐付きます。</p>
+              {!!m.tags?.length && <p>登録済み：{m.tags.join("、")}</p>}
             </section>
           )}
           <div className="rail-counts">

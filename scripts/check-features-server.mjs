@@ -12,11 +12,22 @@ const dataDir = await mkdtemp(path.join(tmpdir(), "kotonoha-features-ui-"));
 const date = new Intl.DateTimeFormat("sv-SE", {
   timeZone: "Asia/Tokyo",
 }).format(new Date());
+const failedTagMeetings = new Set();
 const { app, store } = await createApp({
   dataDir,
   apiKey: "sk-fixture-never-sent",
   aiFactory: () => ({
+    async summarize() {
+      await new Promise(resolve => setTimeout(resolve, 700));
+      return createDemo().minutes;
+    },
     async insight(request, onUsage) {
+      const input = JSON.parse(request.input[1].content);
+      const meeting = input.meetings[0];
+      if (request.text && meeting.title.includes("候補失敗") && !failedTagMeetings.has(meeting.id)) {
+        failedTagMeetings.add(meeting.id);
+        throw new Error("検証用のタグ候補エラー");
+      }
       const response = {
         status: "completed",
         usage: { input_tokens: 100, output_tokens: 100 },
@@ -27,7 +38,7 @@ const { app, store } = await createApp({
               {
                 type: "output_text",
                 text: request.text
-                  ? JSON.stringify({ tags: ["検証", "計画", "共有"] })
+                  ? JSON.stringify({ tags: meeting.title.includes("候補なし") ? [] : ["検証", "計画", "共有"] })
                   : "## 要約\n\n検証会議の期間サマリーです（模擬AI）。進捗と次の行動を整理しました。\n\n### 定例会議：進捗確認\n\n準備状況を共有し、担当者間で次の作業を確認しました。詳細は元の会議録で確認できます。\n\n### 企画会議：今後の計画\n\n次月の企画案を検討しました。最終決定は次回の会議で行います。\n\n## 重要な決定事項\n\n- **定例会議**：確認用の資料を共有する。\n- **担当：担当A**、**期限：未定**。\n\n## 主なアクションアイテム\n\n1. 担当Bが資料を確認する。\n2. 次回の日程を調整する。\n\n## 課題・懸念事項\n\n予算と期限は未定です。元の会話を確認して確定してください。",
               },
             ],
