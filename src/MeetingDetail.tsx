@@ -109,6 +109,7 @@ export function ActionList({
 }) {
   const [saving, setSaving] = useState(false);
   const actions = meeting.minutes?.actions || [];
+  const completedActions = meeting.completedActions || [];
   
   // 期限切れチェック
   const isOverdue = (due: string) => {
@@ -129,7 +130,7 @@ export function ActionList({
   async function toggle(index: number) {
     setSaving(true);
     try {
-      const complete = new Set(meeting.completedActions);
+      const complete = new Set(completedActions);
       if (complete.has(index)) complete.delete(index);
       else complete.add(index);
       onChange(
@@ -148,24 +149,24 @@ export function ActionList({
     <div className="action-list">
       {actions.length ? (
         actions.map((action, i) => {
-          const overdue = !meeting.completedActions.includes(i) && isOverdue(action.due);
+          const overdue = !completedActions.includes(i) && isOverdue(action.due);
           const priority = action.priority || "medium";
           const priorityInfo = priorityConfig[priority];
           
           return (
             <div
-              className={`action-item ${meeting.completedActions.includes(i) ? "completed" : ""} ${overdue ? "overdue" : ""}`}
+              className={`action-item ${completedActions.includes(i) ? "completed" : ""} ${overdue ? "overdue" : ""}`}
               key={i}
             >
               <button
                 className="task-checkbox"
                 disabled={disabled || saving || isWorking(meeting)}
                 role="checkbox"
-                aria-checked={meeting.completedActions.includes(i)}
-                aria-label={`${action.task}を${meeting.completedActions.includes(i) ? "未完了" : "完了"}にする`}
+                aria-checked={completedActions.includes(i)}
+                aria-label={`${action.task}を${completedActions.includes(i) ? "未完了" : "完了"}にする`}
                 onClick={() => toggle(i)}
               >
-                {meeting.completedActions.includes(i) && <Check size={13} />}
+                {completedActions.includes(i) && <Check size={13} />}
               </button>
               <div>
                 <strong>{action.task}</strong>

@@ -248,7 +248,7 @@ export default function App() {
   const realMeetings = meetings.filter((m) => !m.isDemo);
   const actionCount = realMeetings.reduce(
     (count, m) =>
-      count + (m.minutes?.actions.length || 0) - m.completedActions.length,
+      count + (m.minutes?.actions?.length || 0) - (m.completedActions?.length || 0),
     0,
   );
   const current = meetings.find((m) => m.id === selected);
