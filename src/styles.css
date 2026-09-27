@@ -1233,10 +1233,24 @@ button {
 .meeting-row-info > span {
   margin-top: 8px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   font-size: 13px;
   color: #62687a;
+}
+.meeting-participants {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.meeting-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.meeting-duration svg {
+  flex-shrink: 0;
 }
 .meeting-row-info i {
   width: 2px;
