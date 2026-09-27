@@ -75,6 +75,9 @@ test("サマリーを見出し・段落・リスト・太字にし、AIのHTML�
   assert.match(html, /<code>共有<\/code>/);
   assert.ok(!html.includes("<script>") && !html.includes("<img"));
   assert.ok(!html.includes("**担当"));
+  const unfinished = renderToStaticMarkup(createElement(SummaryMarkdown, { content: "**閉じていない強調\n\n`" }));
+  assert.match(unfinished, /\*\*閉じていない強調/);
+  assert.match(unfinished, /<p>`<\/p>/);
 });
 
 test("期間サマリーは日本時間の日境界・7日間・実会議だけを含む", () => {

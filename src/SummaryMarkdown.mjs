@@ -5,9 +5,9 @@ function inline(text) {
   return text
     .split(/(\*\*[^*\n]+\*\*|__[^_\n]+__|`[^`\n]+`)/g)
     .map((part, index) => {
-      if (part.startsWith("**") || part.startsWith("__"))
+      if (/^(?:\*\*[^*\n]+\*\*|__[^_\n]+__)$/.test(part))
         return h("strong", { key: index }, part.slice(2, -2));
-      if (part.startsWith("`") && part.endsWith("`"))
+      if (/^`[^`\n]+`$/.test(part))
         return h("code", { key: index }, part.slice(1, -1));
       return part;
     });
