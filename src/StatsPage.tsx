@@ -11,6 +11,7 @@ import { type Meeting } from "./types";
 import { api } from "./api";
 import { summaryRange as resolveSummaryRange } from "../supabase/functions/_shared/insights.mjs";
 import { SummaryMarkdown } from "./SummaryMarkdown.mjs";
+import { durationStats, formatDuration } from "../supabase/functions/_shared/duration.mjs";
 
 type SummaryPeriod = "month" | "lastMonth" | "week" | "custom";
 const periods: [SummaryPeriod, string][] = [
@@ -59,11 +60,7 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
 
     // 基本統計
     const totalMeetings = realMeetings.length;
-    const totalDuration = realMeetings.reduce(
-      (sum, m) => sum + (m.duration || 0),
-      0,
-    );
-    const avgDuration = totalMeetings > 0 ? totalDuration / totalMeetings : 0;
+    const { total: totalDuration, unknownCount } = durationStats(realMeetings.map(m => m.duration));
 
     // 月次統計
     const monthlyData = new Map<string, number>();
@@ -108,7 +105,7 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
     return {
       totalMeetings,
       totalDuration,
-      avgDuration,
+      unknownCount,
       monthlyData: Array.from(monthlyData.entries()).sort((a, b) =>
         b[0].localeCompare(a[0]),
       ),
@@ -154,13 +151,6 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
       setGeneratingSummary(false);
     }
   }
-
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) return `${hours}時間${minutes}分`;
-    return `${minutes}分`;
-  };
 
   return (
     <div className="stats-page">
@@ -297,6 +287,7 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
               {formatDuration(stats.totalDuration)}
             </div>
             <div className="stat-label">総録音時間</div>
+            {stats.unknownCount > 0 && <small className="muted">未取得{stats.unknownCount}件を除く</small>}
           </div>
         </div>
 

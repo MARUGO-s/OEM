@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { meetingDuration } from "../_shared/duration.mjs";
 import {
   calendarChange,
   calendarHide,
@@ -179,6 +180,7 @@ function expose(record: RecordRow) {
   );
   return {
     ...doc,
+    duration: meetingDuration(record.document),
     hasAudio: recordings.length > 0,
     recordings,
     attachments: publicAttachments(record.document),

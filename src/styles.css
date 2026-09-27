@@ -4364,6 +4364,8 @@ button {
 
 .duration-info {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .duration-info strong {
@@ -4377,6 +4379,10 @@ button {
   color: var(--muted);
 }
 
+.duration-track {
+  flex: 0 0 35%;
+}
+
 .duration-fill {
   height: 32px;
   background: var(--purple);
@@ -4386,7 +4392,7 @@ button {
   justify-content: center;
   color: white;
   transition: width 0.3s ease;
-  min-width: 80px;
+  overflow: hidden;
 }
 
 /* Suggested Tags */

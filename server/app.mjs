@@ -6,6 +6,7 @@ import path from "node:path";
 import { z } from "zod";
 import { MeetingStore } from "./store.mjs";
 import { UsageStore } from "./usage-store.mjs";
+import { meetingDuration } from "../supabase/functions/_shared/duration.mjs";
 import { createAI } from "./ai.mjs";
 import { SummaryRequest, TagsRequest, periodMeetings, insightRequest, parseInsight } from "../supabase/functions/_shared/insights.mjs";
 import { usageEvent } from "../supabase/functions/_shared/usage.mjs";
@@ -86,6 +87,7 @@ const publicRecord = (record) => {
   const recordings = publicRecordings(recordingsFor(record));
   return {
     ...rest,
+    duration: meetingDuration(record),
     hasAudio: recordings.length > 0,
     recordings,
     attachments: publicAttachments(record),

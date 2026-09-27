@@ -23,6 +23,20 @@ import {
 } from "./fixtures/calendar.mjs";
 import { allCalendarEvents, eventKey } from "../supabase/functions/_shared/calendar.mjs";
 
+test("会議一覧と詳細で分割録音の合計時間を返し、内部音声情報は公開しない", async (t) => {
+  const { request, store } = await setup(t);
+  const meeting = { ...createDemo(), duration: null, uploadPlan: [{}, {}], audioParts: [{ duration: 600 }, { duration: 33.626122 }] };
+  await store.save(meeting);
+  const detail = await (await request(`/meetings/${meeting.id}`)).json();
+  const list = await (await request("/meetings")).json();
+  for (const result of [detail, list.find(m => m.id === meeting.id)]) {
+    assert.equal(result.duration, 633.626122);
+    assert.equal(result.audioParts, undefined);
+    assert.equal(result.uploadPlan, undefined);
+  }
+  assert.equal(store.get(meeting.id).duration, null);
+});
+
 test("予定と議事録本文の手動編集を永続化し、再生成でも予定の変更を保持する", async (t) => {
   const { request, store, waitForJobs, dataDir } = await setup(t, {
     apiKey: key,
