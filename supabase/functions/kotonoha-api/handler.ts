@@ -1193,9 +1193,10 @@ export async function handler(req: Request) {
       throw fail(405, "この操作には対応していません。");
     }
     if (route === "/summary" && req.method === "POST") {
-      const { period } = SummaryRequest.parse(await jsonBody(req));
+      const selection = SummaryRequest.parse(await jsonBody(req));
+      const { period } = selection;
       const records: RecordRow[] = await store("list", owner);
-      const { meetings, ...range } = periodMeetings(records.map((r) => r.document), period);
+      const { meetings, ...range } = periodMeetings(records.map((r) => r.document), selection);
       if (!meetings.length) return json({ summary: "対象期間の会議がありません。", meetingCount: 0, period, ...range });
       const key = await getKey(owner, config, "openai");
       const runId = crypto.randomUUID();

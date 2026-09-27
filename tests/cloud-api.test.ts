@@ -1576,6 +1576,25 @@ Deno.test(
       assert.deepEqual((await (await request(`/meetings/${insightMeeting.id}`, "valid-b")).json()).tags, ["共有"]);
       assert.ok([...usageEvents.values()].some((e) => e.operation === "summary" && e.costUsd > 0));
       assert.ok([...usageEvents.values()].some((e) => e.operation === "tags" && e.meetingId === insightMeeting.id));
+      const rangeModule = await import("../supabase/functions/_shared/insights.mjs");
+      const prior = rangeModule.summaryRange("lastMonth");
+      const historical = { ...insightMeeting, id: crypto.randomUUID(), date: prior.end };
+      rows.set(historical.id, { owner, document: historical, audioPath: null, responseId: null });
+      const previous = await request("/summary", "valid-a", postInsight({ period: "lastMonth" }));
+      assert.equal(previous.status, 200);
+      const previousData = await previous.json();
+      assert.equal(previousData.start, prior.start);
+      assert.equal(previousData.end, prior.end);
+      assert.ok(previousData.meetingCount >= 1);
+      const custom = await request("/summary", "valid-a", postInsight({ period: "custom", start: prior.end, end: prior.end }));
+      assert.equal(custom.status, 200);
+      const customData = await custom.json();
+      assert.equal(customData.start, prior.end);
+      assert.equal(customData.end, prior.end);
+      assert.ok(customData.meetingCount >= 1);
+      for (const body of [{ period: "custom" }, { period: "custom", start: "2026-02-30", end: "2026-03-01" }, { period: "custom", start: "2026-03-01", end: "2026-02-28" }, { period: "custom", start: "9999-01-01", end: "9999-01-02" }]) {
+        assert.equal((await request("/summary", "valid-a", postInsight(body))).status, 400);
+      }
       assert.equal(
         (await request("/auth/logout", loginSession.token, { method: "POST" }))
           .status,
