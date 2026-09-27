@@ -30,6 +30,7 @@ import {
   Tag as TagIcon,
   Trash2,
   TrendingUp,
+  GitCompare,
 } from "lucide-react";
 import { api, download, exportMultipleMeetings } from "./api";
 import { isCloud, signOut } from "./cloud";
@@ -52,10 +53,11 @@ import { ActionList, MeetingDetail } from "./MeetingDetail";
 import { Calendar } from "./Calendar";
 import { UsagePage } from "./UsagePage";
 import { StatsPage } from "./StatsPage";
+import { ComparePage } from "./ComparePage";
 import { Modal } from "./Modal";
 import { tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
 
-type Page = "meetings" | "calendar" | "actions" | "usage" | "stats" | "help";
+type Page = "meetings" | "calendar" | "actions" | "usage" | "stats" | "compare" | "help";
 export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -426,7 +428,9 @@ export default function App() {
             ? "API使用料"
             : page === "stats"
               ? "統計ダッシュボード"
-              : "会議ワークスペース";
+              : page === "compare"
+                ? "会議比較"
+                : "会議ワークスペース";
   return (
     <div className="app-shell">
       {sidebarOpen && (
@@ -475,6 +479,7 @@ export default function App() {
               { id: "calendar", Icon: CalendarDays, label: "カレンダー" },
               { id: "actions", Icon: ListTodo, label: "アクション" },
               { id: "stats", Icon: TrendingUp, label: "統計" },
+              { id: "compare", Icon: GitCompare, label: "比較" },
               { id: "usage", Icon: ReceiptText, label: "API使用料" },
               { id: "help", Icon: BookOpen, label: "使い方ガイド" },
             ] as const
@@ -1402,6 +1407,8 @@ export default function App() {
             <UsagePage meetings={meetings} />
           ) : page === "stats" ? (
             <StatsPage meetings={meetings} />
+          ) : page === "compare" ? (
+            <ComparePage meetings={meetings} />
           ) : (
             <Help
               onNew={() => setNewOpen(true)}

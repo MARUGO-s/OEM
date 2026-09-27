@@ -4051,3 +4051,218 @@ button {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* Compare Page */
+.compare-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.compare-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.compare-header h2 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.meeting-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.meeting-select-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: white;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.meeting-select-card:hover {
+  border-color: var(--purple);
+}
+
+.meeting-select-card.selected {
+  border-color: var(--purple);
+  background: var(--purple);
+  color: white;
+}
+
+.select-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--border);
+  border-radius: 8px;
+}
+
+.meeting-select-card.selected .select-icon {
+  background: white;
+  color: var(--purple);
+}
+
+.empty-check {
+  width: 20px;
+  height: 20px;
+}
+
+.meeting-info strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.meeting-info small {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.compare-modes {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.compare-modes button {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.compare-modes button.active {
+  background: var(--purple);
+  color: white;
+  border-color: var(--purple);
+}
+
+.compare-content {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.compare-summary {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.summary-card {
+  flex: 1;
+  padding: 16px;
+  background: #f8f9fc;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.summary-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.summary-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.compare-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.compare-table th {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.participant-matrix table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.participant-matrix th,
+.participant-matrix td {
+  padding: 8px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+
+.participant-matrix th:first-child,
+.participant-matrix td:first-child {
+  text-align: left;
+}
+
+.green {
+  color: #16a34a;
+}
+
+.gray {
+  color: var(--muted);
+}
+
+.duration-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.duration-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.duration-info {
+  flex: 1;
+}
+
+.duration-info strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.duration-info span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.duration-fill {
+  height: 32px;
+  background: var(--purple);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: width 0.3s ease;
+  min-width: 80px;
+}
