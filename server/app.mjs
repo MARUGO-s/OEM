@@ -904,6 +904,67 @@ export async function createApp({
   app.use("/api", (_req, _res, next) =>
     next(fail(404, "APIが見つかりません。")),
   );
+
+  // 自動サマリー生成エンドポイント
+  app.get("/api/summary", async (req, res) => {
+    try {
+      const period = req.query.period || "month"; // month, week
+      const meetings = await store.list();
+      const now = new Date();
+      let startDate: Date;
+      
+      if (period === "week") {
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+      
+      const filteredMeetings = meetings.filter((m) => {
+        const meetingDate = new Date(m.date);
+        return meetingDate >= startDate && m.status === "done";
+      });
+      
+      if (filteredMeetings.length === 0) {
+        return res.json({ summary: "対象期間の会議がありません。" });
+      }
+      
+      const ai = aiFactory({ apiKey, geminiApiKey, model });
+      const meetingData = filteredMeetings.map((m) => ({
+        title: m.title,
+        date: m.date,
+        participants: m.participants,
+        summary: m.minutes?.summary || "",
+        decisions: m.minutes?.decisions || [],
+        actions: m.minutes?.actions || [],
+      }));
+      
+      const prompt = `以下の会議データに基づいて、${period === "week" ? "週次" : "月次"}のサマリーを作成してください：
+
+${JSON.stringify(meetingData, null, 2)}
+
+以下の形式で出力してください：
+## 要約
+全体の概要
+
+## 重要な決定事項
+- 汮定1
+- 汳定2
+
+## 主なアクションアイテム
+- アクション1
+- アクション2
+
+## 課題・懸念事項
+- 課題1
+- 課題2`;
+      
+      const summary = await ai.complete(prompt);
+      res.json({ summary, meetingCount: filteredMeetings.length, period });
+    } catch (error) {
+      console.error("Summary generation error:", error);
+      res.status(500).json({ error: "サマリーの生成に失敗しました。" });
+    }
+  });
   if (staticDir) {
     app.use(express.static(staticDir));
     app.get("/", (_req, res) =>

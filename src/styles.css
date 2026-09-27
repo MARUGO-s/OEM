@@ -3831,6 +3831,83 @@ button {
   color: var(--muted);
 }
 
+.summary-section {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 32px;
+}
+
+.summary-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.period-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.period-selector button {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.period-selector button.active {
+  background: var(--purple);
+  color: white;
+  border-color: var(--purple);
+}
+
+.summary-content {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.summary-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.summary-text {
+  background: #f8f9fc;
+  padding: 20px;
+  border-radius: 8px;
+  line-height: 1.6;
+}
+
+.summary-text h4 {
+  margin: 16px 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.summary-text p {
+  margin: 8px 0;
+}
+
+.summary-text li {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
 .stats-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

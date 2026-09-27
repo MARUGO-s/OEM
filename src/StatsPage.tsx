@@ -1,8 +1,14 @@
-import { useMemo } from "react";
-import { CalendarDays, Clock, CheckCircle, Users, TrendingUp } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CalendarDays, Clock, CheckCircle, Users, TrendingUp, Sparkles, LoaderCircle } from "lucide-react";
 import { formatDate, type Meeting } from "./types";
+import { api } from "./api";
 
 export function StatsPage({ meetings }: { meetings: Meeting[] }) {
+  const [summaryPeriod, setSummaryPeriod] = useState<"month" | "week">("month");
+  const [summary, setSummary] = useState("");
+  const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+
   const stats = useMemo(() => {
     const realMeetings = meetings.filter((m) => !m.isDemo);
     
@@ -52,6 +58,19 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
     };
   }, [meetings]);
   
+  async function generateSummary() {
+    setGeneratingSummary(true);
+    setShowSummary(true);
+    try {
+      const result = await api<{ summary: string; meetingCount: number; period: string }>(`/summary?period=${summaryPeriod}`);
+      setSummary(result.summary);
+    } catch (error) {
+      setSummary("サマリーの生成に失敗しました。もう一度お試しください。");
+    } finally {
+      setGeneratingSummary(false);
+    }
+  }
+  
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -64,6 +83,66 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
       <div className="stats-header">
         <h2>統計ダッシュボード</h2>
         <p className="muted">会議データの概要と分析</p>
+      </div>
+      
+      <div className="summary-section">
+        <div className="summary-controls">
+          <div className="period-selector">
+            <button
+              className={summaryPeriod === "month" ? "active" : ""}
+              onClick={() => setSummaryPeriod("month")}
+            >
+              月次
+            </button>
+            <button
+              className={summaryPeriod === "week" ? "active" : ""}
+              onClick={() => setSummaryPeriod("week")}
+            >
+              週次
+            </button>
+          </div>
+          <button
+            className="button primary"
+            onClick={generateSummary}
+            disabled={generatingSummary}
+          >
+            {generatingSummary ? (
+              <>
+                <LoaderCircle size={16} className="spin" />
+                生成中...
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} />
+                AIサマリー生成
+              </>
+            )}
+          </button>
+        </div>
+        {showSummary && (
+          <div className="summary-content">
+            <div className="summary-header">
+              <h3>AI生成サマリー</h3>
+              <button
+                className="icon-button"
+                onClick={() => setShowSummary(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="summary-text">
+              {summary.split("\n").map((line, i) => {
+                if (line.startsWith("##")) {
+                  return <h4 key={i}>{line.replace("##", "").trim()}</h4>;
+                }
+                if (line.startsWith("-")) {
+                  return <li key={i}>{line.replace("-", "").trim()}</li>;
+                }
+                return <p key={i}>{line}</p>;
+              })}
+            </div>
+          </div>
+        )}
       </div>
       
       <div className="stats-cards">
