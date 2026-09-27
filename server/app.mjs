@@ -911,7 +911,7 @@ export async function createApp({
       const period = req.query.period || "month"; // month, week
       const meetings = await store.list();
       const now = new Date();
-      let startDate: Date;
+      let startDate;
       
       if (period === "week") {
         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
