@@ -49,6 +49,8 @@ for (let index = 1; index <= 6; index++) {
     date: index >= 5 ? summaryRange("lastMonth").end : date,
     participants: "担当A、担当B",
     tags: [],
+    duration: null,
+    audioParts: index <= 2 ? [{ duration: 600 }, { duration: index === 1 ? 33.626122 : 789.435646 }] : [],
     markdown: `# 検証会議${index}\n\n編集済み本文${index}。`,
   });
 }

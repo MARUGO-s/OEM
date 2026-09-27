@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { formatDate, type Meeting } from "./types";
+import { meetingDuration, durationStats, formatDuration } from "../supabase/functions/_shared/duration.mjs";
 
 export function ComparePage({ meetings }: { meetings: Meeting[] }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -47,14 +48,12 @@ export function ComparePage({ meetings }: { meetings: Meeting[] }) {
   const compareDuration = () => {
     const data = selectedMeetings.map((m) => ({
       meeting: m,
-      duration: m.duration || 0,
+      duration: meetingDuration(m),
     }));
 
-    const avgDuration = data.length > 0
-      ? data.reduce((sum, d) => sum + d.duration, 0) / data.length
-      : 0;
+    const { average: avgDuration, unknownCount } = durationStats(data.map(d => d.duration));
 
-    return { data, avgDuration };
+    return { data, avgDuration, unknownCount };
   };
 
   return (
@@ -190,12 +189,8 @@ export function ComparePage({ meetings }: { meetings: Meeting[] }) {
       })()}
 
       {compareMode === "duration" && (() => {
-        const { data, avgDuration } = compareDuration();
-        const formatDuration = (seconds: number) => {
-          const hours = Math.floor(seconds / 3600);
-          const minutes = Math.floor((seconds % 3600) / 60);
-          return hours > 0 ? `${hours}時間${minutes}分` : `${minutes}分`;
-        };
+        const { data, avgDuration, unknownCount } = compareDuration();
+        const maxDuration = Math.max(0, ...data.map(d => d.duration ?? 0));
         return (
           <div className="compare-content">
             <div className="compare-summary">
@@ -204,19 +199,20 @@ export function ComparePage({ meetings }: { meetings: Meeting[] }) {
                 <span className="summary-value">{formatDuration(avgDuration)}</span>
               </div>
             </div>
+            {unknownCount > 0 && <p className="muted">時間が未取得の{unknownCount}件は平均に含めていません。</p>}
             <div className="duration-chart">
               {data.map((d) => {
-                const percent = avgDuration > 0 ? (d.duration / avgDuration) * 100 : 0;
-                const diff = d.duration - avgDuration;
+                const percent = d.duration !== null && maxDuration > 0 ? (d.duration / maxDuration) * 100 : 0;
+                const diff = d.duration !== null && avgDuration !== null ? d.duration - avgDuration : 0;
                 return (
                   <div key={d.meeting.id} className="duration-bar">
                     <div className="duration-info">
                       <strong>{d.meeting.title}</strong>
                       <span>{formatDuration(d.duration)}</span>
                     </div>
-                    <div className="duration-fill" style={{ width: `${Math.min(percent, 100)}%` }}>
+                    <div className="duration-track">{d.duration !== null && <div className="duration-fill" style={{ width: `${percent}%` }} title={diff > 0 ? "平均より長い" : diff < 0 ? "平均より短い" : "平均と同じ"}>
                       {diff > 0 ? <TrendingUp size={16} /> : diff < 0 ? <TrendingDown size={16} /> : <Minus size={16} />}
-                    </div>
+                    </div>}</div>
                   </div>
                 );
               })}

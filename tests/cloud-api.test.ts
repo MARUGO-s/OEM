@@ -503,6 +503,17 @@ Deno.test(
   "Cloud HTTP: fixed login, shared sessions, encrypted settings, upload, GPT pipeline and edits",
   async () => {
     try {
+      const durationFixture = { ...createDemo(), duration: null, uploadPlan: [{}, {}], audioParts: [{ duration: 600 }, { duration: 33.626122 }] };
+      rows.set(durationFixture.id, { owner, document: durationFixture, audioPath: null, responseId: null });
+      const durationDetail = await (await request(`/meetings/${durationFixture.id}`, "valid-a")).json();
+      const durationList = await (await request("/meetings", "valid-b")).json();
+      for (const result of [durationDetail, durationList.find((m: any) => m.id === durationFixture.id)]) {
+        assert.equal(result.duration, 633.626122);
+        assert.equal(result.audioParts, undefined);
+        assert.equal(result.uploadPlan, undefined);
+      }
+      assert.equal(rows.get(durationFixture.id).document.duration, null);
+      rows.delete(durationFixture.id);
       const calendar = calendarMeeting(),
         eventId = eventKey(calendarEvent),
         calRoute = `/meetings/${calendar.id}`;
