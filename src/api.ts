@@ -152,3 +152,73 @@ export function download(
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// iCal (.ics) 形式でエクスポート
+export function exportToICS(meetings: any[]): string {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Kotonoha//Meeting Minutes//JA",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+  ];
+  
+  meetings.forEach((m) => {
+    const startTime = `${m.date}T09:00:00`;
+    const endTime = `${m.date}T10:00:00`;
+    const now = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    
+    lines.push("BEGIN:VEVENT");
+    lines.push(`DTSTART:${startTime.replace(/[-:]/g, "")}`);
+    lines.push(`DTEND:${endTime.replace(/[-:]/g, "")}`);
+    lines.push(`DTSTAMP:${now}`);
+    lines.push(`UID:${m.id}@kotonoha`);
+    lines.push(`SUMMARY:${m.title}`);
+    lines.push(`DESCRIPTION:${m.participants}\\n\\n${m.minutes?.summary || "議事録がありません"}`);
+    lines.push("END:VEVENT");
+  });
+  
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
+// 複数会議を一括エクスポート
+export function exportMultipleMeetings(meetings: any[], format: "markdown" | "json" | "ics"): string {
+  if (format === "ics") {
+    return exportToICS(meetings);
+  }
+  
+  if (format === "json") {
+    return JSON.stringify(meetings, null, 2);
+  }
+  
+  // Markdown format
+  const lines = ["# 会議録一括エクスポート", `エクスポート日時: ${new Date().toLocaleString("ja-JP")}`, ""];
+  
+  meetings.forEach((m, index) => {
+    lines.push(`## ${index + 1}. ${m.title}`);
+    lines.push(`**日付**: ${m.date}`);
+    lines.push(`**参加者**: ${m.participants}`);
+    lines.push("");
+    
+    if (m.minutes?.summary) {
+      lines.push("### 要約");
+      lines.push(m.minutes.summary);
+      lines.push("");
+    }
+    
+    if (m.minutes?.actions?.length) {
+      lines.push("### アクションアイテム");
+      m.minutes.actions.forEach((action: any, i: number) => {
+        const completed = m.completedActions?.includes(i) ? "✓" : "○";
+        lines.push(`${completed} **${action.task}** - ${action.owner} (${action.due || "期限未定"})`);
+      });
+      lines.push("");
+    }
+    
+    lines.push("---");
+    lines.push("");
+  });
+  
+  return lines.join("\n");
+}

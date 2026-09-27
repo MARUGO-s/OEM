@@ -31,7 +31,7 @@ import {
   Trash2,
   TrendingUp,
 } from "lucide-react";
-import { api } from "./api";
+import { api, download, exportMultipleMeetings } from "./api";
 import { isCloud, signOut } from "./cloud";
 import {
   formatDate,
@@ -84,6 +84,7 @@ export default function App() {
     status: "all",
   });
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [tags, setTags] = useState<MeetingTag[]>([]);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
@@ -348,6 +349,14 @@ export default function App() {
       : [...currentTags, tagId];
     
     updateMeeting({ ...meeting, tags: updatedTags });
+  }
+
+  function handleExport(format: "markdown" | "json" | "ics") {
+    const content = exportMultipleMeetings(filtered, format);
+    const filename = `会議録一括エクスポート_${new Date().toISOString().split("T")[0]}.${format === "ics" ? "ics" : format === "json" ? "json" : "md"}`;
+    const mimeType = format === "ics" ? "text/calendar" : format === "json" ? "application/json" : "text/markdown";
+    download(filename, content, mimeType);
+    setShowExportDialog(false);
   }
   const realMeetings = meetings.filter((m) => !m.isDemo);
   const actionCount = realMeetings.reduce(
@@ -840,6 +849,13 @@ export default function App() {
                     >
                       <Filter size={16} />
                     </button>
+                    <button
+                      className="icon-button"
+                      aria-label="一括エクスポート"
+                      onClick={() => setShowExportDialog(true)}
+                    >
+                      <ArrowDownToLine size={16} />
+                    </button>
                   </div>
                 </div>
                 {showSearchOptions && (
@@ -1118,6 +1134,54 @@ export default function App() {
                         {tags.length === 0 && (
                           <p className="muted">タグがありません。タグ管理から作成してください。</p>
                         )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {showExportDialog && (
+                  <div className="export-dialog">
+                    <div className="export-content">
+                      <div className="export-header">
+                        <h3>一括エクスポート</h3>
+                        <button
+                          className="icon-button"
+                          onClick={() => setShowExportDialog(false)}
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <p className="muted">現在表示中の {filtered.length} 件の会議をエクスポートします。</p>
+                      <div className="export-options">
+                        <button
+                          className="export-option"
+                          onClick={() => handleExport("markdown")}
+                        >
+                          <FileText size={24} />
+                          <div>
+                            <strong>Markdown</strong>
+                            <small>ドキュメント形式</small>
+                          </div>
+                        </button>
+                        <button
+                          className="export-option"
+                          onClick={() => handleExport("json")}
+                        >
+                          <ReceiptText size={24} />
+                          <div>
+                            <strong>JSON</strong>
+                            <small>データ形式</small>
+                          </div>
+                        </button>
+                        <button
+                          className="export-option"
+                          onClick={() => handleExport("ics")}
+                        >
+                          <CalendarDays size={24} />
+                          <div>
+                            <strong>iCal (.ics)</strong>
+                            <small>カレンダー形式</small>
+                          </div>
+                        </button>
                       </div>
                     </div>
                   </div>
