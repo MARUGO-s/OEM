@@ -965,6 +965,46 @@ ${JSON.stringify(meetingData, null, 2)}
       res.status(500).json({ error: "サマリーの生成に失敗しました。" });
     }
   });
+
+  // 自動タグ付けエンドポイント
+  app.post("/api/suggest-tags", async (req, res) => {
+    try {
+      const { meetingId } = req.body;
+      const meetings = await store.list();
+      const meeting = meetings.find((m) => m.id === meetingId);
+      
+      if (!meeting || !meeting.minutes) {
+        return res.status(404).json({ error: "会議が見つかりません。" });
+      }
+      
+      const ai = aiFactory({ apiKey, geminiApiKey, model });
+      const prompt = `以下の会議の内容に基づいて、3〜5個の適切なタグを提案してください。
+タグは日本語で、短く分かりやすく、キーワードを推奨します。
+
+会議タイトル: ${meeting.title}
+参加者: ${meeting.participants}
+要約: ${meeting.minutes.summary || "なし"}
+トピック: ${meeting.minutes.topics?.map((t) => t.title).join(", ") || "なし"}
+
+以下のJSON形式で出力してください（タグのみ）：
+{
+  "tags": ["タグ1", "タグ2", "タグ3"]
+}`;
+      
+      const response = await ai.complete(prompt);
+      try {
+        const parsed = JSON.parse(response);
+        res.json({ tags: parsed.tags || [] });
+      } catch {
+        // JSON解析に失敗した場合、テキストからタグを抽出
+        const tags = response.match(/「([^」]+)」/g)?.map((t) => t.replace(/[「」]/g, "")) || [];
+        res.json({ tags });
+      }
+    } catch (error) {
+      console.error("Tag suggestion error:", error);
+      res.status(500).json({ error: "タグの提案に失敗しました。" });
+    }
+  });
   if (staticDir) {
     app.use(express.static(staticDir));
     app.get("/", (_req, res) =>

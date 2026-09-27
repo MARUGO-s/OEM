@@ -18,6 +18,7 @@ import {
   Trash2,
   Users,
   X,
+  Lightbulb,
 } from "lucide-react";
 import { meetingEvents } from "../supabase/functions/_shared/calendar.mjs";
 import { api, download, audioUrl } from "./api";
@@ -226,6 +227,10 @@ export function MeetingDetail({
   );
   const [showDecisions, setShowDecisions] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [suggestingTags, setSuggestingTags] = useState(false);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [showCompressionDialog, setShowCompressionDialog] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const [attachmentsBusy, setAttachmentsBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -329,6 +334,36 @@ export function MeetingDetail({
       notify((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+  async function suggestTags() {
+    setSuggestingTags(true);
+    try {
+      const result = await api<{ tags: string[] }>("/suggest-tags", {
+        method: "POST",
+        body: JSON.stringify({ meetingId: m.id }),
+      });
+      setSuggestedTags(result.tags);
+    } catch (e) {
+      notify("タグの提案に失敗しました。");
+    } finally {
+      setSuggestingTags(false);
+    }
+  }
+  
+  async function compressAudio() {
+    setCompressing(true);
+    try {
+      // 音声ファイルの再処理をリクエスト
+      onChange(
+        await api<Meeting>(`/meetings/${m.id}/retry`, { method: "POST" }),
+      );
+      notify("音声の最適化処理を開始しました。");
+      setShowCompressionDialog(false);
+    } catch (e) {
+      notify("音声の処理に失敗しました。");
+    } finally {
+      setCompressing(false);
     }
   }
   const displayText = tab === "transcript" ? m.transcript : m.markdown;
@@ -830,6 +865,40 @@ export function MeetingDetail({
                 "解析後に、会議の要点がここにまとまります。"}
             </p>
           </section>
+          {m.status === "done" && m.minutes && (
+            <section>
+              <h3>
+                AIタグ提案<span>提案</span>
+              </h3>
+              <button
+                className="button secondary small"
+                onClick={suggestTags}
+                disabled={suggestingTags}
+              >
+                {suggestingTags ? (
+                  <>
+                    <LoaderCircle size={14} className="spin" />
+                    提案中...
+                  </>
+                ) : (
+                  <>
+                    <Lightbulb size={14} />
+                    タグを提案
+                  </>
+                )}
+              </button>
+              {suggestedTags.length > 0 && (
+                <div className="suggested-tags">
+                  <p className="muted">提案されたタグ:</p>
+                  {suggestedTags.map((tag, i) => (
+                    <span key={i} className="suggested-tag">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
           <div className="rail-counts">
             <button
               className="rail-row"
@@ -905,6 +974,16 @@ export function MeetingDetail({
                 議事録を再生成
               </button>
             )}
+            {m.hasAudio && !m.isDemo && (
+              <button
+                className="text-button"
+                disabled={processing || busy || editing || attachmentsBusy}
+                onClick={() => setShowCompressionDialog(true)}
+              >
+                <Download size={13} />
+                音声を最適化
+              </button>
+            )}
             <button
               className="text-button delete-button"
               disabled={processing || editing || attachmentsBusy}
@@ -948,6 +1027,35 @@ export function MeetingDetail({
             >
               {busy && <LoaderCircle size={15} className="spin" />}
               {confirm === "delete" ? "ゴミ箱へ移動" : "再生成する"}
+            </button>
+          </div>
+        </Modal>
+      )}
+      {showCompressionDialog && (
+        <Modal
+          title="音声を最適化"
+          subtitle="音声ファイルの品質を調整してファイルサイズを削減します"
+          onClose={() => setShowCompressionDialog(false)}
+          locked={compressing}
+        >
+          <p className="confirm-copy">
+            音声ファイルを再処理して、最適な品質で保存します。これによりファイルサイズが削減され、ストレージ容量を節約できます。
+          </p>
+          <div className="modal-footer">
+            <button
+              className="button secondary"
+              onClick={() => setShowCompressionDialog(false)}
+              disabled={compressing}
+            >
+              キャンセル
+            </button>
+            <button
+              className="button primary"
+              disabled={compressing}
+              onClick={compressAudio}
+            >
+              {compressing && <LoaderCircle size={15} className="spin" />}
+              最適化する
             </button>
           </div>
         </Modal>

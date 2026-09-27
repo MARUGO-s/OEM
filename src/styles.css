@@ -4343,3 +4343,27 @@ button {
   transition: width 0.3s ease;
   min-width: 80px;
 }
+
+/* Suggested Tags */
+.suggested-tags {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f8f9fc;
+  border-radius: 8px;
+}
+
+.suggested-tags p {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+}
+
+.suggested-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  margin: 4px 4px 4px 0;
+  background: var(--purple);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
