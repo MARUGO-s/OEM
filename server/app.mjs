@@ -50,6 +50,7 @@ import {
   MAX_FILE_SIZE,
   MAX_TEXT_LENGTH,
   MetadataSchema,
+  RetrySchema,
   PatchSchema,
   renameMarkdownHeading,
   audioExtensions,
@@ -625,6 +626,7 @@ export async function createApp({
   );
 
   app.post("/api/meetings/:id/retry", requireKey, async (req, res) => {
+    const options = RetrySchema.parse(req.body === undefined ? {} : req.body);
     const meeting = getMeeting(req.params.id);
     if (meeting.status === "uploading")
       throw fail(
@@ -646,6 +648,7 @@ export async function createApp({
     try {
       const next = await store.save({
         ...meeting,
+        ...options,
         status: needsTranscription(meeting) ? "transcribing" : "analyzing",
         error: null,
         geminiRetryCount: 0,

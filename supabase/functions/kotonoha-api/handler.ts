@@ -12,6 +12,7 @@ import {
   MAX_FILE_SIZE,
   MAX_TEXT_LENGTH,
   MetadataSchema,
+  RetrySchema,
   minutesToMarkdown,
   PatchSchema,
   renameMarkdownHeading,
@@ -270,11 +271,10 @@ async function bodyBytes(req: Request, limit: number) {
   }
   return bytes;
 }
-async function jsonBody(req: Request) {
+async function jsonBody(req: Request, allowEmpty = false) {
   try {
-    return JSON.parse(
-      new TextDecoder().decode(await bodyBytes(req, 1_000_000)),
-    );
+    const text = new TextDecoder().decode(await bodyBytes(req, 1_000_000));
+    return allowEmpty && text === "" ? {} : JSON.parse(text);
   } catch (error) {
     if ((error as any).publicMessage) throw error;
     throw fail(400, "入力形式を確認してください。");
@@ -1308,6 +1308,7 @@ export async function handler(req: Request) {
       return json({ url: data.signedUrl });
     }
     if (match[2] === "retry" && req.method === "POST") {
+      const options = RetrySchema.parse(await jsonBody(req, true));
       if (record.document.status === "uploading") {
         throw fail(
           409,
@@ -1329,6 +1330,7 @@ export async function handler(req: Request) {
         throw fail(409, "まだ処理中です。完了をお待ちください。");
       }
       record = await store("claim", owner, id, {
+        ...options,
         status: needsTranscription(record.document, record.audioPath)
           ? "transcribing"
           : "analyzing",

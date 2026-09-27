@@ -22,6 +22,48 @@ import {
   editFields,
 } from "./fixtures/calendar.mjs";
 import { allCalendarEvents, eventKey } from "../supabase/functions/_shared/calendar.mjs";
+import { summaryInput } from "../supabase/functions/_shared/summary.mjs";
+
+test("再生成時に詳しさを変更・保存し、文字起こしは再利用する", async (t) => {
+  const seen = [];
+  let transcriptions = 0;
+  const { request, store, waitForJobs, dataDir } = await setup(t, {
+    apiKey: key,
+    aiFactory: () => ({
+      async transcribe() { transcriptions++; throw new Error("再文字起こし不要"); },
+      async summarize(meeting) {
+        seen.push(meeting.template);
+        assert.equal(meeting.transcript, "保存済みの会話");
+        assert.match(summaryInput(meeting)[0].content, meeting.template === "detailed" ? /背景、理由、異論も詳しく/ : /要点を簡潔に/);
+        return { ...sampleMinutes, summary: `再生成：${meeting.template}` };
+      },
+    }),
+  });
+  const meeting = { ...createDemo(), isDemo: false, source: "audio", audioFile: "already.wav", transcript: "保存済みの会話", tags: ["既存タグ"], completedActions: [0] };
+  await store.save(meeting);
+  const route = `/meetings/${meeting.id}/retry`;
+  for (const body of [JSON.stringify({template: "detailed"}), JSON.stringify({template: "brief"}), undefined]) {
+    const response = await request(route, { method: "POST", body });
+    assert.equal(response.status, 202);
+    await waitForJobs();
+    const saved = store.get(meeting.id);
+    assert.equal(saved.status, "done");
+    assert.match(saved.markdown, new RegExp(`再生成：${saved.template}`));
+    assert.deepEqual(saved.tags, ["既存タグ"]);
+    assert.deepEqual(saved.completedActions, []);
+  }
+  assert.deepEqual(seen, ["detailed", "brief", "brief"]);
+  assert.equal(transcriptions, 0);
+  const reloaded = new MeetingStore(path.join(dataDir, "meetings"));
+  await reloaded.init();
+  assert.equal(reloaded.get(meeting.id).template, "brief");
+  const before = structuredClone(store.get(meeting.id));
+  for (const body of ['{"template":"invalid"}', '{"template":null}', '{"template":"standard","status":"done"}', 'null']) {
+    assert.equal((await request(route, { method: "POST", body })).status, 400);
+    assert.deepEqual(store.get(meeting.id), before);
+  }
+  assert.equal(seen.length, 3);
+});
 
 test("会議一覧と詳細で分割録音の合計時間を返し、内部音声情報は公開しない", async (t) => {
   const { request, store } = await setup(t);
