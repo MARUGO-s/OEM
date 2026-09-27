@@ -25,6 +25,8 @@ supabase functions deploy kotonoha-api --project-ref hjhkccbktkscwtgzxjfq --no-v
 
 ## DB変更の注意
 
+2026年9月28日の集計・タグ・比較の安定化は、`kotonoha-api` とフロントの更新のみです。DBマイグレーション・キー再設定は不要です。タグは既存の会議document、AIサマリー・タグ提案の用途区分は既存の使用料documentに保存します。APIを先に更新し、その後PRをmainへマージしてPagesの公開完了を確認します。ロールバックは該当変更のrevert PRと対応するAPIの再デプロイで行い、DBをリセットしません。
+
 API使用料ページは `20260924000400_kotonoha_api_usage.sql` のみを適用してからEdge Function・フロントを公開します。会議録専用 `kotonoha.api_usage` とservice_role限定 `public.kotonoha_usage` RPCを追加します。他アプリのテーブル・Auth・Storageには触れません。マイグレーション前の料金は復元できません。`tests/cloud-usage-database.sql` は管理者権限でロールバック付きの所有者分離・重複防止・権限テストを行います。
 
 カレンダー対応は `20260923000500_kotonoha_calendar.sql` のみを適用してからEdge Function・フロントを公開します。service_role限定 `public.kotonoha_calendar` を追加し、既存専用会議documentの `calendarOverrides` に1予定ずつ行ロックで保存します。共有の業務テーブル・Auth・Storageは変更しません。本文編集は従来のPATCHで保存し、予定とは独立しています。再生成時も手動変更を残します。

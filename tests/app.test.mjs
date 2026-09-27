@@ -373,6 +373,50 @@ test("段階アップロードは全音声保存後だけ開始し、順序・�
   assert.ok(store.get(draft.id).transcript.endsWith(`会話${parts.length}`));
 });
 
+test("追加AI機能: 現在の接続設定・期間・使用料・タグの再読込を検証する", async (t) => {
+  const calls = [];
+  let incomplete = false;
+  const { request, store, dataDir } = await setup(t, {
+    aiFactory: (apiKey, model, options) => createAI(apiKey, model, { ...options, fetch: async (_url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ body, authorization: new Headers(init.headers).get("authorization") });
+      return Response.json({ id: `insight-${calls.length}`, status: incomplete ? "incomplete" : "completed",
+        usage: { input_tokens: 1000, output_tokens: 200 },
+        output: [{ type: "message", content: [{ type: "output_text", text: body.text ? '{"tags":["企画","進捗","企画"]}' : "## 要約\n保存済み本文のサマリー" }] }],
+      });
+    } }),
+  });
+  const post = (body) => ({ method: "POST", body: JSON.stringify(body) });
+  assert.equal((await request("/summary", post({ period: "year" }))).status, 400);
+  assert.equal((await (await request("/summary", post({ period: "month" }))).json()).meetingCount, 0);
+  const meeting = { ...createDemo(), isDemo: false, source: "text", markdown: "# 手動修正した原文" };
+  await store.save(meeting);
+  await store.save(createDemo());
+  assert.equal((await request("/summary", post({ period: "month" }))).status, 428);
+  await request("/settings", { method: "PUT", body: JSON.stringify({ apiKey: key, model: "gpt-6-luna" }) });
+  const result = await request("/summary", post({ period: "month" }));
+  assert.equal(result.status, 200, await result.clone().text());
+  assert.equal((await result.json()).meetingCount, 1);
+  assert.equal(calls[0].body.model, "gpt-6-luna");
+  assert.equal(calls[0].authorization, `Bearer ${key}`);
+  assert.match(calls[0].body.input[1].content, /手動修正した原文/);
+  assert.deepEqual((await (await request("/suggest-tags", post({ meetingId: meeting.id }))).json()).tags, ["企画", "進捗"]);
+  assert.equal((await request("/suggest-tags", post({ meetingId: "bad" }))).status, 400);
+  assert.equal((await request(`/meetings/${meeting.id}`, { method: "PATCH", body: JSON.stringify({ tags: [" 企画 ", "進捗", "企画"] }) })).status, 200);
+  const reloaded = new MeetingStore(path.join(dataDir, "meetings"));
+  await reloaded.init();
+  assert.deepEqual(reloaded.get(meeting.id).tags, ["企画", "進捗"]);
+  assert.equal((await request(`/meetings/${meeting.id}`, { method: "PATCH", body: JSON.stringify({ tags: [""] }) })).status, 400);
+  const month = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).format(new Date());
+  const usage = await (await request(`/usage?month=${month}`)).json();
+  assert.equal(usage.eventCount, 2);
+  assert.deepEqual(usage.events.map((e) => e.operation).sort(), ["summary", "tags"]);
+  assert.ok(usage.totalUsd > 0);
+  incomplete = true;
+  assert.equal((await request("/summary", post({ period: "month" }))).status, 502);
+  assert.equal(store.get(meeting.id).markdown, "# 手動修正した原文");
+});
+
 async function setup(t, options = {}) {
   const dataDir = await mkdtemp(path.join(tmpdir(), "kotonoha-test-"));
   const context = await createApp({ dataDir, ...options });

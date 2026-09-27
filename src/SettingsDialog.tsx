@@ -203,9 +203,9 @@ export function SettingsDialog({
           <label className="chosen">
             <Bell size={22} />
             <span>
-              <strong>アクション期限リマインダー</strong>
+              <strong>確定した期限のリマインダー</strong>
               <small>
-                期限切れのアクションを通知します
+                アプリを開いている間、共有カレンダーの確定済み期限を通知します。同じ期限はこのタブで一度だけ通知します。
               </small>
               <span className="notification-status">
                 {notificationPermission === "granted" ? "有効" : notificationPermission === "denied" ? "無効" : "未設定"}

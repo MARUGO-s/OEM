@@ -144,7 +144,7 @@ export function UsagePage({ meetings }: { meetings: Meeting[] }) {
                         <tbody>{group.events.map((event) => (
                           <tr key={event.id}>
                             <td>{when(event.createdAt)}</td>
-                            <td>{event.kind === "minutes" ? "会話解析・議事録" : "文字起こし"}</td>
+                            <td>{event.operation === "summary" ? "期間サマリー" : event.operation === "tags" ? "タグ提案" : event.kind === "minutes" ? "会話解析・議事録" : "文字起こし"}</td>
                             <td>{event.kind === "minutes" ? modelName(event.model) : transcriptionModelName(event.model)}<small>{event.provider}</small></td>
                             <td>
                               <span>入力 {integer(event.inputTokens)} token</span>

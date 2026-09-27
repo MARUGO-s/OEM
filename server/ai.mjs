@@ -27,6 +27,11 @@ export function createAI(
     ...clientOptions,
   });
   return {
+    async insight(request, onUsage = () => {}) {
+      const response = await client.responses.create(request);
+      await onUsage(response);
+      return response;
+    },
     async transcribe(filePath, onUsage = () => {}) {
       if (transcriptionModel === GEMINI_TRANSCRIPTION_MODEL) {
         const bytes = await readFile(filePath);

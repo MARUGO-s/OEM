@@ -6,6 +6,7 @@ import {
   calendarRestore,
 } from "../_shared/calendar.mjs";
 import { usageEvent } from "../_shared/usage.mjs";
+import { SummaryRequest, TagsRequest, periodMeetings, insightRequest, parseInsight } from "../_shared/insights.mjs";
 import {
   MAX_FILE_SIZE,
   MAX_TEXT_LENGTH,
@@ -313,14 +314,14 @@ async function usageId(providerId?: string) {
 }
 async function recordApiUsage(
   owner: string, meeting: Doc, kind: "transcription" | "minutes",
-  model: string, response: Doc, duration?: number | null,
+  model: string, response: Doc, duration?: number | null, operation?: string,
 ) {
   try {
     const id = await usageId(response?.id ? `${owner}:${kind}:${response.id}` : undefined);
     await store("record", owner, null, usageEvent({
       id, meetingId: meeting.id, meetingTitle: meeting.title,
       runId: meeting.analysisId,
-      kind, model, response, audioSeconds: duration,
+      kind, model, response, audioSeconds: duration, operation,
     }), "kotonoha_usage");
   } catch (error) {
     console.error("kotonoha API usage could not be saved", (error as any)?.status || "unknown");
@@ -1191,6 +1192,31 @@ export async function handler(req: Request) {
       }
       throw fail(405, "この操作には対応していません。");
     }
+    if (route === "/summary" && req.method === "POST") {
+      const { period } = SummaryRequest.parse(await jsonBody(req));
+      const records: RecordRow[] = await store("list", owner);
+      const { meetings, ...range } = periodMeetings(records.map((r) => r.document), period);
+      if (!meetings.length) return json({ summary: "対象期間の会議がありません。", meetingCount: 0, period, ...range });
+      const key = await getKey(owner, config, "openai");
+      const runId = crypto.randomUUID();
+      const result = await openai(key, "/responses", {
+        method: "POST", body: JSON.stringify(insightRequest(config.model, "summary", meetings, range)),
+      }, 110_000);
+      await recordApiUsage(owner, { id: runId, title: "期間サマリー", analysisId: runId }, "minutes", config.model, result, null, "summary");
+      return json({ ...parseInsight(result, "summary"), meetingCount: meetings.length, period, ...range });
+    }
+    if (route === "/suggest-tags" && req.method === "POST") {
+      const { meetingId } = TagsRequest.parse(await jsonBody(req));
+      const record: RecordRow = await store("get", owner, meetingId);
+      const meeting = record.document;
+      if (meeting.isDemo || meeting.status !== "done" || !meeting.minutes) throw fail(400, "完了した実際の会議を選択してください。");
+      const key = await getKey(owner, config, "openai");
+      const result = await openai(key, "/responses", {
+        method: "POST", body: JSON.stringify(insightRequest(config.model, "tags", [meeting], undefined)),
+      }, 110_000);
+      await recordApiUsage(owner, { ...meeting, analysisId: crypto.randomUUID() }, "minutes", config.model, result, null, "tags");
+      return json(parseInsight(result, "tags"));
+    }
     const match = route.match(
       /^\/meetings\/([a-f0-9-]{36})(?:\/(audio|retry|parts|complete))?$/,
     );
@@ -1356,113 +1382,6 @@ export async function handler(req: Request) {
           .remove(record.document.audioParts.map((p: Doc) => p.audioPath));
       }
       return json(null, 204);
-    }
-    // 自動サマリー生成エンドポイント
-    if (match[2] === "summary" && req.method === "GET") {
-      const period = new URL(req.url).searchParams.get("period") || "month";
-      const listResult = await store("list", owner);
-      const meetings = listResult?.records || [];
-      const now = new Date();
-      let startDate: Date;
-      
-      if (period === "week") {
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      } else {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      }
-      
-      const filteredMeetings = meetings.filter((r: RecordRow) => {
-        const meetingDate = new Date(r.document.date);
-        return meetingDate >= startDate && r.document.status === "done";
-      });
-      
-      if (filteredMeetings.length === 0) {
-        return json({ summary: "対象期間の会議がありません。" });
-      }
-      
-      const openaiKey = await getKey(owner, config, "openai");
-      const meetingData = filteredMeetings.map((r: RecordRow) => ({
-        title: r.document.title,
-        date: r.document.date,
-        participants: r.document.participants,
-        summary: r.document.minutes?.summary || "",
-        decisions: r.document.minutes?.decisions || [],
-        actions: r.document.minutes?.actions || [],
-      }));
-      
-      const prompt = `以下の会議データに基づいて、${period === "week" ? "週次" : "月次"}のサマリーを作成してください：
-
-${JSON.stringify(meetingData, null, 2)}
-
-以下の形式で出力してください：
-## 要約
-全体の概要
-
-## 重要な決定事項
-- 決定1
-- 決定2
-
-## 主なアクションアイテム
-- アクション1
-- アクション2
-
-## 課題・懸念事項
-- 課題1
-- 課題2`;
-      
-      const result = await openai(openaiKey, "/chat/completions", {
-        method: "POST",
-        body: JSON.stringify({
-          model: config.model,
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: 2000,
-        }),
-      });
-      
-      const summary = result.choices?.[0]?.message?.content || "サマリーの生成に失敗しました。";
-      return json({ summary, meetingCount: filteredMeetings.length, period });
-    }
-    // 自動タグ付けエンドポイント
-    if (match[2] === "suggest-tags" && req.method === "POST") {
-      const body = await jsonBody(req);
-      const { meetingId } = body;
-      const record = await store("read", owner, meetingId);
-      
-      if (!record || !record.document.minutes) {
-        throw fail(404, "会議が見つかりません。");
-      }
-      
-      const openaiKey = await getKey(owner, config, "openai");
-      const prompt = `以下の会議の内容に基づいて、3〜5個の適切なタグを提案してください。
-タグは日本語で、短く分かりやすく、キーワードを推奨します。
-
-会議タイトル: ${record.document.title}
-参加者: ${record.document.participants}
-要約: ${record.document.minutes.summary || "なし"}
-トピック: ${record.document.minutes.topics?.map((t: Doc) => t.title).join(", ") || "なし"}
-
-以下のJSON形式で出力してください（タグのみ）：
-{
-  "tags": ["タグ1", "タグ2", "タグ3"]
-}`;
-      
-      const result = await openai(openaiKey, "/chat/completions", {
-        method: "POST",
-        body: JSON.stringify({
-          model: config.model,
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: 500,
-        }),
-      });
-      
-      const response = result.choices?.[0]?.message?.content || "[]";
-      try {
-        const parsed = JSON.parse(response);
-        return json({ tags: parsed.tags || [] });
-      } catch {
-        const tags = response.match(/「([^」]+)」/g)?.map((t: string) => t.replace(/[「」]/g, "")) || [];
-        return json({ tags });
-      }
     }
     throw fail(405, "この操作には対応していません。");
   } catch (error) {

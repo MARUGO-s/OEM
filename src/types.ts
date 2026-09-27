@@ -92,6 +92,7 @@ export interface Settings {
   maxFileSize: number;
 }
 export interface UsageEvent {
+  operation?: "summary" | "tags";
   id: string;
   meetingId: string;
   meetingTitle: string;

@@ -412,6 +412,12 @@ globalThis.fetch = async (input, init: any) => {
     if (init?.method === "POST" && url.pathname === "/v1/responses") {
       const body = JSON.parse(init.body as string);
       calls.push({ route: url.pathname, body });
+      if (body.store === false) {
+        return json({ id: `insight-${calls.length}`, status: "completed",
+          usage: { input_tokens: 1000, output_tokens: 100 },
+          output: [{ type: "message", content: [{ type: "output_text", text: body.text ? '{"tags":["共有","進捗"]}' : "## 要約\nクラウド期間サマリー" }] }],
+        });
+      }
       assert.equal(body.background, true);
       assert.equal(body.store, true);
       assert.equal(body.text.format.type, "json_schema");
@@ -1554,6 +1560,22 @@ Deno.test(
         calls.filter((c) => c.route.endsWith("/transcriptions")).length,
         transcribedBefore,
       );
+      const insightMeeting = { ...createDemo(), isDemo: false, source: "text" };
+      rows.set(insightMeeting.id, { owner, document: insightMeeting, audioPath: null, responseId: null });
+      const postInsight = (body: any) => ({ method: "POST", body: JSON.stringify(body) });
+      assert.equal((await request("/summary", "invalid", postInsight({ period: "month" }))).status, 401);
+      assert.equal((await request("/summary", "valid-a", postInsight({ period: "year" }))).status, 400);
+      const summary = await request("/summary", "valid-a", postInsight({ period: "month" }));
+      assert.equal(summary.status, 200, await summary.clone().text());
+      assert.match((await summary.json()).summary, /クラウド期間サマリー/);
+      const suggested = await request("/suggest-tags", "valid-a", postInsight({ meetingId: insightMeeting.id }));
+      assert.deepEqual((await suggested.json()).tags, ["共有", "進捗"]);
+      assert.equal((await request("/suggest-tags", "valid-a", postInsight({ meetingId: "bad" }))).status, 400);
+      const tagPatch = await request(`/meetings/${insightMeeting.id}`, "valid-a", { method: "PATCH", body: JSON.stringify({ tags: ["共有"] }) });
+      assert.equal(tagPatch.status, 200);
+      assert.deepEqual((await (await request(`/meetings/${insightMeeting.id}`, "valid-b")).json()).tags, ["共有"]);
+      assert.ok([...usageEvents.values()].some((e) => e.operation === "summary" && e.costUsd > 0));
+      assert.ok([...usageEvents.values()].some((e) => e.operation === "tags" && e.meetingId === insightMeeting.id));
       assert.equal(
         (await request("/auth/logout", loginSession.token, { method: "POST" }))
           .status,

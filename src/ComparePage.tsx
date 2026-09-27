@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, X, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Check, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { formatDate, type Meeting } from "./types";
 
 export function ComparePage({ meetings }: { meetings: Meeting[] }) {
@@ -9,9 +9,12 @@ export function ComparePage({ meetings }: { meetings: Meeting[] }) {
   const selectedMeetings = meetings.filter((m) => selectedIds.includes(m.id));
 
   const toggleSelection = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id].slice(0, 5)
-    );
+    setSelectedIds((prev) => {
+      const available = prev.filter((selected) => meetings.some((m) => m.id === selected));
+      return available.includes(id)
+        ? available.filter((selected) => selected !== id)
+        : [...available, id].slice(0, 5);
+    });
   };
 
   const compareActions = () => {
@@ -54,43 +57,37 @@ export function ComparePage({ meetings }: { meetings: Meeting[] }) {
     return { data, avgDuration };
   };
 
-  if (selectedIds.length < 2) {
-    return (
-      <div className="compare-page">
-        <div className="compare-header">
-          <h2>会議比較</h2>
-          <p className="muted">比較する会議を2〜5つ選択してください</p>
-        </div>
-        <div className="meeting-selector">
-          {meetings.map((m) => (
-            <button
-              key={m.id}
-              className={`meeting-select-card ${selectedIds.includes(m.id) ? "selected" : ""}`}
-              onClick={() => toggleSelection(m.id)}
-            >
-              <div className="select-icon">
-                {selectedIds.includes(m.id) ? <Check size={20} /> : <div className="empty-check" />}
-              </div>
-              <div className="meeting-info">
-                <strong>{m.title}</strong>
-                <small>{formatDate(m.date)}</small>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="compare-page">
       <div className="compare-header">
         <h2>会議比較</h2>
-        <button className="button secondary small" onClick={() => setSelectedIds([])}>
+        <button className="button secondary small" disabled={!selectedMeetings.length} onClick={() => setSelectedIds([])}>
           選択をクリア
         </button>
       </div>
 
+      <p className="muted">比較する会議を2〜5つ選択してください（{selectedMeetings.length}/5件）</p>
+      <div className="meeting-selector">
+        {meetings.map((m) => (
+          <button
+            key={m.id}
+            className={`meeting-select-card ${selectedIds.includes(m.id) ? "selected" : ""}`}
+            aria-pressed={selectedIds.includes(m.id)}
+            disabled={selectedMeetings.length >= 5 && !selectedIds.includes(m.id)}
+            onClick={() => toggleSelection(m.id)}
+          >
+            <div className="select-icon">
+              {selectedIds.includes(m.id) ? <Check size={20} /> : <div className="empty-check" />}
+            </div>
+            <div className="meeting-info">
+              <strong>{m.title}</strong>
+              <small>{formatDate(m.date)}</small>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {selectedMeetings.length >= 2 && <>
       <div className="compare-modes">
         <button
           className={compareMode === "actions" ? "active" : ""}
@@ -227,6 +224,7 @@ export function ComparePage({ meetings }: { meetings: Meeting[] }) {
           </div>
         );
       })()}
+      </>}
     </div>
   );
 }

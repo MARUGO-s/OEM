@@ -229,8 +229,6 @@ export function MeetingDetail({
   const [editing, setEditing] = useState(false);
   const [suggestingTags, setSuggestingTags] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
-  const [showCompressionDialog, setShowCompressionDialog] = useState(false);
-  const [compressing, setCompressing] = useState(false);
   const [attachmentsBusy, setAttachmentsBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -260,9 +258,9 @@ export function MeetingDetail({
       ?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [tab]);
   useEffect(() => {
-    onEditingChange(editing || attachmentsBusy);
+    onEditingChange(editing || attachmentsBusy || busy);
     return () => onEditingChange(false);
-  }, [editing, attachmentsBusy, onEditingChange]);
+  }, [editing, attachmentsBusy, busy, onEditingChange]);
   useEffect(() => {
     if (!m.hasAudio || tab !== "transcript") return;
     let alive = true;
@@ -345,27 +343,12 @@ export function MeetingDetail({
       });
       setSuggestedTags(result.tags);
     } catch (e) {
-      notify("タグの提案に失敗しました。");
+      notify(e instanceof Error ? e.message : "タグの提案に失敗しました。");
     } finally {
       setSuggestingTags(false);
     }
   }
   
-  async function compressAudio() {
-    setCompressing(true);
-    try {
-      // 音声ファイルの再処理をリクエスト
-      onChange(
-        await api<Meeting>(`/meetings/${m.id}/retry`, { method: "POST" }),
-      );
-      notify("音声の最適化処理を開始しました。");
-      setShowCompressionDialog(false);
-    } catch (e) {
-      notify("音声の処理に失敗しました。");
-    } finally {
-      setCompressing(false);
-    }
-  }
   const displayText = tab === "transcript" ? m.transcript : m.markdown;
   const turns = m.segments.length ? null : speakerTurns(m.transcript);
   const tabs: Tab[] = m.isDemo
@@ -865,7 +848,7 @@ export function MeetingDetail({
                 "解析後に、会議の要点がここにまとまります。"}
             </p>
           </section>
-          {m.status === "done" && m.minutes && (
+          {!m.isDemo && m.status === "done" && m.minutes && (
             <section>
               <h3>
                 AIタグ提案<span>提案</span>
@@ -873,7 +856,7 @@ export function MeetingDetail({
               <button
                 className="button secondary small"
                 onClick={suggestTags}
-                disabled={suggestingTags}
+                disabled={suggestingTags || busy || editing || attachmentsBusy}
               >
                 {suggestingTags ? (
                   <>
@@ -887,13 +870,25 @@ export function MeetingDetail({
                   </>
                 )}
               </button>
+              <p className="muted">提案にはAPI利用料がかかります。候補を押すと会議に保存します。</p>
               {suggestedTags.length > 0 && (
                 <div className="suggested-tags">
                   <p className="muted">提案されたタグ:</p>
                   {suggestedTags.map((tag, i) => (
-                    <span key={i} className="suggested-tag">
-                      {tag}
-                    </span>
+                    <button key={i} className="suggested-tag"
+                      disabled={busy || editing || attachmentsBusy || m.tags?.includes(tag)}
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          onChange(await api<Meeting>(`/meetings/${m.id}`, {
+                            method: "PATCH", body: JSON.stringify({ tags: [...new Set([...(m.tags || []), tag])] }),
+                          }));
+                          notify("タグを保存しました。");
+                        } catch (e) { notify(e instanceof Error ? e.message : "タグを保存できませんでした。"); }
+                        finally { setBusy(false); }
+                      }}>
+                      {tag}{m.tags?.includes(tag) ? " ✓" : " ＋"}
+                    </button>
                   ))}
                 </div>
               )}
@@ -974,19 +969,9 @@ export function MeetingDetail({
                 議事録を再生成
               </button>
             )}
-            {m.hasAudio && !m.isDemo && (
-              <button
-                className="text-button"
-                disabled={processing || busy || editing || attachmentsBusy}
-                onClick={() => setShowCompressionDialog(true)}
-              >
-                <Download size={13} />
-                音声を最適化
-              </button>
-            )}
             <button
               className="text-button delete-button"
-              disabled={processing || editing || attachmentsBusy}
+              disabled={processing || busy || editing || attachmentsBusy}
               onClick={() => setConfirm("delete")}
             >
               <Trash2 size={13} />
@@ -1027,35 +1012,6 @@ export function MeetingDetail({
             >
               {busy && <LoaderCircle size={15} className="spin" />}
               {confirm === "delete" ? "ゴミ箱へ移動" : "再生成する"}
-            </button>
-          </div>
-        </Modal>
-      )}
-      {showCompressionDialog && (
-        <Modal
-          title="音声を最適化"
-          subtitle="音声ファイルの品質を調整してファイルサイズを削減します"
-          onClose={() => setShowCompressionDialog(false)}
-          locked={compressing}
-        >
-          <p className="confirm-copy">
-            音声ファイルを再処理して、最適な品質で保存します。これによりファイルサイズが削減され、ストレージ容量を節約できます。
-          </p>
-          <div className="modal-footer">
-            <button
-              className="button secondary"
-              onClick={() => setShowCompressionDialog(false)}
-              disabled={compressing}
-            >
-              キャンセル
-            </button>
-            <button
-              className="button primary"
-              disabled={compressing}
-              onClick={compressAudio}
-            >
-              {compressing && <LoaderCircle size={15} className="spin" />}
-              最適化する
             </button>
           </div>
         </Modal>
