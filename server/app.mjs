@@ -77,6 +77,7 @@ const fail = (status, message) =>
 const publicRecord = (record) => {
   const {
     audioFile,
+    analysisId,
     audioParts,
     uploadPlan,
     attachments,
@@ -136,11 +137,11 @@ export async function createApp({
   const jobs = new Set();
   const acquireGemini = createLocalGeminiGate();
   let settingsBusy = false;
-  async function recordApiUsage(kind, meeting, runId, modelId, response, duration, operation) {
+  async function recordApiUsage(kind, meeting, runId, modelId, response, duration, operation, parentRunId) {
     try {
       await usageStore.record(usageEvent({
         id: randomUUID(), meetingId: meeting.id, meetingTitle: meeting.title, runId,
-        kind, model: modelId, response, audioSeconds: duration, operation,
+        kind, model: modelId, response, audioSeconds: duration, operation, parentRunId,
       }));
     } catch (error) {
       console.error("API usage could not be saved", error?.code || error?.name);
@@ -240,7 +241,7 @@ export async function createApp({
           geminiApiKey: geminiKey,
         },
       );
-      let meeting = getMeeting(id);
+      let meeting = await store.save({ ...getMeeting(id), analysisId: runId });
       const gemini = transcriptionModelForJob === "gemini-3.5-transcribe";
       async function transcribePart(part) {
         const duration = part.duration || (recordingsFor(meeting).length === 1
@@ -909,12 +910,13 @@ export async function createApp({
     if (insightJobs >= 2) throw fail(429, "AI生成中です。完了後にもう一度お試しください。");
     insightJobs++;
     const modelForRequest = currentModel;
-    const runId = randomUUID();
+    const parentRunId = operation === "tags" ? meetings[0].analysisId : undefined;
+    const runId = parentRunId || randomUUID();
     const meeting = operation === "tags" ? meetings[0] : { id: runId, title: "期間サマリー" };
     try {
       const ai = aiFactory(currentKey, modelForRequest, { maxRetries: 0, timeout: 110_000 });
       const result = await ai.insight(insightRequest(modelForRequest, operation, meetings, range),
-        (response) => recordApiUsage("minutes", meeting, runId, modelForRequest, response, null, operation));
+        (response) => recordApiUsage("minutes", meeting, runId, modelForRequest, response, null, operation, parentRunId));
       return parseInsight(result, operation);
     } catch (error) {
       if (error.publicMessage) throw error;

@@ -1571,7 +1571,7 @@ Deno.test(
         calls.filter((c) => c.route.endsWith("/transcriptions")).length,
         transcribedBefore,
       );
-      const insightMeeting = { ...createDemo(), isDemo: false, source: "text" };
+      const insightMeeting = { ...createDemo(), isDemo: false, source: "text", analysisId: crypto.randomUUID() };
       rows.set(insightMeeting.id, { owner, document: insightMeeting, audioPath: null, responseId: null });
       const postInsight = (body: any) => ({ method: "POST", body: JSON.stringify(body) });
       assert.equal((await request("/summary", "invalid", postInsight({ period: "month" }))).status, 401);
@@ -1587,6 +1587,9 @@ Deno.test(
       assert.deepEqual((await (await request(`/meetings/${insightMeeting.id}`, "valid-b")).json()).tags, ["共有"]);
       assert.ok([...usageEvents.values()].some((e) => e.operation === "summary" && e.costUsd > 0));
       assert.ok([...usageEvents.values()].some((e) => e.operation === "tags" && e.meetingId === insightMeeting.id));
+      const tagUsage = [...usageEvents.values()].find(e => e.operation === "tags" && e.meetingId === insightMeeting.id);
+      assert.equal(tagUsage.parentRunId, insightMeeting.analysisId);
+      assert.equal(tagUsage.runId, insightMeeting.analysisId);
       const rangeModule = await import("../supabase/functions/_shared/insights.mjs");
       const prior = rangeModule.summaryRange("lastMonth");
       const historical = { ...insightMeeting, id: crypto.randomUUID(), date: prior.end };
