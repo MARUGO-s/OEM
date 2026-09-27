@@ -404,7 +404,7 @@ test("追加AI機能: 現在の接続設定・期間・使用料・タグの再�
   const post = (body) => ({ method: "POST", body: JSON.stringify(body) });
   assert.equal((await request("/summary", post({ period: "year" }))).status, 400);
   assert.equal((await (await request("/summary", post({ period: "month" }))).json()).meetingCount, 0);
-  const meeting = { ...createDemo(), isDemo: false, source: "text", markdown: "# 手動修正した原文" };
+  const meeting = { ...createDemo(), isDemo: false, source: "text", markdown: "# 手動修正した原文", analysisId: randomUUID() };
   await store.save(meeting);
   await store.save(createDemo());
   assert.equal((await request("/summary", post({ period: "month" }))).status, 428);
@@ -426,6 +426,8 @@ test("追加AI機能: 現在の接続設定・期間・使用料・タグの再�
   const usage = await (await request(`/usage?month=${month}`)).json();
   assert.equal(usage.eventCount, 2);
   assert.deepEqual(usage.events.map((e) => e.operation).sort(), ["summary", "tags"]);
+  assert.equal(usage.events.find(e => e.operation === "tags").parentRunId, meeting.analysisId);
+  assert.equal(usage.events.find(e => e.operation === "tags").runId, meeting.analysisId);
   assert.ok(usage.totalUsd > 0);
   const prior = summaryRange("lastMonth");
   await store.save({ ...meeting, id: randomUUID(), date: prior.end });
@@ -1078,7 +1080,7 @@ test("実際のSDKリクエストはGPT Transcribeと指定のAstra/Sol/Lunaを�
 });
 
 test("API使用料を呼び出しごとに保存し、会議削除後も月別に表示する", async (t) => {
-  const { request, waitForJobs } = await setup(t, {
+  const { request, waitForJobs, store } = await setup(t, {
     apiKey: key,
     aiFactory: () => ({
       async transcribe(_path, onUsage) {
@@ -1106,6 +1108,8 @@ test("API使用料を呼び出しごとに保存し、会議削除後も月別�
   assert.ok(usage.events.every((event) => event.meetingId === meeting.id));
   assert.ok(usage.events.every((event) => event.runId === usage.events[0].runId));
   assert.ok(usage.events[0].runId);
+  assert.equal(store.get(meeting.id).analysisId, usage.events[0].runId);
+  assert.equal((await (await request(`/meetings/${meeting.id}`)).json()).analysisId, undefined);
   assert.equal((await request(`/meetings/${meeting.id}/retry`, { method: "POST" })).status, 202);
   await waitForJobs();
   const afterRetry = await (await request(route)).json();

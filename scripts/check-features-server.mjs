@@ -1,6 +1,7 @@
 // Isolated UI smoke server: fixture meetings and fake AI; no saved keys or live requests.
 import { createApp } from "../server/app.mjs";
 import { createDemo } from "../server/demo.mjs";
+import { UsageStore } from "../server/usage-store.mjs";
 import { createServer } from "vite";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,6 +14,25 @@ const date = new Intl.DateTimeFormat("sv-SE", {
   timeZone: "Asia/Tokyo",
 }).format(new Date());
 const failedTagMeetings = new Set();
+const usageMeetingId = randomUUID();
+const analysisRunId = randomUUID();
+const fixtureUsage = new UsageStore(path.join(dataDir, "usage"));
+await fixtureUsage.init();
+for (const [index, costUsd] of [0.030004, 0.001684, 0.001303925, 0.00018505].entries()) {
+  await fixtureUsage.record({
+    id: randomUUID(), meetingId: usageMeetingId, meetingTitle: "検証会議1",
+    runId: index === 3 ? randomUUID() : analysisRunId,
+    kind: index < 2 ? "transcription" : "minutes",
+    ...(index === 3 ? { operation: "tags" } : {}),
+    model: index < 2 ? "gemini-3.5-transcribe" : "gpt-6-luna",
+    provider: index < 2 ? "Google" : "OpenAI",
+    createdAt: new Date(`${date}T05:54:0${index}+09:00`).toISOString(),
+    inputTokens: [15002, 842, 4500, 1313][index],
+    outputTokens: [0, 0, 1483, 42][index],
+    audioSeconds: index === 0 ? 600 : index === 1 ? 33.626 : null,
+    cachedInputTokens: 0, reasoningTokens: null, estimated: false, costUsd,
+  });
+}
 const { app, store } = await createApp({
   dataDir,
   apiKey: "sk-fixture-never-sent",
@@ -53,7 +73,7 @@ const { app, store } = await createApp({
 for (let index = 1; index <= 6; index++) {
   await store.save({
     ...createDemo(),
-    id: randomUUID(),
+    id: index === 1 ? usageMeetingId : randomUUID(),
     isDemo: false,
     status: "done",
     title: `検証会議${index}`,

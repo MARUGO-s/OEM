@@ -81,3 +81,56 @@ test("解析IDのない旧履歴は議事録呼び出しで区切る", () => {
   assert.equal(groups[1].events.length, 2);
   assert.ok(groups.every((group) => group.legacy));
 });
+
+test("既存の独立したタグ料金も直前の同一会議にまとめ、料金とトークンを保持する", () => {
+  const base = { meetingId: "meeting", meetingTitle: "会議", inputTokens: 10, outputTokens: 5 };
+  const events = [
+    { ...base, id: "1", runId: "analysis", kind: "transcription", costUsd: 0.030004, audioSeconds: 600, createdAt: "2026-09-27T20:53:00Z" },
+    { ...base, id: "2", runId: "analysis", kind: "transcription", costUsd: 0.001684, audioSeconds: 33.626, createdAt: "2026-09-27T20:53:39Z" },
+    { ...base, id: "3", runId: "analysis", kind: "minutes", costUsd: 0.001303925, createdAt: "2026-09-27T20:54:03Z" },
+    { ...base, id: "4", runId: "old-tag-request", kind: "minutes", operation: "tags", costUsd: 0.00018505, createdAt: "2026-09-27T20:54:07Z" },
+  ];
+  const [group] = groupUsageEvents(events.toReversed());
+  assert.equal(groupUsageEvents(events).length, 1);
+  assert.equal(group.events.length, 4);
+  assert.equal(group.inferredTags, true);
+  assert.equal((group.totalUsd * 160).toFixed(4), "5.3083");
+  assert.equal(group.inputTokens, 40);
+  assert.equal(group.outputTokens, 20);
+  assert.equal(group.audioSeconds, 633.626);
+});
+
+test("タグの明示的な親解析を優先し、再生成・他会議・サマリーを混ぜない", () => {
+  const base = { meetingId: "a", costUsd: 0.01, kind: "minutes" };
+  const events = [
+    { ...base, id: "m1", runId: "r1", createdAt: "2026-09-28T00:00:00Z" },
+    { ...base, id: "t1", runId: "tag1", operation: "tags", createdAt: "2026-09-28T00:01:00Z" },
+    { ...base, id: "m2", runId: "r2", createdAt: "2026-09-28T00:02:00Z" },
+    { ...base, id: "late", runId: "r1", parentRunId: "r1", operation: "tags", createdAt: "2026-09-28T00:03:00Z" },
+    { ...base, id: "t2", runId: "tag2", operation: "tags", createdAt: "2026-09-28T00:04:00Z" },
+    { ...base, id: "other", meetingId: "b", runId: "tag3", operation: "tags", createdAt: "2026-09-28T00:05:00Z" },
+    { ...base, id: "summary", runId: "r1", operation: "summary", createdAt: "2026-09-28T00:06:00Z" },
+  ];
+  const groups = groupUsageEvents(events);
+  assert.equal(groups.length, 4);
+  assert.deepEqual(groups.find(g => g.id === "a:r1").events.map(e => e.id), ["m1", "t1", "late"]);
+  assert.deepEqual(groups.find(g => g.id === "a:r2").events.map(e => e.id), ["m2", "t2"]);
+  assert.equal(groups.flatMap(g => g.events).length, events.length);
+  assert.equal(groups.reduce((sum, g) => sum + g.totalUsd, 0).toFixed(2), "0.07");
+});
+
+test("タグの親が月内にない場合・未来の議事録・料金不明・解析IDなしの履歴", () => {
+  const base = { meetingId: "a", kind: "minutes", costUsd: 0.01 };
+  const events = [
+    { ...base, id: "early-tag", operation: "tags", createdAt: "2026-09-28T00:00:00Z" },
+    { ...base, id: "legacy", createdAt: "2026-09-28T00:01:00Z" },
+    { ...base, id: "legacy-tag", operation: "tags", costUsd: null, createdAt: "2026-09-28T00:02:00Z" },
+    { ...base, id: "missing-parent", parentRunId: "previous-month", operation: "tags", createdAt: "2026-09-28T00:03:00Z" },
+  ];
+  const groups = groupUsageEvents(events);
+  assert.equal(groups.length, 3);
+  const legacy = groups.find(g => g.legacy);
+  assert.deepEqual(legacy.events.map(e => e.id), ["legacy", "legacy-tag"]);
+  assert.equal(legacy.unpricedCount, 1);
+  assert.equal(legacy.totalUsd, 0.01);
+});

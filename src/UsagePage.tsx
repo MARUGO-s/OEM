@@ -43,7 +43,7 @@ export function UsagePage({ meetings }: { meetings: Meeting[] }) {
   const [rateError, setRateError] = useState("");
   const meetingNames = new Map(meetings.map((meeting) => [meeting.id, meeting.title]));
   const groups = useMemo(() => groupUsageEvents(data?.events || []) as Array<{
-    id: string; meetingId: string; legacy: boolean; createdAt: string;
+    id: string; meetingId: string; legacy: boolean; inferredTags: boolean; createdAt: string;
     totalUsd: number; unpricedCount: number; inputTokens: number;
     outputTokens: number; audioSeconds: number; events: UsageEvent[];
   }>, [data]);
@@ -95,7 +95,7 @@ export function UsagePage({ meetings }: { meetings: Meeting[] }) {
         <div>
           <div className="eyebrow">API USAGE.</div>
           <h1>API使用料</h1>
-          <p>解析1回ごとの概算料金を円で確認できます。内訳を開くと各API呼び出しの利用量が表示されます。</p>
+          <p>文字起こし・議事録生成・タグ候補生成までを一連の作業として、解析1回ごとの合計料金を表示します。内訳で各処理の利用量と料金を確認できます。</p>
         </div>
       </div>
       <div className="usage-toolbar">
@@ -134,7 +134,7 @@ export function UsagePage({ meetings }: { meetings: Meeting[] }) {
                 {groups.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((group) => (
                   <details className="usage-group" key={group.id}>
                     <summary>
-                      <span><strong>{meetingNames.get(group.meetingId) || group.events.at(-1)?.meetingTitle}</strong><small>{when(group.createdAt)} ・ {group.events.length} 呼び出し{group.legacy ? " ・ 旧履歴（まとめ方は推定）" : ""}</small></span>
+                      <span><strong>{meetingNames.get(group.meetingId) || group.events.at(-1)?.meetingTitle}</strong><small>{when(group.createdAt)} ・ {group.events.length} 呼び出し{group.events.some(event => event.operation === "tags") ? " ・ タグ候補生成を含む" : ""}{group.legacy ? " ・ 旧履歴（まとめ方は推定）" : ""}{group.inferredTags ? " ・ タグの紐付けは推定" : ""}</small></span>
                       <span className="usage-group-total"><strong>{group.unpricedCount === group.events.length ? "算出不可" : yen(group.totalUsd, rate)}</strong>{group.unpricedCount > 0 && group.unpricedCount < group.events.length && <small>算出不可 {group.unpricedCount} 件を除く</small>}</span>
                     </summary>
                     <div className="usage-group-meta">入力 {integer(group.inputTokens)} token ・ 出力 {integer(group.outputTokens)} token{group.audioSeconds > 0 && ` ・ 音声 ${(group.audioSeconds / 60).toFixed(1)} 分`}</div>

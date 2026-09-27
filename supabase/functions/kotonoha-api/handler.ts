@@ -316,14 +316,14 @@ async function usageId(providerId?: string) {
 }
 async function recordApiUsage(
   owner: string, meeting: Doc, kind: "transcription" | "minutes",
-  model: string, response: Doc, duration?: number | null, operation?: string,
+  model: string, response: Doc, duration?: number | null, operation?: string, parentRunId?: string,
 ) {
   try {
     const id = await usageId(response?.id ? `${owner}:${kind}:${response.id}` : undefined);
     await store("record", owner, null, usageEvent({
       id, meetingId: meeting.id, meetingTitle: meeting.title,
       runId: meeting.analysisId,
-      kind, model, response, audioSeconds: duration, operation,
+      kind, model, response, audioSeconds: duration, operation, parentRunId,
     }), "kotonoha_usage");
   } catch (error) {
     console.error("kotonoha API usage could not be saved", (error as any)?.status || "unknown");
@@ -1217,7 +1217,7 @@ export async function handler(req: Request) {
       const result = await openai(key, "/responses", {
         method: "POST", body: JSON.stringify(insightRequest(config.model, "tags", [meeting], undefined)),
       }, 110_000);
-      await recordApiUsage(owner, { ...meeting, analysisId: crypto.randomUUID() }, "minutes", config.model, result, null, "tags");
+      await recordApiUsage(owner, meeting, "minutes", config.model, result, null, "tags", meeting.analysisId);
       return json(parseInsight(result, "tags"));
     }
     const match = route.match(
