@@ -2290,11 +2290,14 @@ button {
   margin-bottom: 18px;
 }
 .transcript-text {
-  white-space: pre-wrap;
   font-size: 16px;
   color: #343848;
-  line-height: 2.2;
+  line-height: 2;
   overflow-wrap: anywhere;
+}
+.transcript-text p {
+  margin: 0 0 1.2em;
+  text-indent: 1em;
 }
 .actions-content {
   padding: 12px 0 24px;

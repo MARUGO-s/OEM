@@ -31,6 +31,7 @@ import {
 import { Modal } from "./Modal";
 import { AttachmentPanel } from "./Attachments";
 import { MeetingSchedule } from "./Calendar";
+import { transcriptParagraphs } from "./transcript-paragraphs.mjs";
 
 type Tab = "minutes" | "transcript" | "actions" | "schedule" | "files";
 const tabLabels: Record<Tab, string> = {
@@ -693,10 +694,14 @@ export function MeetingDetail({
                       {m.source === "audio" && (
                         <p className="transcript-note">
                           {transcriptionModelName(m.transcriptionModel)}
-                          Transcribeの出力です。話者名・タイムスタンプは付与していません。
+                          の出力です。話者名・タイムスタンプは付与していません。読みやすさのため文の区切りで段落に分けて表示しています。
                         </p>
                       )}
-                      <p className="transcript-text">{m.transcript}</p>
+                      <div className="transcript-text">
+                        {transcriptParagraphs(m.transcript).map((p, i) => (
+                          <p key={i}>{p}</p>
+                        ))}
+                      </div>
                     </>
                   ) : (
                     <div className="document-empty">
