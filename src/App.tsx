@@ -26,6 +26,9 @@ import {
   Sparkles,
   UploadCloud,
   X,
+  Filter,
+  Tag as TagIcon,
+  Trash2,
 } from "lucide-react";
 import { api } from "./api";
 import { isCloud, signOut } from "./cloud";
@@ -37,6 +40,8 @@ import {
   today,
   type Meeting,
   type Settings,
+  type MeetingFilters,
+  type MeetingTag,
 } from "./types";
 import { NewMeeting } from "./NewMeeting";
 import { SettingsDialog } from "./SettingsDialog";
@@ -58,6 +63,18 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [advancedFilters, setAdvancedFilters] = useState<MeetingFilters>({
+    dateRange: null,
+    participants: "",
+    status: "all",
+  });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [tags, setTags] = useState<MeetingTag[]>([]);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+  const [showTagManager, setShowTagManager] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#6960d8");
+  const [tagAssignmentTarget, setTagAssignmentTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -196,6 +213,38 @@ export default function App() {
     setNewOpen(false);
     openMeeting(m.id);
   }
+
+  // タグ管理関数
+  function createTag() {
+    if (!newTagName.trim()) return;
+    const newTag: MeetingTag = {
+      id: `tag-${Date.now()}`,
+      name: newTagName.trim(),
+      color: newTagColor,
+    };
+    setTags([...tags, newTag]);
+    setNewTagName("");
+    setNewTagColor("#6960d8");
+    notify("タグを作成しました");
+  }
+
+  function deleteTag(tagId: string) {
+    setTags(tags.filter((t) => t.id !== tagId));
+    if (selectedTagFilter === tagId) setSelectedTagFilter(null);
+    notify("タグを削除しました");
+  }
+
+  function toggleMeetingTag(meetingId: string, tagId: string) {
+    const meeting = meetings.find((m) => m.id === meetingId);
+    if (!meeting) return;
+    
+    const currentTags = meeting.tags || [];
+    const updatedTags = currentTags.includes(tagId)
+      ? currentTags.filter((t) => t !== tagId)
+      : [...currentTags, tagId];
+    
+    updateMeeting({ ...meeting, tags: updatedTags });
+  }
   const realMeetings = meetings.filter((m) => !m.isDemo);
   const actionCount = realMeetings.reduce(
     (count, m) =>
@@ -203,14 +252,40 @@ export default function App() {
     0,
   );
   const current = meetings.find((m) => m.id === selected);
-  const filtered = meetings.filter(
-    (m) =>
-      (filter === "all" ||
-        (filter === "done" ? m.status === "done" : isWorking(m))) &&
+  const filtered = meetings.filter((m) => {
+    // 基本フィルター
+    const basicFilter =
+      filter === "all" ||
+      (filter === "done" ? m.status === "done" : isWorking(m)) ||
+      (filter === "processing" ? isWorking(m) : false);
+
+    // 検索フィルター
+    const searchFilter =
       `${m.title} ${m.participants} ${m.transcript} ${m.markdown}`
         .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
+        .includes(search.toLowerCase());
+
+    // 高度なフィルター
+    const statusFilter =
+      advancedFilters.status === "all" ||
+      (advancedFilters.status === "done" ? m.status === "done" : false) ||
+      (advancedFilters.status === "working" ? isWorking(m) : false) ||
+      (advancedFilters.status === "error" ? m.status === "error" : false);
+
+    const participantsFilter =
+      !advancedFilters.participants ||
+      m.participants.toLowerCase().includes(advancedFilters.participants.toLowerCase());
+
+    const dateFilter =
+      !advancedFilters.dateRange ||
+      (m.date >= advancedFilters.dateRange.start && m.date <= advancedFilters.dateRange.end);
+
+    // タグフィルター
+    const tagFilter =
+      !selectedTagFilter || (m.tags && m.tags.includes(selectedTagFilter));
+
+    return basicFilter && searchFilter && statusFilter && participantsFilter && dateFilter && tagFilter;
+  });
   const pageTitle =
     page === "calendar"
       ? "共有カレンダー"
@@ -609,25 +684,241 @@ export default function App() {
                   <h2>
                     会議ライブラリ<span>{meetings.length}</span>
                   </h2>
-                  <label className="search-box">
-                    <Search size={16} />
-                    <input
-                      aria-label="会議を検索"
-                      placeholder="会議名や内容で検索…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-                    {search && (
-                      <button
-                        className="icon-button"
-                        aria-label="検索をクリア"
-                        onClick={() => setSearch("")}
-                      >
-                        <X size={13} />
-                      </button>
-                    )}
-                  </label>
+                  <div className="search-filters-row">
+                    <label className="search-box">
+                      <Search size={16} />
+                      <input
+                        aria-label="会議を検索"
+                        placeholder="会議名や内容で検索…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                      />
+                      {search && (
+                        <button
+                          className="icon-button"
+                          aria-label="検索をクリア"
+                          onClick={() => setSearch("")}
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </label>
+                    <button
+                      className={`icon-button ${showAdvancedFilters ? "active" : ""}`}
+                      aria-label="高度なフィルター"
+                      onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                    >
+                      <Filter size={16} />
+                    </button>
+                  </div>
                 </div>
+                {showAdvancedFilters && (
+                  <div className="advanced-filters-panel">
+                    <div className="filter-row">
+                      <label>
+                        日付範囲
+                        <div className="date-range-inputs">
+                          <input
+                            type="date"
+                            value={advancedFilters.dateRange?.start || ""}
+                            onChange={(e) =>
+                              setAdvancedFilters((prev) => ({
+                                ...prev,
+                                dateRange: {
+                                  start: e.target.value,
+                                  end: prev.dateRange?.end || today(),
+                                },
+                              }))
+                            }
+                          />
+                          <span>〜</span>
+                          <input
+                            type="date"
+                            value={advancedFilters.dateRange?.end || ""}
+                            onChange={(e) =>
+                              setAdvancedFilters((prev) => ({
+                                ...prev,
+                                dateRange: {
+                                  start: prev.dateRange?.start || today(),
+                                  end: e.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </div>
+                      </label>
+                    </div>
+                    <div className="filter-row">
+                      <label>
+                        参加者
+                        <input
+                          type="text"
+                          placeholder="参加者名で絞り込み…"
+                          value={advancedFilters.participants}
+                          onChange={(e) =>
+                            setAdvancedFilters((prev) => ({
+                              ...prev,
+                              participants: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="filter-row">
+                      <label>
+                        ステータス
+                        <select
+                          value={advancedFilters.status}
+                          onChange={(e) =>
+                            setAdvancedFilters((prev) => ({
+                              ...prev,
+                              status: e.target.value as MeetingFilters["status"],
+                            }))
+                          }
+                        >
+                          <option value="all">すべて</option>
+                          <option value="done">作成完了</option>
+                          <option value="working">処理中</option>
+                          <option value="error">エラー</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="filter-row">
+                      <label>
+                        タグで絞り込み
+                        <div className="tag-filter-row">
+                          <button
+                            className={`tag-filter-btn ${!selectedTagFilter ? "active" : ""}`}
+                            onClick={() => setSelectedTagFilter(null)}
+                          >
+                            すべて
+                          </button>
+                          {tags.map((tag) => (
+                            <button
+                              key={tag.id}
+                              className={`tag-filter-btn ${selectedTagFilter === tag.id ? "active" : ""}`}
+                              style={{ 
+                                borderColor: selectedTagFilter === tag.id ? tag.color : "#e9eaf1",
+                                backgroundColor: selectedTagFilter === tag.id ? `${tag.color}20` : "transparent"
+                              }}
+                              onClick={() => setSelectedTagFilter(tag.id)}
+                            >
+                              <span
+                                className="tag-color-dot"
+                                style={{ backgroundColor: tag.color }}
+                              />
+                              {tag.name}
+                            </button>
+                          ))}
+                          <button
+                            className="tag-filter-btn tag-manager-btn"
+                            onClick={() => setShowTagManager(!showTagManager)}
+                          >
+                            <TagIcon size={14} />
+                            タグ管理
+                          </button>
+                        </div>
+                      </label>
+                    </div>
+                    {showTagManager && (
+                      <div className="tag-manager-panel">
+                        <div className="tag-create-row">
+                          <input
+                            type="text"
+                            placeholder="新しいタグ名…"
+                            value={newTagName}
+                            onChange={(e) => setNewTagName(e.target.value)}
+                          />
+                          <input
+                            type="color"
+                            value={newTagColor}
+                            onChange={(e) => setNewTagColor(e.target.value)}
+                            className="color-picker"
+                          />
+                          <button
+                            className="button primary"
+                            onClick={createTag}
+                            disabled={!newTagName.trim()}
+                          >
+                            追加
+                          </button>
+                        </div>
+                        <div className="tag-list">
+                          {tags.map((tag) => (
+                            <div key={tag.id} className="tag-item">
+                              <span
+                                className="tag-color-dot"
+                                style={{ backgroundColor: tag.color }}
+                              />
+                              <span>{tag.name}</span>
+                              <button
+                                className="icon-button"
+                                onClick={() => deleteTag(tag.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))}
+                          {tags.length === 0 && (
+                            <p className="muted">タグがありません。新しいタグを作成してください。</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="filter-actions">
+                      <button
+                        className="button secondary"
+                        onClick={() =>
+                          setAdvancedFilters({
+                            dateRange: null,
+                            participants: "",
+                            status: "all",
+                          })
+                        }
+                      >
+                        フィルターをクリア
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {tagAssignmentTarget && (
+                  <div className="tag-assignment-modal">
+                    <div className="tag-assignment-content">
+                      <div className="tag-assignment-header">
+                        <h3>タグを追加</h3>
+                        <button
+                          className="icon-button"
+                          onClick={() => setTagAssignmentTarget(null)}
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <div className="tag-assignment-list">
+                        {tags.map((tag) => {
+                          const meeting = meetings.find((m) => m.id === tagAssignmentTarget);
+                          const isAssigned = meeting?.tags?.includes(tag.id);
+                          return (
+                            <button
+                              key={tag.id}
+                              className={`tag-assignment-item ${isAssigned ? "assigned" : ""}`}
+                              onClick={() => toggleMeetingTag(tagAssignmentTarget, tag.id)}
+                            >
+                              <span
+                                className="tag-color-dot"
+                                style={{ backgroundColor: tag.color }}
+                              />
+                              {tag.name}
+                              {isAssigned && <Check size={14} />}
+                            </button>
+                          );
+                        })}
+                        {tags.length === 0 && (
+                          <p className="muted">タグがありません。タグ管理から作成してください。</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="library-tabs">
                   {[
                     ["all", "すべて"],
@@ -674,6 +965,36 @@ export default function App() {
                             {m.participants || "参加者未記入"}
                             {m.isDemo && <em>サンプル</em>}
                           </span>
+                          {m.tags && m.tags.length > 0 && (
+                            <div className="meeting-tags">
+                              {m.tags.map((tagId) => {
+                                const tag = tags.find((t) => t.id === tagId);
+                                return tag ? (
+                                  <span
+                                    key={tagId}
+                                    className="meeting-tag"
+                                    style={{ backgroundColor: `${tag.color}20`, borderColor: tag.color }}
+                                  >
+                                    <span
+                                      className="tag-color-dot"
+                                      style={{ backgroundColor: tag.color }}
+                                    />
+                                    {tag.name}
+                                  </span>
+                                ) : null;
+                              })}
+                            </div>
+                          )}
+                          <button
+                            className="tag-assign-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTagAssignmentTarget(m.id);
+                            }}
+                            title="タグを追加"
+                          >
+                            <TagIcon size={14} />
+                          </button>
                         </div>
                         <span
                           className={`badge ${m.status === "done" ? "success" : m.status === "error" ? "failure" : "neutral"}`}

@@ -109,6 +109,23 @@ export function ActionList({
 }) {
   const [saving, setSaving] = useState(false);
   const actions = meeting.minutes?.actions || [];
+  
+  // 期限切れチェック
+  const isOverdue = (due: string) => {
+    if (!due) return false;
+    const dueDate = new Date(due);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return dueDate < today;
+  };
+
+  // 優先度のラベルと色
+  const priorityConfig = {
+    high: { label: "高", className: "priority-high" },
+    medium: { label: "中", className: "priority-medium" },
+    low: { label: "低", className: "priority-low" },
+  };
+
   async function toggle(index: number) {
     setSaving(true);
     try {
@@ -130,36 +147,49 @@ export function ActionList({
   return (
     <div className="action-list">
       {actions.length ? (
-        actions.map((action, i) => (
-          <div
-            className={`action-item ${meeting.completedActions.includes(i) ? "completed" : ""}`}
-            key={i}
-          >
-            <button
-              className="task-checkbox"
-              disabled={disabled || saving || isWorking(meeting)}
-              role="checkbox"
-              aria-checked={meeting.completedActions.includes(i)}
-              aria-label={`${action.task}を${meeting.completedActions.includes(i) ? "未完了" : "完了"}にする`}
-              onClick={() => toggle(i)}
+        actions.map((action, i) => {
+          const overdue = !meeting.completedActions.includes(i) && isOverdue(action.due);
+          const priority = action.priority || "medium";
+          const priorityInfo = priorityConfig[priority];
+          
+          return (
+            <div
+              className={`action-item ${meeting.completedActions.includes(i) ? "completed" : ""} ${overdue ? "overdue" : ""}`}
+              key={i}
             >
-              {meeting.completedActions.includes(i) && <Check size={13} />}
-            </button>
-            <div>
-              <strong>{action.task}</strong>
-              <span>
-                <span className="person-dot">
-                  {action.owner.slice(0, 1) || "?"}
-                </span>
-                {action.owner || "未定"}
-                <span className="action-due">
-                  <CalendarDays size={12} />
-                  {action.due || "未定"}
-                </span>
-              </span>
+              <button
+                className="task-checkbox"
+                disabled={disabled || saving || isWorking(meeting)}
+                role="checkbox"
+                aria-checked={meeting.completedActions.includes(i)}
+                aria-label={`${action.task}を${meeting.completedActions.includes(i) ? "未完了" : "完了"}にする`}
+                onClick={() => toggle(i)}
+              >
+                {meeting.completedActions.includes(i) && <Check size={13} />}
+              </button>
+              <div>
+                <strong>{action.task}</strong>
+                <div className="action-meta">
+                  <span className="person-dot">
+                    {action.owner.slice(0, 1) || "?"}
+                  </span>
+                  {action.owner || "未定"}
+                  <span className={`action-priority ${priorityInfo.className}`}>
+                    {priorityInfo.label}
+                  </span>
+                  {action.category && (
+                    <span className="action-category">{action.category}</span>
+                  )}
+                  <span className={`action-due ${overdue ? "overdue" : ""}`}>
+                    <CalendarDays size={12} />
+                    {action.due || "未定"}
+                    {overdue && " (期限切れ)"}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-        ))
+          );
+        })
       ) : (
         <p className="muted empty-inline">アクションアイテムはありません。</p>
       )}

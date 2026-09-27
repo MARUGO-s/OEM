@@ -2,6 +2,8 @@ export interface Action {
   task: string;
   owner: string;
   due: string;
+  priority?: "high" | "medium" | "low";
+  category?: string;
 }
 export interface Minutes {
   scheduleEvents?: ScheduleEvent[];
@@ -80,6 +82,7 @@ export interface Meeting {
     reason: "spacing" | "rate_limit";
     attempt: number;
   } | null;
+  tags?: string[];
 }
 export interface Settings {
   configured: boolean;
@@ -167,3 +170,15 @@ export const formatDate = (date: string) =>
   );
 export const clock = (value: number) =>
   `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(Math.floor(value % 60)).padStart(2, "0")}`;
+
+export interface MeetingFilters {
+  dateRange: { start: string; end: string } | null;
+  participants: string;
+  status: "all" | "done" | "working" | "error";
+}
+
+export interface MeetingTag {
+  id: string;
+  name: string;
+  color: string;
+}
