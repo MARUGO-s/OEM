@@ -7,6 +7,7 @@ import { z } from "zod";
 import { MeetingStore } from "./store.mjs";
 import { UsageStore } from "./usage-store.mjs";
 import { createAI } from "./ai.mjs";
+import { SummaryRequest, TagsRequest, periodMeetings, insightRequest, parseInsight } from "../supabase/functions/_shared/insights.mjs";
 import { usageEvent } from "../supabase/functions/_shared/usage.mjs";
 import {
   createLocalGeminiGate,
@@ -133,11 +134,11 @@ export async function createApp({
   const jobs = new Set();
   const acquireGemini = createLocalGeminiGate();
   let settingsBusy = false;
-  async function recordApiUsage(kind, meeting, runId, modelId, response, duration) {
+  async function recordApiUsage(kind, meeting, runId, modelId, response, duration, operation) {
     try {
       await usageStore.record(usageEvent({
         id: randomUUID(), meetingId: meeting.id, meetingTitle: meeting.title, runId,
-        kind, model: modelId, response, audioSeconds: duration,
+        kind, model: modelId, response, audioSeconds: duration, operation,
       }));
     } catch (error) {
       console.error("API usage could not be saved", error?.code || error?.name);
@@ -901,110 +902,39 @@ export async function createApp({
       busy.delete(meeting.id);
     }
   });
+  let insightJobs = 0;
+  async function generateInsight(operation, meetings, range) {
+    if (insightJobs >= 2) throw fail(429, "AI生成中です。完了後にもう一度お試しください。");
+    insightJobs++;
+    const modelForRequest = currentModel;
+    const runId = randomUUID();
+    const meeting = operation === "tags" ? meetings[0] : { id: runId, title: "期間サマリー" };
+    try {
+      const ai = aiFactory(currentKey, modelForRequest, { maxRetries: 0, timeout: 110_000 });
+      const result = await ai.insight(insightRequest(modelForRequest, operation, meetings, range),
+        (response) => recordApiUsage("minutes", meeting, runId, modelForRequest, response, null, operation));
+      return parseInsight(result, operation);
+    } catch (error) {
+      if (error.publicMessage) throw error;
+      throw fail(502, safeError(error));
+    } finally { insightJobs--; }
+  }
+  app.post("/api/summary", async (req, res) => {
+    const { period } = SummaryRequest.parse(req.body);
+    const { meetings, ...range } = periodMeetings(store.list(), period);
+    if (!meetings.length) return res.json({ summary: "対象期間の会議がありません。", meetingCount: 0, period, ...range });
+    if (!currentKey) throw fail(428, "接続設定でOpenAI APIキーを設定してください。");
+    res.json({ ...await generateInsight("summary", meetings, range), meetingCount: meetings.length, period, ...range });
+  });
+  app.post("/api/suggest-tags", requireKey, async (req, res) => {
+    const { meetingId } = TagsRequest.parse(req.body);
+    const meeting = getMeeting(meetingId);
+    if (meeting.isDemo || meeting.status !== "done" || !meeting.minutes) throw fail(400, "完了した実際の会議を選択してください。");
+    res.json(await generateInsight("tags", [meeting]));
+  });
   app.use("/api", (_req, _res, next) =>
     next(fail(404, "APIが見つかりません。")),
   );
-
-  // 自動サマリー生成エンドポイント
-  app.get("/api/summary", async (req, res) => {
-    try {
-      const period = req.query.period || "month"; // month, week
-      const meetings = await store.list();
-      const now = new Date();
-      let startDate;
-      
-      if (period === "week") {
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      } else {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      }
-      
-      const filteredMeetings = meetings.filter((m) => {
-        const meetingDate = new Date(m.date);
-        return meetingDate >= startDate && m.status === "done";
-      });
-      
-      if (filteredMeetings.length === 0) {
-        return res.json({ summary: "対象期間の会議がありません。" });
-      }
-      
-      const ai = aiFactory({ apiKey, geminiApiKey, model });
-      const meetingData = filteredMeetings.map((m) => ({
-        title: m.title,
-        date: m.date,
-        participants: m.participants,
-        summary: m.minutes?.summary || "",
-        decisions: m.minutes?.decisions || [],
-        actions: m.minutes?.actions || [],
-      }));
-      
-      const prompt = `以下の会議データに基づいて、${period === "week" ? "週次" : "月次"}のサマリーを作成してください：
-
-${JSON.stringify(meetingData, null, 2)}
-
-以下の形式で出力してください：
-## 要約
-全体の概要
-
-## 重要な決定事項
-- 汮定1
-- 汳定2
-
-## 主なアクションアイテム
-- アクション1
-- アクション2
-
-## 課題・懸念事項
-- 課題1
-- 課題2`;
-      
-      const summary = await ai.complete(prompt);
-      res.json({ summary, meetingCount: filteredMeetings.length, period });
-    } catch (error) {
-      console.error("Summary generation error:", error);
-      res.status(500).json({ error: "サマリーの生成に失敗しました。" });
-    }
-  });
-
-  // 自動タグ付けエンドポイント
-  app.post("/api/suggest-tags", async (req, res) => {
-    try {
-      const { meetingId } = req.body;
-      const meetings = await store.list();
-      const meeting = meetings.find((m) => m.id === meetingId);
-      
-      if (!meeting || !meeting.minutes) {
-        return res.status(404).json({ error: "会議が見つかりません。" });
-      }
-      
-      const ai = aiFactory({ apiKey, geminiApiKey, model });
-      const prompt = `以下の会議の内容に基づいて、3〜5個の適切なタグを提案してください。
-タグは日本語で、短く分かりやすく、キーワードを推奨します。
-
-会議タイトル: ${meeting.title}
-参加者: ${meeting.participants}
-要約: ${meeting.minutes.summary || "なし"}
-トピック: ${meeting.minutes.topics?.map((t) => t.title).join(", ") || "なし"}
-
-以下のJSON形式で出力してください（タグのみ）：
-{
-  "tags": ["タグ1", "タグ2", "タグ3"]
-}`;
-      
-      const response = await ai.complete(prompt);
-      try {
-        const parsed = JSON.parse(response);
-        res.json({ tags: parsed.tags || [] });
-      } catch {
-        // JSON解析に失敗した場合、テキストからタグを抽出
-        const tags = response.match(/「([^」]+)」/g)?.map((t) => t.replace(/[「」]/g, "")) || [];
-        res.json({ tags });
-      }
-    } catch (error) {
-      console.error("Tag suggestion error:", error);
-      res.status(500).json({ error: "タグの提案に失敗しました。" });
-    }
-  });
   if (staticDir) {
     app.use(express.static(staticDir));
     app.get("/", (_req, res) =>

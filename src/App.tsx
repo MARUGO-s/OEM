@@ -46,6 +46,7 @@ import {
   type MeetingTag,
   type SearchOptions,
   type MeetingTemplate,
+  type ScheduleEvent,
 } from "./types";
 import { NewMeeting } from "./NewMeeting";
 import { SettingsDialog } from "./SettingsDialog";
@@ -55,7 +56,22 @@ import { UsagePage } from "./UsagePage";
 import { StatsPage } from "./StatsPage";
 import { ComparePage } from "./ComparePage";
 import { Modal } from "./Modal";
-import { tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
+import { meetingEvents, tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
+import { MeetingTagsSchema, TagNameSchema } from "../supabase/functions/_shared/domain.mjs";
+
+const TAG_CANDIDATES_KEY = "kotonoha.tag-candidates.v1";
+const NOTIFIED_DEADLINES_KEY = "kotonoha.notified-deadlines.v1";
+function storedStrings(storage: Storage, key: string): string[] {
+  const value: unknown = JSON.parse(storage.getItem(key) || "[]");
+  return Array.isArray(value) ? value.filter((s): s is string => typeof s === "string") : [];
+}
+function meetingTag(name: string): MeetingTag {
+  const colors = ["#6960d8", "#247b6e", "#ad5b28", "#ad4575", "#326db0", "#78702b"];
+  let hash = 0;
+  for (const char of name) hash = (Math.imul(hash, 31) + char.codePointAt(0)!) >>> 0;
+  // Use the name for both UI identity and the value saved in Meeting.tags.
+  return { id: name, name, color: colors[hash % colors.length] };
+}
 
 type Page = "meetings" | "calendar" | "actions" | "usage" | "stats" | "compare" | "help";
 export default function App() {
@@ -87,11 +103,18 @@ export default function App() {
   });
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [tags, setTags] = useState<MeetingTag[]>([]);
+  const [tagCandidates, setTagCandidates] = useState<string[]>(() => {
+    try {
+      return MeetingTagsSchema.parse(storedStrings(localStorage, TAG_CANDIDATES_KEY));
+    } catch { return []; }
+  });
+  const tags = [...new Set([...meetings.flatMap((m) => m.tags || []), ...tagCandidates])]
+    .sort().map(meetingTag);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
   const [newTagName, setNewTagName] = useState("");
-  const [newTagColor, setNewTagColor] = useState("#6960d8");
+  const [tagBusy, setTagBusy] = useState(false);
+  const tagMutation = useRef({ busy: false, version: 0 });
   const [tagAssignmentTarget, setTagAssignmentTarget] = useState<string | null>(null);
   const [templates, setTemplates] = useState<MeetingTemplate[]>([]);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
@@ -106,6 +129,14 @@ export default function App() {
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameError, setRenameError] = useState("");
   const renameInput = useRef<HTMLInputElement>(null);
+  const latestMeetings = useRef(meetings);
+  const notifiedDeadlines = useRef<Set<string> | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TAG_CANDIDATES_KEY, JSON.stringify(tagCandidates));
+    } catch { /* Candidates remain usable when browser storage is unavailable. */ }
+  }, [tagCandidates]);
 
   // デフォルトテンプレート
   useEffect(() => {
@@ -113,7 +144,7 @@ export default function App() {
       {
         id: "weekly",
         name: "週次定例会議",
-        description: "週次の進捗確認・課題共有",
+        description: "会議名と標準形式を設定します。議題は会話から抽出します。",
         defaultParticipants: "",
         defaultTopics: ["前回の振り返り", "今週の進捗", "課題・懸念事項", "来週の予定"],
         templateType: "standard",
@@ -122,7 +153,7 @@ export default function App() {
       {
         id: "project",
         name: "プロジェクト進捗",
-        description: "プロジェクト全体の進捗確認",
+        description: "会議名と詳細形式を設定します。議題は会話から抽出します。",
         defaultParticipants: "",
         defaultTopics: ["マイルストーンの進捗", "リスク管理", "リソース状況", "次回のアクション"],
         templateType: "detailed",
@@ -131,7 +162,7 @@ export default function App() {
       {
         id: "brainstorm",
         name: "ブレインストーミング",
-        description: "アイデア出し・創造的な議論",
+        description: "会議名と簡易形式を設定します。議題は会話から抽出します。",
         defaultParticipants: "",
         defaultTopics: ["テーマの共有", "アイデア出し", "アイデアの整理", "次のステップ"],
         templateType: "brief",
@@ -148,47 +179,58 @@ export default function App() {
     }
   }, []);
 
-  // 期限切れアクションのチェックと通知
+  const checkOverdueActions = useCallback(() => {
+    if (!("Notification" in window) || notificationPermission !== "granted" ||
+        Notification.permission !== "granted") return;
+    if (!notifiedDeadlines.current) {
+      try {
+        notifiedDeadlines.current = new Set(storedStrings(sessionStorage, NOTIFIED_DEADLINES_KEY));
+      } catch { notifiedDeadlines.current = new Set(); }
+    }
+    const notified = notifiedDeadlines.current;
+    const today = tokyoToday();
+    const pending = latestMeetings.current.filter((m) => !m.isDemo).flatMap((m) =>
+      meetingEvents(m).flatMap((event: ScheduleEvent & { id: string; original: ScheduleEvent }) => {
+        const due = event.endDate || event.date;
+        if (event.kind !== "deadline" || event.status !== "confirmed" || !due || due >= today) return [];
+        // Calendar edits preserve the original title/owner, so completion still matches.
+        const actions = (m.minutes?.actions || []).flatMap((action, index) =>
+          action.task === event.original.title && action.owner === event.original.owner ? [index] : [],
+        );
+        if (actions.length && actions.every((index) => m.completedActions?.includes(index))) return [];
+        const key = JSON.stringify([m.id, event.id, due]);
+        return notified.has(key) ? [] : [key];
+      }),
+    );
+    if (!pending.length) return;
+    try {
+      new Notification("期限を過ぎた予定があります", {
+        body: `共有カレンダーに${pending.length}件の未通知の期限があります`,
+        tag: "kotonoha-overdue",
+      });
+    } catch { return; } // Some browsers cannot construct notifications; never break the app.
+    pending.forEach((key) => notified.add(key));
+    try {
+      sessionStorage.setItem(NOTIFIED_DEADLINES_KEY, JSON.stringify([...notified]));
+    } catch { /* In-memory deduplication still works. */ }
+  }, [notificationPermission]);
+  useEffect(() => {
+    latestMeetings.current = meetings;
+    checkOverdueActions();
+  }, [meetings, checkOverdueActions]);
   useEffect(() => {
     if (notificationPermission !== "granted") return;
-    
-    const checkOverdueActions = () => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      let overdueCount = 0;
-      meetings.forEach((m) => {
-        if (m.minutes?.actions) {
-          m.minutes.actions.forEach((action, index) => {
-            if (!m.completedActions?.includes(index) && action.due) {
-              const dueDate = new Date(action.due);
-              if (dueDate < today) {
-                overdueCount++;
-              }
-            }
-          });
-        }
-      });
-      
-      if (overdueCount > 0) {
-        new Notification("期限切れのアクションがあります", {
-          body: `${overdueCount}件のアクションが期限切れです`,
-          icon: "/favicon.ico",
-        });
-      }
-    };
-    
-    // 1時間ごとにチェック
-    const interval = setInterval(checkOverdueActions, 60 * 60 * 1000);
+    // Stable across polling; check day rollover even when meeting data does not change.
+    const interval = setInterval(checkOverdueActions, 60_000);
     return () => clearInterval(interval);
-  }, [notificationPermission, meetings]);
+  }, [notificationPermission, checkOverdueActions]);
 
   async function requestNotificationPermission() {
     if ("Notification" in window) {
       const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
       if (permission === "granted") {
-        notify("通知を有効にしました");
+        notify("通知を有効にしました。アプリを開いている間だけ期限を確認します。");
       }
     }
   }
@@ -210,12 +252,13 @@ export default function App() {
     [],
   );
   const refresh = useCallback(async () => {
+    const tagVersion = tagMutation.current.version;
     try {
       const [records, config] = await Promise.all([
         api<Meeting[]>("/meetings"),
         api<Settings>("/settings"),
       ]);
-      setMeetings(records);
+      if (!tagMutation.current.busy && tagMutation.current.version === tagVersion) setMeetings(records);
       setSettings(config);
       setError("");
     } catch (e) {
@@ -233,11 +276,12 @@ export default function App() {
     let stop = false;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
+      const tagVersion = tagMutation.current.version;
       try {
         const records = await api<Meeting[]>("/meetings");
         const config = isCloud ? await api<Settings>("/settings") : null;
         if (!stop) {
-          setMeetings(records);
+          if (!tagMutation.current.busy && tagMutation.current.version === tagVersion) setMeetings(records);
           if (config) setSettings(config);
           setError("");
         }
@@ -323,34 +367,51 @@ export default function App() {
 
   // タグ管理関数
   function createTag() {
-    if (!newTagName.trim()) return;
-    const newTag: MeetingTag = {
-      id: `tag-${Date.now()}`,
-      name: newTagName.trim(),
-      color: newTagColor,
-    };
-    setTags([...tags, newTag]);
+    const parsed = TagNameSchema.safeParse(newTagName);
+    if (!parsed.success) return notify("タグ名は1〜50文字で入力してください。");
+    if (tags.some((tag) => tag.name === parsed.data)) return notify("同じ名前のタグがあります。");
+    if (tagCandidates.length >= 50) return notify("未使用のタグ候補を削除してから追加してください。");
+    setTagCandidates((prev) => [...prev, parsed.data]);
     setNewTagName("");
-    setNewTagColor("#6960d8");
-    notify("タグを作成しました");
+    notify("タグ候補を追加しました。会議に付けると共有保存されます。");
   }
 
   function deleteTag(tagId: string) {
-    setTags(tags.filter((t) => t.id !== tagId));
+    if (meetings.some((m) => m.tags?.includes(tagId))) return;
+    setTagCandidates((prev) => prev.filter((name) => name !== tagId));
     if (selectedTagFilter === tagId) setSelectedTagFilter(null);
-    notify("タグを削除しました");
+    notify("この端末のタグ候補を削除しました");
   }
 
-  function toggleMeetingTag(meetingId: string, tagId: string) {
+  async function toggleMeetingTag(meetingId: string, tagId: string) {
     const meeting = meetings.find((m) => m.id === meetingId);
-    if (!meeting) return;
+    if (!meeting || tagMutation.current.busy) return;
     
     const currentTags = meeting.tags || [];
     const updatedTags = currentTags.includes(tagId)
       ? currentTags.filter((t) => t !== tagId)
       : [...currentTags, tagId];
     
-    updateMeeting({ ...meeting, tags: updatedTags });
+    const parsed = MeetingTagsSchema.safeParse(updatedTags);
+    if (!parsed.success) return notify("タグは各50文字以内、1会議50個まで設定できます。");
+    tagMutation.current.busy = true;
+    tagMutation.current.version++;
+    setTagBusy(true);
+    try {
+      const updated = await api<Meeting>(`/meetings/${meetingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ tags: parsed.data }),
+      });
+      updateMeeting(updated);
+      setTagCandidates((prev) => prev.filter((name) => !updated.tags?.includes(name)));
+      notify("タグを保存しました。共有画面にも反映されます。");
+    } catch (e) {
+      notify(`タグを保存できませんでした。${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      tagMutation.current.busy = false;
+      tagMutation.current.version++;
+      setTagBusy(false);
+    }
   }
 
   function handleExport(format: "markdown" | "json" | "ics") {
@@ -1053,12 +1114,6 @@ export default function App() {
                             value={newTagName}
                             onChange={(e) => setNewTagName(e.target.value)}
                           />
-                          <input
-                            type="color"
-                            value={newTagColor}
-                            onChange={(e) => setNewTagColor(e.target.value)}
-                            className="color-picker"
-                          />
                           <button
                             className="button primary"
                             onClick={createTag}
@@ -1078,6 +1133,9 @@ export default function App() {
                               <button
                                 className="icon-button"
                                 onClick={() => deleteTag(tag.id)}
+                                disabled={meetings.some((m) => m.tags?.includes(tag.id))}
+                                title="使用中のタグは各会議から外してください"
+                                aria-label={`${tag.name}の候補を削除`}
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -1126,6 +1184,7 @@ export default function App() {
                               key={tag.id}
                               className={`tag-assignment-item ${isAssigned ? "assigned" : ""}`}
                               onClick={() => toggleMeetingTag(tagAssignmentTarget, tag.id)}
+                              disabled={tagBusy || !!meeting && (isWorking(meeting) || meeting.status === "uploading")}
                             >
                               <span
                                 className="tag-color-dot"
@@ -1215,7 +1274,7 @@ export default function App() {
                 ) : filtered.length ? (
                   <div className="meeting-list">
                     {filtered.map((m) => (
-                      <button
+                      <div
                         className="meeting-row"
                         key={m.id}
                         onClick={() => openMeeting(m.id)}
@@ -1230,7 +1289,12 @@ export default function App() {
                           )}
                         </span>
                         <div className="meeting-row-info">
-                          <strong>{m.title}</strong>
+                          <button className="meeting-open" onClick={(event) => {
+                            event.stopPropagation();
+                            openMeeting(m.id);
+                          }}>
+                            <strong>{m.title}</strong>
+                          </button>
                           <span>
                             {formatDate(m.date)}
                             <i />
@@ -1289,7 +1353,7 @@ export default function App() {
                                   : "要確認"}
                         </span>
                         <ChevronRight size={17} />
-                      </button>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -1529,7 +1593,7 @@ function Help({
           },
           {
             title: "カレンダーで予定・期限を確認、手動で変更",
-            text: "会話で決まった予定や期限を月間・一覧で確認できます。日本時間で表示し、予定案・資料のみの記載は確定と区別します。日付を特定できない「来週まで」などは日付要確認に置きます。以前の議事録の日付は要確認の候補として表示します。「予定を編集」で内容を変更できます。カードの「削除」で1件を除外し、「選択して一括削除」では複数件を選べます。日付未定欄の「このN件を選択」でまとめて選べます。削除済みの予定は下部から戻せます。元の会議録は消えず、変更は全員に共有されます。同じ予定の削除は再解析後も保持しますが、AIが別の内容として抽出した予定は新しい候補として現れる場合があります。外部カレンダーへの同期・通知はありません。",
+            text: "会話で決まった予定や期限を月間・一覧で確認できます。日本時間で表示し、予定案・資料のみの記載は確定と区別します。日付を特定できない「来週まで」などは日付要確認に置きます。以前の議事録の日付は要確認の候補として表示します。「予定を編集」で内容を変更できます。カードの「削除」で1件を除外し、「選択して一括削除」では複数件を選べます。日付未定欄の「このN件を選択」でまとめて選べます。削除済みの予定は下部から戻せます。元の会議録は消えず、変更は全員に共有されます。同じ予定の削除は再解析後も保持しますが、AIが別の内容として抽出した予定は新しい候補として現れる場合があります。外部カレンダーへの自動同期はありません。通知の条件は下の「集計・タグ・通知について」をご確認ください。",
           },
           {
             title: "内容を確認して、編集・書き出し",
@@ -1559,6 +1623,15 @@ function Help({
             {isCloud
               ? "会議・音声・資料はSupabaseの会議録専用領域に非公開で保存し、ログインした全員で共有します。追加・編集・削除も共通です。他の人の変更は約10秒ごとに反映します（編集中を除く）。OpenAIとGeminiのAPIキーはワークスペース共通で別々に暗号化保存し、画面には再表示しません。Gemini文字起こしを選ぶと音声をGoogleへ送信し、文字起こし後に一時ファイルの削除を要求します。Geminiで完了しなかった録音はGPT Transcribeに自動で切り替え、その録音の音声はOpenAIへ送信します。テキスト・議事録生成はOpenAIへ送信され、各APIの利用料がかかります。添付資料はAIへ送信しません。会議の削除・資料の関連付け解除後も資料は保持します。復元・完全消去は管理者にご依頼ください。"
               : "会議・音声・資料はアプリの .data フォルダに保存されます。Dropboxの設定によってはクラウドにも同期されます。Gemini文字起こしを選ぶと音声をGoogleへ送信し（完了しなかった録音はGPT Transcribeに自動で切り替えてOpenAIへ送信）、テキスト・議事録生成はOpenAIへ送信します。各APIの利用料がかかります。添付資料はAIへ送信しません。関連付けを解除した資料も保持します。削除した会議は .data/trash に移動します。"}
+          </p>
+        </div>
+      </section>
+      <section className="help-note">
+        <MessageSquareText size={23} />
+        <div>
+          <h3>集計・タグ・通知について</h3>
+          <p>
+            AIサマリーは日本時間の今月・直近7日間に開催した解析完了の会議が対象です。タグ提案とともにOpenAIの追加料金がかかり、API使用料に記録します。サマリーは画面内だけの表示です。タグの提案を押すと会議に保存して全員に共有します。未使用のタグ候補だけはこのブラウザーに保存します。会議比較は2〜5件を選べます。一括Markdownには保存済み本文を含み、ICSは会議の開催日を終日予定として書き出します。通知を許可すると、アプリを開いている間だけ確定した期限の超過を同じタブで1回通知します。アプリを閉じている間の通知・外部カレンダーへの自動同期はありません。
           </p>
         </div>
       </section>

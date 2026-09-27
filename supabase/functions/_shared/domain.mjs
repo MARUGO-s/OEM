@@ -30,9 +30,15 @@ export const MetadataSchema = z.object({
   template: z.enum(["standard", "brief", "detailed"]).default("standard"),
 });
 
+// Tag names are the persisted identity; there is no separate tag-ID registry.
+export const TagNameSchema = z.string().trim().min(1).max(50);
+export const MeetingTagsSchema = z.array(TagNameSchema).max(50)
+  .transform((names) => [...new Set(names)]);
+
 export const PatchSchema = z
   .object({
     title: z.string().trim().min(1).max(160).optional(),
+    tags: MeetingTagsSchema.optional(),
     markdown: z.string().max(150_000).optional(),
     transcript: z.string().trim().min(1).max(MAX_TEXT_LENGTH).optional(),
     completedActions: z

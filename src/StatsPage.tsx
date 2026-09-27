@@ -8,6 +8,8 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
   const [summary, setSummary] = useState("");
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
+  const [summaryRange, setSummaryRange] = useState("");
 
   const stats = useMemo(() => {
     const realMeetings = meetings.filter((m) => !m.isDemo);
@@ -61,16 +63,22 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
   async function generateSummary() {
     setGeneratingSummary(true);
     setShowSummary(true);
+    setSummary("");
+    setSummaryError("");
+    setSummaryRange("");
     try {
-      const result = await api<{ summary: string; meetingCount: number; period: string }>(`/summary?period=${summaryPeriod}`);
+      const result = await api<{ summary: string; meetingCount: number; period: string; start: string; end: string }>("/summary", {
+        method: "POST", body: JSON.stringify({ period: summaryPeriod }),
+      });
       setSummary(result.summary);
+      setSummaryRange(`${result.start}〜${result.end}・${result.meetingCount}件`);
     } catch (error) {
-      setSummary("サマリーの生成に失敗しました。もう一度お試しください。");
+      setSummaryError(error instanceof Error ? error.message : "サマリーの生成に失敗しました。");
     } finally {
       setGeneratingSummary(false);
     }
   }
-  
+
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -90,15 +98,17 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
           <div className="period-selector">
             <button
               className={summaryPeriod === "month" ? "active" : ""}
+              disabled={generatingSummary}
               onClick={() => setSummaryPeriod("month")}
             >
-              月次
+              今月
             </button>
             <button
               className={summaryPeriod === "week" ? "active" : ""}
+              disabled={generatingSummary}
               onClick={() => setSummaryPeriod("week")}
             >
-              週次
+              直近7日
             </button>
           </div>
           <button
@@ -119,24 +129,28 @@ export function StatsPage({ meetings }: { meetings: Meeting[] }) {
             )}
           </button>
         </div>
+        <p className="muted">日本時間で今日までの完了済み会議が対象です。生成にはAPI利用料がかかります。結果はこの画面を閉じると消えます。</p>
         {showSummary && (
           <div className="summary-content">
             <div className="summary-header">
-              <h3>AI生成サマリー</h3>
+              <h3>AI生成サマリー {summaryRange}</h3>
               <button
                 className="icon-button"
+                aria-label="サマリーを閉じる"
                 onClick={() => setShowSummary(false)}
               >
                 ✕
               </button>
             </div>
             <div className="summary-text">
+              {summaryError && <p role="alert">{summaryError}</p>}
+              {generatingSummary && <p role="status">サマリーを生成しています…</p>}
               {summary.split("\n").map((line, i) => {
                 if (line.startsWith("##")) {
                   return <h4 key={i}>{line.replace("##", "").trim()}</h4>;
                 }
                 if (line.startsWith("-")) {
-                  return <li key={i}>{line.replace("-", "").trim()}</li>;
+                  return <p key={i}>• {line.replace("-", "").trim()}</p>;
                 }
                 return <p key={i}>{line}</p>;
               })}

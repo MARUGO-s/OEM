@@ -1183,6 +1183,7 @@ button {
   font-size: 9px;
 }
 .meeting-row {
+  cursor: pointer;
   width: 100%;
   display: flex;
   align-items: center;
@@ -1196,6 +1197,11 @@ button {
 }
 .meeting-row:hover {
   background: #fbfaff;
+}
+.meeting-open {
+  display: block;
+  width: 100%;
+  text-align: left;
 }
 .meeting-file-icon {
   width: 44px;
