@@ -1,8 +1,20 @@
 import { z } from "zod";
 
 export const SummaryRequest = z
-  .object({ period: z.enum(["week", "month"]) })
-  .strict();
+  .discriminatedUnion("period", [
+    z.object({ period: z.enum(["week", "month", "lastMonth"]) }).strict(),
+    z
+      .object({
+        period: z.literal("custom"),
+        start: z.iso.date(),
+        end: z.iso.date(),
+      })
+      .strict(),
+  ])
+  .refine((value) => value.period !== "custom" || value.start <= value.end, {
+    message: "開始日は終了日以前にしてください。",
+    path: ["end"],
+  });
 export const TagsRequest = z.object({ meetingId: z.uuid() }).strict();
 const TagsResult = z
   .object({ tags: z.array(z.string().trim().min(1).max(40)).max(5) })
@@ -10,22 +22,44 @@ const TagsResult = z
 const invalid = (message) =>
   Object.assign(new Error(message), { status: 400, publicMessage: message });
 
-export function periodMeetings(meetings, period, now = new Date()) {
+export function summaryRange(selection, now = new Date()) {
+  const request = SummaryRequest.parse(
+    typeof selection === "string" ? { period: selection } : selection,
+  );
   const today = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Tokyo",
   }).format(now);
-  const start =
-    period === "month"
-      ? `${today.slice(0, 7)}-01`
-      : new Date(Date.parse(`${today}T00:00:00Z`) - 6 * 86400000)
-          .toISOString()
-          .slice(0, 10);
+  const monthStart = `${today.slice(0, 7)}-01`;
+  if (request.period === "custom") {
+    if (request.end > today)
+      throw invalid("終了日は日本時間の今日以前にしてください。");
+    return { start: request.start, end: request.end };
+  }
+  if (request.period === "lastMonth") {
+    const end = new Date(Date.parse(`${monthStart}T00:00:00Z`) - 86400000)
+      .toISOString()
+      .slice(0, 10);
+    return { start: `${end.slice(0, 7)}-01`, end };
+  }
+  return {
+    start:
+      request.period === "month"
+        ? monthStart
+        : new Date(Date.parse(`${today}T00:00:00Z`) - 6 * 86400000)
+            .toISOString()
+            .slice(0, 10),
+    end: today,
+  };
+}
+
+export function periodMeetings(meetings, selection, now = new Date()) {
+  const { start, end } = summaryRange(selection, now);
   return {
     start,
-    end: today,
+    end,
     meetings: meetings.filter(
       (m) =>
-        !m.isDemo && m.status === "done" && m.date >= start && m.date <= today,
+        !m.isDemo && m.status === "done" && m.date >= start && m.date <= end,
     ),
   };
 }
@@ -45,12 +79,12 @@ export function insightRequest(model, operation, meetings, range) {
   const content = JSON.stringify({ range, meetings: data });
   if (content.length > 100000)
     throw invalid(
-      "対象の会議データが多すぎます。週次を選ぶか、議事録を短くしてお試しください。",
+      "対象の会議データが多すぎます。期間を短くしてお試しください。",
     );
   const instruction =
     operation === "tags"
       ? "会議に適した短い日本語タグを3〜5個提案してください。"
-      : "対象期間の会議をまとめ、Markdownの見出し「## 要約」「## 重要な決定事項」「## 主なアクションアイテム」「## 課題・懸念事項」で出力してください。各事項に元の会議名を添え、完了済み作業を未完了として扱わないでください。";
+      : "対象期間の会議をまとめ、Markdownの見出し「## 要約」「## 重要な決定事項」「## 主なアクションアイテム」「## 課題・懸念事項」で出力してください。要約には最初に期間全体の短い概観を置き、その後は「### 会議名」の小見出しと2〜3文の短い段落で会議ごとに整理してください。段落間・見出しの前後には空行を入れてください。決定事項・アクション・課題は1項目1論点の短い箇条書きにし、重要な語句・担当・期限を **太字** で示してください。長い文章を1つの箇条書きに詰め込まないでください。各事項に元の会議名を添え、完了済み作業を未完了として扱わないでください。根拠のある事項がなければ「記録なし」と記載してください。";
   return {
     model,
     store: false,

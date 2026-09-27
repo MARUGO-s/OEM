@@ -920,8 +920,9 @@ export async function createApp({
     } finally { insightJobs--; }
   }
   app.post("/api/summary", async (req, res) => {
-    const { period } = SummaryRequest.parse(req.body);
-    const { meetings, ...range } = periodMeetings(store.list(), period);
+    const selection = SummaryRequest.parse(req.body);
+    const { period } = selection;
+    const { meetings, ...range } = periodMeetings(store.list(), selection);
     if (!meetings.length) return res.json({ summary: "対象期間の会議がありません。", meetingCount: 0, period, ...range });
     if (!currentKey) throw fail(428, "接続設定でOpenAI APIキーを設定してください。");
     res.json({ ...await generateInsight("summary", meetings, range), meetingCount: meetings.length, period, ...range });

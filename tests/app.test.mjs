@@ -9,6 +9,7 @@ import { createApp } from "../server/app.mjs";
 import { createDemo } from "../server/demo.mjs";
 import { MeetingStore } from "../server/store.mjs";
 import { createAI } from "../server/ai.mjs";
+import { summaryRange } from "../supabase/functions/_shared/insights.mjs";
 import { MAX_FILE_SIZE } from "../server/domain.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
 import { splitRecordings } from "../src/split-recordings.mjs";
@@ -412,6 +413,21 @@ test("追加AI機能: 現在の接続設定・期間・使用料・タグの再�
   assert.equal(usage.eventCount, 2);
   assert.deepEqual(usage.events.map((e) => e.operation).sort(), ["summary", "tags"]);
   assert.ok(usage.totalUsd > 0);
+  const prior = summaryRange("lastMonth");
+  await store.save({ ...meeting, id: randomUUID(), date: prior.end });
+  const previous = await (await request("/summary", post({ period: "lastMonth" }))).json();
+  assert.equal(previous.start, prior.start);
+  assert.equal(previous.end, prior.end);
+  assert.equal(previous.meetingCount, 1);
+  const custom = await (await request("/summary", post({ period: "custom", start: prior.end, end: prior.end }))).json();
+  assert.equal(custom.start, prior.end);
+  assert.equal(custom.end, prior.end);
+  assert.equal(custom.meetingCount, 1);
+  const countBeforeInvalid = calls.length;
+  for (const body of [{ period: "custom" }, { period: "custom", start: "2026-02-30", end: "2026-03-01" }, { period: "custom", start: "2026-03-01", end: "2026-02-28" }, { period: "custom", start: "9999-01-01", end: "9999-01-02" }]) {
+    assert.equal((await request("/summary", post(body))).status, 400);
+  }
+  assert.equal(calls.length, countBeforeInvalid);
   incomplete = true;
   assert.equal((await request("/summary", post({ period: "month" }))).status, 502);
   assert.equal(store.get(meeting.id).markdown, "# 手動修正した原文");
