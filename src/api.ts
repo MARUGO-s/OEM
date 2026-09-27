@@ -38,7 +38,9 @@ export async function api<T>(
     data = await response.json();
   } catch {
     throw new Error(
-      "サーバーに接続できません。アプリの起動状態を確認してください。",
+      isCloud
+        ? "サーバーに接続できません。アプリの起動状態を確認してください。"
+        : "ローカルサーバー（ポート4318）に接続できません。npm run dev を実行したターミナルの [server] のエラーを確認し、起動し直してください。",
     );
   }
   if (!response.ok) throw new Error(data.error || "処理に失敗しました。");

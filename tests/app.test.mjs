@@ -13,7 +13,7 @@ import { MAX_FILE_SIZE } from "../server/domain.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
 import { splitRecordings } from "../src/split-recordings.mjs";
 import { randomUUID } from "node:crypto";
-import { documentFixtures, reviewFixture } from "./fixtures/documents.mjs";
+import { documentFixtures } from "./fixtures/documents.mjs";
 import { attachmentDigest } from "../supabase/functions/_shared/attachments.mjs";
 import {
   calendarMeeting,
@@ -127,7 +127,7 @@ test("個別・複数予定の削除と復元は会議録を残して永続化�
 const sampleMinutes = createDemo().minutes;
 const key = "sk-test-only-not-a-real-api-key";
 
-test("資料を全件保存後に解析し、原本ダウンロード・再生成・関連解除・復元用保持ができる", async (t) => {
+test("資料を全件保存後に会話だけを解析し、原本ダウンロード・再生成・関連解除・復元用保持ができる", async (t) => {
   const fixtures = documentFixtures(),
     attachmentPlan = await Promise.all(fixtures.map(async (f) => ({
       id: randomUUID(),
@@ -146,21 +146,12 @@ test("資料を全件保存後に解析し、原本ダウンロード・再生�
       transcribe: async () => {
         throw new Error("Text-only meeting must not transcribe");
       },
-      summarize: async (meeting, files) => {
+      summarize: async (...args) => {
         summaries++;
-        assert.equal(files.length, meeting.attachments.length);
-        for (const file of files) {
-          assert.match(file.input.file_data, /^data:.*;base64,/);
-          assert.equal(
-            Buffer.from(file.input.file_data.split(",")[1], "base64").length,
-            file.attachment.size,
-          );
-        }
+        assert.equal(args.length, 2, "attachments are not passed to the AI");
+        assert.equal(typeof args[1], "function");
         await gate;
-        return {
-          ...sampleMinutes,
-          documentReview: meeting.attachments.map(reviewFixture),
-        };
+        return sampleMinutes;
       },
     }),
   });
@@ -229,15 +220,16 @@ test("資料を全件保存後に解析し、原本ダウンロード・再生�
     await waitForJobs();
     assert.equal(store.get(draft.id).status, "done");
     assert.equal(summaries, 1);
-    assert.equal(store.get(draft.id).minutes.documentReview.length, 3);
-    assert.match(store.get(draft.id).markdown, /添付資料との照合/);
+    assert.equal(store.get(draft.id).minutes.documentReview, undefined);
+    assert.doesNotMatch(store.get(draft.id).markdown, /添付資料との照合/);
+    assert.equal(store.get(draft.id).attachments.length, 3);
     const removed = await request(
       `${route}/attachments/${attachmentPlan[0].id}`,
       { method: "DELETE" },
     );
     assert.equal(removed.status, 200);
     const result = await removed.json();
-    assert.equal(result.minutesStale, true);
+    assert.equal(result.minutesStale, false);
     assert.equal(result.attachments.length, 2);
     assert.equal(result.removedAttachments, undefined);
     assert.equal(
@@ -249,11 +241,12 @@ test("資料を全件保存後に解析し、原本ダウンロード・再生�
       3,
       "unlinked document is retained",
     );
-    assert.equal(
-      (await upload(new File(["追加の参考資料"], "note.txt"), randomUUID()))
-        .status,
-      201,
+    const added = await upload(
+      new File(["追加の参考資料"], "note.txt"),
+      randomUUID(),
     );
+    assert.equal(added.status, 201);
+    assert.equal((await added.json()).minutesStale, false);
     assert.equal(
       (await request(`${route}/retry`, { method: "POST" })).status,
       202,
@@ -261,7 +254,7 @@ test("資料を全件保存後に解析し、原本ダウンロード・再生�
     await waitForJobs();
     assert.equal(summaries, 2);
     assert.equal(store.get(draft.id).minutesStale, false);
-    assert.equal(store.get(draft.id).minutes.documentReview.length, 3);
+    assert.equal(store.get(draft.id).minutes.documentReview, undefined);
     const saved = store.get(draft.id);
     assert.equal((await request(route, { method: "DELETE" })).status, 204);
     for (const f of [...saved.attachments, ...saved.removedAttachments])
@@ -274,7 +267,7 @@ test("資料を全件保存後に解析し、原本ダウンロード・再生�
   }
 });
 
-test("偽装資料・容量超過は保存せず、AIで未読資料が欠けた結果を成功扱いしない", async (t) => {
+test("偽装資料・容量超過は保存せず、保存済み資料があっても会話だけで議事録を作る", async (t) => {
   const { request, store, waitForJobs, dataDir } = await setup(t, {
     apiKey: key,
     aiFactory: () => ({ summarize: async () => sampleMinutes }),
@@ -307,8 +300,9 @@ test("偽装資料・容量超過は保存せず、AIで未読資料が欠けた
     202,
   );
   await waitForJobs();
-  assert.equal(store.get(meeting.id).status, "error");
+  assert.equal(store.get(meeting.id).status, "done");
   assert.equal(store.get(meeting.id).transcript, meeting.transcript);
+  assert.equal(store.get(meeting.id).minutes.documentReview, undefined);
   assert.equal(store.get(meeting.id).attachments.length, 1);
 });
 
@@ -490,6 +484,38 @@ test("キーを返却・永続化せず、AIモデル設定のみ再起動後も
   assert.equal(restarted.store.list().length, 0);
 });
 
+test("旧設定のgpt-4o-transcribeは起動を止めずGPT Transcribeとして扱う", async (t) => {
+  const { request, dataDir } = await setup(t, {
+    transcriptionModel: "gpt-4o-transcribe",
+  });
+  assert.equal(
+    (await (await request("/settings")).json()).transcriptionModel,
+    "gpt-transcribe",
+  );
+  await writeFile(
+    path.join(dataDir, "config.json"),
+    JSON.stringify({ model: "gpt-6-sol", transcriptionModel: "gpt-4o-transcribe" }),
+  );
+  const restarted = await createApp({
+    dataDir,
+    transcriptionModel: "gemini-3.5-transcribe",
+  });
+  const server = restarted.app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const settings = await (
+    await fetch(`http://127.0.0.1:${server.address().port}/api/settings`, {
+      headers: { "X-Kotonoha": "1" },
+    })
+  ).json();
+  assert.equal(settings.transcriptionModel, "gpt-transcribe");
+  const unknownDir = await mkdtemp(path.join(tmpdir(), "kotonoha-test-"));
+  t.after(() => rm(unknownDir, { recursive: true, force: true }));
+  await assert.rejects(
+    createApp({ dataDir: unknownDir, transcriptionModel: "whisper-1" }),
+    /TRANSCRIPTION_MODEL must be one of gpt-transcribe, gemini-3.5-transcribe/,
+  );
+});
 test("録音を文字起こしして議事録まで作成し、音声を再生できる", async (t) => {
   const calls = [];
   const { request, waitForJobs } = await setup(t, {
@@ -535,6 +561,51 @@ test("録音を文字起こしして議事録まで作成し、音声を再生�
   });
   assert.equal(range.status, 206);
   assert.equal((await range.arrayBuffer()).byteLength, 10);
+});
+
+test("Geminiで完了しなかった録音はGPT Transcribeに切り替え、切り替えを記録する", async (t) => {
+  const models = [];
+  const { request, waitForJobs } = await setup(t, {
+    apiKey: key,
+    geminiApiKey: "AIza-test-only-not-a-real-gemini-key",
+    transcriptionModel: "gemini-3.5-transcribe",
+    aiFactory: (_key, _model, _options, { transcriptionModel }) => ({
+      async transcribe(_file, onUsage) {
+        models.push(transcriptionModel);
+        if (transcriptionModel === "gemini-3.5-transcribe")
+          throw Object.assign(new Error("Gemini transcription did not complete"), {
+            code: "GEMINI_TRANSCRIPT_INCOMPLETE",
+            provider: "gemini",
+            geminiStatus: "incomplete",
+          });
+        await onUsage({ usage: { seconds: 60 } });
+        return { transcript: "GPTで文字起こししました。", segments: [], duration: null };
+      },
+      summarize: async () => sampleMinutes,
+    }),
+  });
+  const created = await request("/meetings", {
+    method: "POST",
+    body: payload({ audio: true }),
+  });
+  assert.equal(created.status, 202);
+  const { id } = await created.json();
+  await waitForJobs();
+  const meeting = await (await request(`/meetings/${id}`)).json();
+  assert.equal(meeting.status, "done", meeting.error);
+  assert.equal(meeting.transcript, "GPTで文字起こししました。");
+  assert.deepEqual(models, ["gemini-3.5-transcribe", "gpt-transcribe"]);
+  assert.deepEqual(
+    meeting.recordings.map((r) => r.fallbackModel),
+    ["gpt-transcribe"],
+  );
+  const month = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit",
+  }).format(new Date());
+  const usage = await (await request(`/usage?month=${month}&page=0`)).json();
+  assert.ok(usage.events.some((event) =>
+    event.meetingId === id && event.kind === "transcription" &&
+    event.model === "gpt-transcribe"));
 });
 
 test("解析失敗後も文字起こしを保持し、Solへ変更して音声認識を繰り返さず再試行する", async (t) => {
@@ -940,7 +1011,7 @@ test("API使用料を呼び出しごとに保存し、会議削除後も月別�
         await onUsage({ usage: { seconds: 60 } });
         return { transcript: "来週始めます。", segments: [], duration: null };
       },
-      async summarize(_meeting, _files, onUsage) {
+      async summarize(_meeting, onUsage) {
         await onUsage({ usage: { input_tokens: 1000, output_tokens: 200,
           input_tokens_details: { cached_tokens: 0 } } });
         return sampleMinutes;

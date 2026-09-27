@@ -26,8 +26,8 @@ import {
   validateAttachmentBytes,
 } from "../_shared/attachments.mjs";
 import {
+  CalendarMinutesSchema,
   parseMinutes,
-  schemaForMeeting,
   summaryInput,
 } from "../_shared/summary.mjs";
 import {
@@ -386,25 +386,7 @@ async function startSummary(owner: string, record: RecordRow, key: string) {
   if (m.transcript.length > MAX_TEXT_LENGTH) {
     throw Object.assign(new Error("too long"), { code: "TEXT_TOO_LONG" });
   }
-  const files = [];
-  for (const attachment of m.attachments || []) {
-    const { data, error } = await service.storage
-      .from(DOCUMENT_BUCKET)
-      .createSignedUrl(attachment.storagePath, 3600);
-    if (error || !data?.signedUrl) {
-      throw fail(
-        503,
-        "添付資料を読み込めませんでした。資料を確認し、再試行してください。",
-      );
-    }
-    // The model fetches only an expiring URL for the authorized meeting's file.
-    // No public bucket, Files API copy, or bulk base64 allocation in Edge memory.
-    files.push({
-      attachment,
-      input: { type: "input_file", file_url: data.signedUrl },
-    });
-  }
-  const { $schema: _, ...outputSchema } = z.toJSONSchema(schemaForMeeting(m));
+  const { $schema: _, ...outputSchema } = z.toJSONSchema(CalendarMinutesSchema);
   const result = await openai(key, "/responses", {
     method: "POST",
     body: JSON.stringify({
@@ -413,7 +395,7 @@ async function startSummary(owner: string, record: RecordRow, key: string) {
       max_output_tokens: 16000,
       background: true,
       store: true,
-      input: summaryInput(m, files),
+      input: summaryInput(m),
       text: {
         format: {
           type: "json_schema",
@@ -457,7 +439,11 @@ async function processMeeting(
       needsTranscription(record.document, record.audioPath) ||
       !record.document.transcript
     ) {
-      if (gemini) {
+      // One part runs per invocation; a part Gemini could not finish goes to OpenAI.
+      const pending = recordingsFor(record.document, record.audioPath).find(
+        (part: Doc) => !part.transcript,
+      );
+      if (gemini && !pending?.transcriptionFallback) {
         const slot = await gate("reserve");
         if (!slot) return; // Superseded job: do not send an obsolete request.
         if (!slot.allowed) {
@@ -490,7 +476,8 @@ async function processMeeting(
           const duration = part.duration || (recordingsFor(record.document, record.audioPath).length === 1
             ? record.document.duration : null);
           if (
-            record.document.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL
+            record.document.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL &&
+            !part.transcriptionFallback
           ) {
             if (!keys.gemini) {
               throw fail(428, "接続設定でGemini APIキーを設定してください。");
@@ -547,6 +534,34 @@ async function processMeeting(
     await startSummary(owner, record, keys.openai);
   } catch (error) {
     const cause = (error as any).cause || error;
+    const partIndex = (error as any).partIndex;
+    const failedPart = record.document.audioParts?.[partIndex];
+    if (
+      cause?.code === "GEMINI_TRANSCRIPT_INCOMPLETE" &&
+      failedPart &&
+      !failedPart.transcriptionFallback
+    ) {
+      // Retry only this part with GPT Transcribe in the next invocation, so the
+      // Gemini and OpenAI calls never share one Edge Function time budget.
+      const geminiStatus = cause.geminiStatus || "unknown";
+      await jobUpdate(owner, record, {
+        audioParts: record.document.audioParts.map((part: Doc, i: number) =>
+          i === partIndex
+            ? {
+                ...part,
+                transcriptionFallback: {
+                  model: OPENAI_TRANSCRIPTION_MODEL,
+                  geminiStatus,
+                },
+              }
+            : part,
+        ),
+        partReady: true,
+        transcriptionWait: null,
+        diagnosticCode: `GEMINI_FALLBACK_${geminiStatus.toUpperCase()}`,
+      });
+      return;
+    }
     const retry = heldGeminiSlot
       ? geminiRetryPlan(cause, record.document.geminiRetryCount || 0)
       : null;

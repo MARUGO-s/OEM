@@ -53,7 +53,11 @@ export interface Meeting {
   isDemo: boolean;
   hasAudio: boolean;
   fileName: string | null;
-  recordings?: { fileName: string; transcribed: boolean }[];
+  recordings?: {
+    fileName: string;
+    transcribed: boolean;
+    fallbackModel?: string;
+  }[];
   attachments?: Attachment[];
   duration: number | null;
   transcript: string;

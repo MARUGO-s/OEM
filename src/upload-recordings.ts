@@ -101,7 +101,7 @@ export async function uploadRecordings(
     progress(
       files.length
         ? "送信完了。文字起こしを開始しています…"
-        : "送信完了。会話と資料の解析を開始しています…",
+        : "送信完了。会話の解析を開始しています…",
     );
     return await api<Meeting>(`/meetings/${meeting.id}/complete`, {
       method: "POST",

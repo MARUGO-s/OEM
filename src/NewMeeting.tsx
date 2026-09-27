@@ -42,7 +42,7 @@ import {
 
 const LIMIT = 100_000_000;
 const ACCEPT =
-  ".mp3,.mp4,.mpeg,.mpga,.m4a,.aac,.wav,.webm,.ogg,.flac,.mov,.m4v,.mkv";
+  ".mp3,.mp4,.mpeg,.mpga,.m4a,.aac,.wav,.webm,.ogg,.flac,.mov,.m4v,.mkv,.ts,.mts,.m2ts,.3gp";
 function formatElapsed(totalSeconds: number) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -210,7 +210,7 @@ export function NewMeeting({
     const picked = Array.from(selected);
     if (picked.some((file) => !ACCEPT.split(",").includes(extension(file)))) {
       setError(
-        "AAC、MP3、M4A、WAV、MP4、MOVなどの対応ファイルを選んでください。",
+        "AAC、MP3、M4A、WAVなどの音声ファイル、またはMP4、MOV、MKV、MTSなどの動画ファイルを選んでください。",
       );
       return;
     }
@@ -541,10 +541,12 @@ export function NewMeeting({
                 "ファイルを選択"
               )}
             </button>
-            <small>AAC / MP3 / M4A / WAV / MP4 / MOV / WebM / OGG / FLAC</small>
+            <small>音声：AAC / MP3 / M4A / WAV / OGG / FLAC</small>
             <small>
-              動画は音声だけを取り出し、100 MBを超える場合は自動で圧縮します
+              動画：MP4 / MOV / MKV / WebM / MTS / M2TS / TS /
+              3GP（音声だけを取り出して使用）
             </small>
+            <small>合計100 MBを超える場合は、音声を自動で圧縮します</small>
             <small>最大5ファイル・合計100 MBまで · 大きな録音は自動分割</small>
             <input
               ref={input}
@@ -692,7 +694,7 @@ export function NewMeeting({
             : modelName(settings?.model)}
           <br />
           <span>
-            音声は選択した文字起こしサービスへ、テキストと添付資料はOpenAIへ送信して処理します。API利用料がかかります。
+            音声は選択した文字起こしサービスへ、テキストはOpenAIへ送信して処理します。API利用料がかかります。添付資料は保存のみで、AIには送信しません。
           </span>
         </p>
         {!settings?.configured && (

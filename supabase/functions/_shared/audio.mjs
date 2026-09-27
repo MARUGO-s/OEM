@@ -241,6 +241,9 @@ export function publicRecordings(parts) {
   return parts.map((part) => ({
     fileName: part.fileName,
     transcribed: Boolean(part.transcript),
+    ...(part.transcriptionFallback
+      ? { fallbackModel: part.transcriptionFallback.model }
+      : {}),
   }));
 }
 
@@ -263,7 +266,12 @@ export async function transcribeRecordings(
   const results = await Promise.allSettled(
     next.map(async (part, index) => {
       if (part.transcript || !selected.has(index)) return;
-      const text = await transcribe(part, index);
+      // A callback may return { transcript, transcriptionFallback } to record
+      // that another model transcribed this part.
+      const result = await transcribe(part, index);
+      const text = typeof result === "string" ? result : result?.transcript;
+      if (result?.transcriptionFallback)
+        part.transcriptionFallback = result.transcriptionFallback;
       if (typeof text !== "string" || !text.trim()) {
         throw Object.assign(new Error("empty"), { code: "EMPTY_AUDIO" });
       }
@@ -286,6 +294,7 @@ export async function transcribeRecordings(
     throw Object.assign(
       new Error("Recording transcription failed", { cause: error }),
       {
+        partIndex: failed,
         diagnosticCode:
           error?.code ||
           (error?.status ? `HTTP_${error.status}` : error?.name || "UNKNOWN"),

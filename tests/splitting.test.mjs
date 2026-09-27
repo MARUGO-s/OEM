@@ -5,11 +5,118 @@ import { splitRecordings } from "../src/split-recordings.mjs";
 import {
   validateAdts,
   transcribeRecordings,
+  publicRecordings,
 } from "../supabase/functions/_shared/audio.mjs";
 import { UploadSchema } from "../supabase/functions/_shared/upload.mjs";
 import { aacFixture } from "./fixtures/aac.mjs";
 import { createHash } from "node:crypto";
 import { waveFile } from "./fixtures/wav.mjs";
+import { videoFixtures, aacFrames } from "./fixtures/video.mjs";
+
+async function readParts(parts) {
+  const result = [];
+  for (const part of parts) {
+    const input = new Input({
+      formats: ALL_FORMATS,
+      source: new BlobSource(part.blob),
+    });
+    try {
+      const track = await input.getPrimaryAudioTrack();
+      const packets = [];
+      for await (const packet of new EncodedPacketSink(track).packets())
+        packets.push(packet.data);
+      result.push({
+        codec: await track.getCodec(),
+        sampleRate: track.sampleRate,
+        channels: track.numberOfChannels,
+        duration: await input.computeDuration(),
+        packets,
+      });
+    } finally {
+      input.dispose();
+    }
+  }
+  return result;
+}
+
+test("動画（MOV・MKV・MTS）のDolbyやビッグエンディアンPCM音声を16 kHzモノラルへ変換して分割する", async () => {
+  for (const make of [
+    videoFixtures.movPcmBigEndian,
+    videoFixtures.mkvAc3,
+    videoFixtures.m2tsAc3,
+  ]) {
+    const file = await make();
+    const ratios = [];
+    const parts = await splitRecordings(
+      [file],
+      ({ ratio }) => ratios.push(ratio),
+      { durationLimit: 1 },
+    );
+    const decoded = await readParts(parts);
+    const total = parts.reduce((n, p) => n + p.duration, 0);
+    assert.ok(Math.abs(total - 3) < 0.05, `${file.name}: ${total}`);
+    assert.equal(parts.length, Math.ceil(total));
+    assert.ok(parts.every((p) => p.duration <= 1 && p.fileName === file.name));
+    assert.deepEqual(
+      parts.map((p) => p.name),
+      parts.map((_, i) => `recording-1-${i + 1}.wav`),
+    );
+    // Without WebCodecs (Node), speech falls back to 16-bit PCM WAV.
+    for (const part of decoded) {
+      assert.deepEqual(
+        [part.codec, part.sampleRate, part.channels],
+        ["pcm-s16", 16000, 1],
+      );
+      assert.ok(Math.abs(part.duration - total / parts.length) < 0.01);
+    }
+    const pcm = new Int16Array(
+      Buffer.concat(decoded.flatMap((p) => p.packets)).buffer.slice(0),
+    );
+    let crossings = 0,
+      peak = 0;
+    for (let i = 1; i < pcm.length; i++) {
+      if (pcm[i - 1] < 0 !== pcm[i] < 0) crossings++;
+      peak = Math.max(peak, Math.abs(pcm[i]));
+    }
+    assert.ok(peak > 0.3 * 32768, `${file.name}: silent output`);
+    const hz = crossings / 2 / (pcm.length / 16000);
+    assert.ok(Math.abs(hz - 440) < 10, `${file.name}: ${hz} Hz`);
+    assert.equal(ratios.at(-1), 1);
+    assert.ok(ratios.every((r, i) => !i || r >= ratios[i - 1]));
+  }
+});
+
+test("MP4・MPEG-TSの動画内AAC音声は再圧縮せずにM4Aへ取り出す", async () => {
+  const expected = [...aacFrames().packets].map((p) =>
+    p.data.slice(p.data[1] & 1 ? 7 : 9),
+  );
+  for (const make of [videoFixtures.mp4Aac, videoFixtures.tsAac]) {
+    const file = await make();
+    const parts = await splitRecordings([file]);
+    assert.deepEqual(
+      parts.map((p) => [p.name, p.blob.type]),
+      [["recording-1-1.m4a", "audio/mp4"]],
+    );
+    const [decoded] = await readParts(parts);
+    assert.equal(decoded.codec, "aac");
+    assert.deepEqual(decoded.packets, expected, file.name);
+  }
+});
+
+test("対応できない動画は理由を示して拒否する", async () => {
+  await assert.rejects(
+    splitRecordings([await videoFixtures.mkvDts()]),
+    /録音1「dts\.mkv」: この音声形式（DTS）には対応していません/,
+  );
+  await assert.rejects(
+    splitRecordings([await videoFixtures.movSilent()]),
+    /音声トラックがありません/,
+  );
+  await assert.rejects(
+    splitRecordings([new File([new Uint8Array(4096).fill(7)], "broken.mov")]),
+    /ファイル形式を読み取れません/,
+  );
+});
 test("100,000,000バイトの単一WAVを分割し、全PCMバイトを順序通り保持する", async () => {
   const file = waveFile();
   const parts = await splitRecordings([file]);
@@ -152,6 +259,43 @@ test("合計100 MBの境界、マニフェストの順序、件数、分割サ�
   await assert.rejects(
     splitRecordings([{ size: 50_000_000 }, { size: 50_000_001 }]),
     /100 MB/,
+  );
+});
+test("別モデルで文字起こしした録音を記録し、失敗した録音の番号を返す", async () => {
+  const fallback = { model: "gpt-transcribe", geminiStatus: "incomplete" };
+  let saved;
+  const text = await transcribeRecordings(
+    [{ fileName: "a.m4a" }, { fileName: "b.m4a" }],
+    async (_part, index) =>
+      index === 0
+        ? { transcript: "代わりのモデル", transcriptionFallback: fallback }
+        : "通常のモデル",
+    async (parts) => {
+      saved = parts;
+    },
+  );
+  assert.equal(text, "【録音 1】\n代わりのモデル\n\n【録音 2】\n通常のモデル");
+  assert.deepEqual(saved[0].transcriptionFallback, fallback);
+  assert.equal(saved[1].transcriptionFallback, undefined);
+  assert.deepEqual(publicRecordings(saved), [
+    { fileName: "a.m4a", transcribed: true, fallbackModel: "gpt-transcribe" },
+    { fileName: "b.m4a", transcribed: true },
+  ]);
+  await assert.rejects(
+    transcribeRecordings(
+      [{ fileName: "a.m4a", transcript: "済み" }, { fileName: "b.m4a" }],
+      async () => {
+        throw Object.assign(new Error("incomplete"), {
+          code: "GEMINI_TRANSCRIPT_INCOMPLETE",
+          geminiStatus: "incomplete",
+        });
+      },
+      async () => {},
+    ),
+    (error) =>
+      error.partIndex === 1 &&
+      error.cause.code === "GEMINI_TRANSCRIPT_INCOMPLETE" &&
+      /録音2.*状態：incomplete/.test(error.publicMessage),
   );
 });
 test("分割文字起こしは1回1本、保存済みをスキップし最終回だけ連結する", async () => {

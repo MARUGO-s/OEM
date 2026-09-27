@@ -12,6 +12,9 @@
   --border: #e9eaf1;
   --ink: #252938;
   --surface: #fff;
+  /* The app has one light design; keep native parts (dialogs, form
+     controls) light when the OS or a host page prefers dark. */
+  color-scheme: light;
 }
 * {
   box-sizing: border-box;
@@ -1276,6 +1279,7 @@ button {
   border-radius: 15px;
   width: min(500px, calc(100vw - 32px));
   max-height: calc(100dvh - 64px);
+  background: var(--surface);
   color: var(--ink);
   box-shadow: 0 20px 100px #23203030;
 }
@@ -1795,10 +1799,10 @@ button {
   background: #f8f5fd;
 }
 .meeting-heading h1 {
-  font-size: 29px;
-  font-weight: 600;
-  line-height: 1.65;
-  margin: 9px 0 15px;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 6px 0 12px;
 }
 .meeting-title-row {
   display: flex;
@@ -1825,6 +1829,23 @@ button {
   display: flex;
   align-items: center;
   gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.meeting-meta > .meta-fallback {
+  display: inline;
+  color: var(--purple);
+  cursor: help;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.print-only {
+  display: none;
 }
 .sample-note {
   font-size: 10px;
@@ -1869,67 +1890,73 @@ button {
 }
 .detail-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 270px;
-  gap: 23px;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 40px;
   align-items: start;
-  margin-top: 21px;
+  margin-top: 8px;
 }
 .document-panel {
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  min-height: 610px;
+  min-width: 0;
 }
 .document-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border);
-  padding: 0 20px;
-  gap: 24px;
+  gap: 4px;
+  box-shadow: inset 0 -1px 0 var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.document-tabs::-webkit-scrollbar {
+  display: none;
 }
 .document-tabs button {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
   border-bottom: 2px solid transparent;
-  padding: 18px 1px 15px;
+  padding: 12px 14px;
   font-size: 14px;
-  color: #555b6e;
+  color: var(--muted);
+}
+.document-tabs button:hover:not(:disabled) {
+  color: var(--ink);
 }
 .document-tabs button.active {
-  color: #9079c5;
-  border-color: #9780d1;
+  color: var(--purple);
+  border-color: var(--purple);
+  font-weight: 600;
 }
-.document-tabs button > span {
-  border-radius: 4px;
-  background: #f4f0fa;
-  padding: 1px 5px;
-  font-size: 9px;
+.document-tabs button:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: -4px;
+  border-radius: 6px 6px 0 0;
+}
+.tab-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: #8a8b99;
+  font-variant-numeric: tabular-nums;
 }
 .document-toolbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
-  gap: 7px;
-  padding: 13px 21px;
-  border-bottom: 1px solid #f4f1f7;
-  min-height: 55px;
+  gap: 8px;
+  padding-top: 24px;
 }
-.document-toolbar > span {
-  font-size: 13px;
-  color: #62687a;
+.button.ghost {
+  background: transparent;
+  border: 1px solid #e2e3eb;
+  color: #55596c;
+  font-weight: 500;
 }
-.document-toolbar > div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.document-toolbar .text-button {
-  font-size: 13px;
+.button.ghost:hover:not(:disabled) {
+  background: #f6f5fc;
 }
 .markdown {
-  padding: 30px 33px 42px;
-  line-height: 2.1;
+  padding: 8px 0 40px;
+  line-height: 1.85;
   color: #343848;
   font-size: 15px;
   overflow-wrap: anywhere;
@@ -1942,13 +1969,11 @@ button {
   margin-bottom: 16px;
 }
 .markdown h2 {
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.8;
-  margin: 21px 0 9px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f0ebf4;
-  color: #343848;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.6;
+  margin: 24px 0 8px;
+  color: #282d3d;
 }
 .markdown h3 {
   font-size: 16px;
@@ -1991,45 +2016,111 @@ button {
   line-height: 1.9;
   color: #bbafc7;
 }
-.meeting-insights {
+.meeting-rail {
   display: flex;
   flex-direction: column;
-  gap: 17px;
+  border-left: 1px solid var(--border);
+  padding-left: 24px;
 }
-.insight-card {
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 19px 19px 17px;
+.meeting-rail > * + * {
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+  padding-top: 20px;
 }
-.insight-card:first-child {
-  background: #faf8fe;
-  border-color: #eee8f6;
-}
-.insight-card h3 {
-  font-size: 15px;
+.meeting-rail h3 {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
-  color: #414658;
-  font-weight: 550;
-  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 8px;
 }
-.insight-card h3 > svg {
-  color: #b4a0ce;
+.meeting-rail h3 > span {
+  font-size: 11px;
+  font-weight: 400;
+  color: #8a8b99;
 }
-.insight-card h3 > span {
-  margin-left: auto;
-  background: #f5f1fa;
-  color: #b2a0c7;
-  padding: 1px 5px;
-  font-size: 9px;
-  border-radius: 4px;
+.meeting-rail section > p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #3d4355;
+  margin: 0;
 }
-.insight-card > p {
-  font-size: 14px;
-  color: #4d5366;
-  line-height: 2;
+.rail-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+.rail-row > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #8a8b99;
+  font-variant-numeric: tabular-nums;
+}
+.rail-row:hover:not(:disabled) > span:first-child {
+  color: var(--purple);
+}
+.rail-row:disabled {
+  cursor: default;
+}
+.rail-row svg {
+  transition: transform 0.15s ease;
+}
+.rail-row svg.open {
+  transform: rotate(180deg);
+}
+.rail-counts .decision-list {
+  margin: 0 0 8px;
+}
+.rail-counts .decision-list li {
+  font-size: 13px;
+  line-height: 1.7;
+  margin-top: 6px;
+}
+.rail-models p {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #3d4355;
+  margin: 0;
+}
+.rail-models p > span {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.rail-models small {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #8a8b99;
+}
+.rail-manage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.rail-manage .text-button {
+  font-size: 12px;
+}
+.rail-manage .delete-button {
+  color: var(--muted);
+}
+.rail-manage .delete-button:hover:not(:disabled) {
+  color: #c03d55;
 }
 .decision-list {
   padding: 0;
@@ -2122,47 +2213,8 @@ button {
   margin-left: auto;
   color: #bfaecc;
 }
-.insight-card > .text-button {
-  font-size: 10px;
-  margin-top: 8px;
-}
-.source-note {
-  padding: 4px 5px;
-}
-.source-note > span {
-  font-size: 9px;
-  color: #b6a8c3;
-  display: block;
-}
-.source-note strong {
-  display: block;
-  font-size: 14px;
-  font-weight: 500;
-  color: #4d5366;
-  margin: 6px 0 10px;
-}
-.source-note small {
-  font-size: 12px;
-  line-height: 1.9;
-  color: #62687a;
-  display: block;
-}
-.meeting-manage {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 7px 5px;
-  border-top: 1px solid #eee8f5;
-}
-.meeting-manage .text-button {
-  font-size: 10px;
-  color: #b3a5c0;
-}
-.meeting-manage .delete-button {
-  color: #c2a2ac;
-}
 .editor-wrap {
-  padding: 20px;
+  padding: 16px 0 0;
 }
 .editor-wrap > p {
   font-size: 10px;
@@ -2183,7 +2235,7 @@ button {
   line-height: 2.1;
 }
 .transcript-content {
-  padding: 25px 29px;
+  padding: 24px 0;
 }
 .transcript-content audio {
   width: 100%;
@@ -2245,7 +2297,7 @@ button {
   overflow-wrap: anywhere;
 }
 .actions-content {
-  padding: 24px 30px;
+  padding: 12px 0 24px;
 }
 .actions-content .action-item {
   padding: 20px 0;
@@ -2431,21 +2483,12 @@ button {
     font-size: 10px;
   }
   .detail-grid {
-    grid-template-columns: minmax(0, 1fr) 235px;
-    gap: 16px;
-  }
-  .document-tabs {
-    gap: 18px;
-    padding: 0 17px;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 28px;
   }
   .document-tabs button {
+    padding: 12px 10px;
     font-size: 13px;
-  }
-  .markdown {
-    padding: 25px;
-  }
-  .insight-card {
-    padding: 17px 14px;
   }
   .toast {
     left: calc(50% + 105px);
@@ -2538,15 +2581,13 @@ button {
   .detail-grid {
     grid-template-columns: 1fr;
   }
-  .meeting-insights {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .document-panel {
-    min-height: 500px;
+  .meeting-rail {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: 20px 0 0;
   }
   .meeting-heading h1 {
-    font-size: 25px;
+    font-size: 26px;
   }
   .topbar-date {
     display: none;
@@ -2959,28 +3000,16 @@ button {
   .meeting-meta {
     font-size: 13px;
   }
-  .meeting-insights {
-    grid-template-columns: 1fr;
-  }
-  .document-tabs {
-    padding: 0 14px;
-    gap: 20px;
-  }
   .document-tabs button {
+    padding: 11px 9px;
     font-size: 13px;
     gap: 5px;
   }
-  .document-tabs button svg {
-    width: 14px;
-  }
   .document-toolbar {
-    padding: 11px 15px;
-  }
-  .document-toolbar > span {
-    font-size: 12px;
+    padding-top: 16px;
   }
   .markdown {
-    padding: 25px 22px;
+    padding: 4px 0 32px;
     font-size: 14px;
   }
   .markdown h1 {
@@ -2990,14 +3019,14 @@ button {
     font-size: 16px;
   }
   .transcript-content {
-    padding: 23px 20px;
+    padding: 18px 0;
   }
   .transcript-segment p {
     margin-left: 0;
     font-size: 14px;
   }
   .actions-content {
-    padding: 23px 20px;
+    padding: 8px 0 18px;
   }
   .progress-panel {
     padding: 16px;
@@ -3033,7 +3062,6 @@ button {
     padding: 7px 17px 17px;
   }
 }
-.attachment-panel,
 .attachment-picker {
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -3041,7 +3069,10 @@ button {
   background: #fff;
 }
 .attachment-panel {
-  margin: 0 0 22px;
+  padding: 12px 0 24px;
+}
+.attachment-panel > .button {
+  margin-top: 14px;
 }
 .attachment-panel .field-hint,
 .attachment-picker .field-hint {
@@ -3058,6 +3089,46 @@ button {
 .attachment-picker.drag {
   border-color: var(--purple);
   background: #f2edff;
+}
+.attachment-picker.dropzone {
+  margin: 16px 0 0;
+  padding: 36px 24px;
+  border: 1px dashed #c9c5ef;
+  border-radius: 10px;
+  background: #fcfbff;
+}
+.attachment-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.attachment-dropzone > svg {
+  color: var(--purple);
+}
+.attachment-dropzone > strong {
+  font-size: 15px;
+  font-weight: 500;
+}
+.attachment-picker .attachment-dropzone .field-hint {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+}
+.attachment-picker.dropzone .attachment-row:first-of-type {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.attachment-footnote {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
 }
 .attachment-drop-hint {
   display: flex;
@@ -3140,9 +3211,11 @@ button {
   line-height: 1.8;
 }
 @media (max-width: 600px) {
-  .attachment-panel,
   .attachment-picker {
     padding: 14px;
+  }
+  .attachment-picker.dropzone {
+    padding: 24px 14px;
   }
   .attachment-row {
     flex-wrap: wrap;
@@ -3211,12 +3284,11 @@ button {
   .attachment-panel,
   .topbar,
   .detail-top,
-  .meeting-insights,
+  .meeting-rail,
   .sample-note,
   .document-toolbar,
   .document-tabs,
   .toast,
-  .meeting-manage,
   .progress-panel,
   .error-message,
   .notice,
@@ -3234,9 +3306,8 @@ button {
   .detail-grid {
     display: block;
   }
-  .document-panel {
-    border: 0;
-    min-height: 0;
+  .print-only {
+    display: block;
   }
   .markdown {
     padding: 0;

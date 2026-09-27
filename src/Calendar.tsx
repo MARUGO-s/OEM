@@ -1020,22 +1020,58 @@ export function MeetingSchedule({
   onOpen: (date?: string) => void;
   disabled?: boolean;
 }) {
-  const events = meetingEvents(meeting) as CalendarEntry[];
+  const events = (meetingEvents(meeting) as CalendarEntry[]).sort(sortEvents);
   return (
-    <section className="meeting-schedule">
-      <div>
-        <CalendarDays size={20} />
-        <div>
-          <h3>
-            この会議の予定・期限 <span>{events.length}件</span>
-          </h3>
-          <p>
-            {events.length
-              ? "日付・時間・場所をカレンダーで確認・変更できます。"
-              : "日程や期限が抽出されると、カレンダーに表示されます。"}
+    <div className="meeting-schedule">
+      {events.length ? (
+        <ul className="schedule-list">
+          {events.map((e) => (
+            <li key={e.id}>
+              <button
+                className="schedule-row"
+                disabled={disabled}
+                onClick={() => onOpen(e.date || undefined)}
+              >
+                <span className="schedule-date">
+                  {e.date ? shortDate(e.date) : "日付要確認"}
+                  <small>{e.date ? timeText(e) : e.dateText}</small>
+                </span>
+                <span className="schedule-body">
+                  <strong>{e.title}</strong>
+                  <small>
+                    {[
+                      kindText[e.kind],
+                      e.endDate && e.endDate !== e.date
+                        ? `～ ${shortDate(e.endDate)}`
+                        : "",
+                      e.owner && `担当：${e.owner}`,
+                      e.location,
+                      e.manual ? "手動変更" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ・ ")}
+                  </small>
+                </span>
+                <span className={`cal-status ${e.status}`}>
+                  {statusText[e.status]}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="schedule-empty">
+          <p>この会議から抽出された予定・期限はありません。</p>
+          <p className="muted">
+            日程や期限が抽出されると、こことカレンダーに表示されます。
           </p>
         </div>
-      </div>
+      )}
+      {!!events.length && (
+        <p className="schedule-hint">
+          日付・時間・場所の変更や根拠の確認はカレンダーで行えます。
+        </p>
+      )}
       <button
         className="button secondary small"
         disabled={disabled}
@@ -1044,6 +1080,6 @@ export function MeetingSchedule({
         カレンダーで確認
         <ArrowRight size={14} />
       </button>
-    </section>
+    </div>
   );
 }

@@ -128,7 +128,7 @@ class ManualDoc(SimpleDocTemplate):
 doc=ManualDoc(str(OUTPUT),pagesize=A4,leftMargin=LEFT,rightMargin=LEFT,topMargin=23*mm,bottomMargin=23*mm,title="kotonoha 操作説明書",author="kotonoha",subject="録音と資料の取り込み 議事録編集 共有カレンダー",pageCompression=1)
 doc.build(story,onFirstPage=frame,onLaterPages=frame)
 reader=PdfReader(str(OUTPUT))
-expected=["kotonoha 操作説明書","1 ログインと画面の見方","2 録音や会話を取り込む","3 会議資料を保存して解析する","4 議事録を確認して編集する","5 カレンダーと予定の手動変更","6 共有と書き出しとデータの管理","7 困ったときと確認チェック"]
+expected=["kotonoha 操作説明書","1 ログインと画面の見方","2 録音や会話を取り込む","3 会議資料を保存する","4 議事録を確認して編集する","5 カレンダーと予定の手動変更","6 共有と書き出しとデータの管理","7 困ったときと確認チェック"]
 assert len(reader.pages)==len(expected),f"Expected 8 pages, got {len(reader.pages)}"
 for index,(page,title) in enumerate(zip(reader.pages,expected),1):
     text=page.extract_text()

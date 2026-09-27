@@ -1,4 +1,5 @@
-// Explicit live smoke check: one real, billable summary using small synthetic docs.
+// Explicit live smoke check: one real, billable summary of the conversation only;
+// small synthetic docs are stored and downloaded but never sent to the AI.
 // Credentials enter hidden stdin, never command args/logs; saved keys stay in Edge.
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
@@ -58,7 +59,7 @@ try {
     method: "POST",
     body: JSON.stringify({
       metadata: {
-        title: "検証用・添付資料の実AI照合（架空）",
+        title: "検証用・添付資料の保存と会話のみの実AI解析（架空）",
         date: "2026-09-23",
       },
       sources: [],
@@ -124,12 +125,10 @@ try {
     meeting.error || "AI completion timed out",
   );
   assert.equal(meeting.minutesModel, settings.model);
-  assert.equal(meeting.minutes.documentReview.length, 3);
-  assert.deepEqual(
-    meeting.minutes.documentReview.map((r) => r.attachmentId).sort(),
-    attachments.map((a) => a.id).sort(),
-  );
-  assert.match(meeting.markdown, /添付資料との照合/);
+  assert.equal(meeting.minutes.documentReview, undefined);
+  assert.doesNotMatch(meeting.markdown, /添付資料との照合/);
+  assert.equal(meeting.attachments.length, 3);
+  assert.equal(meeting.minutesStale, false);
   console.log(
     JSON.stringify(
       {
@@ -140,7 +139,6 @@ try {
         decisions: meeting.minutes.decisions,
         actions: meeting.minutes.actions,
         openQuestions: meeting.minutes.openQuestions,
-        documentReview: meeting.minutes.documentReview,
       },
       null,
       2,
