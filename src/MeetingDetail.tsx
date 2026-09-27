@@ -31,7 +31,10 @@ import {
 import { Modal } from "./Modal";
 import { AttachmentPanel } from "./Attachments";
 import { MeetingSchedule } from "./Calendar";
-import { transcriptParagraphs } from "./transcript-paragraphs.mjs";
+import {
+  speakerTurns,
+  transcriptParagraphs,
+} from "./transcript-paragraphs.mjs";
 
 type Tab = "minutes" | "transcript" | "actions" | "schedule" | "files";
 const tabLabels: Record<Tab, string> = {
@@ -297,6 +300,7 @@ export function MeetingDetail({
     }
   }
   const displayText = tab === "transcript" ? m.transcript : m.markdown;
+  const turns = m.segments.length ? null : speakerTurns(m.transcript);
   const tabs: Tab[] = m.isDemo
     ? ["minutes", "transcript", "actions", "files"]
     : ["minutes", "transcript", "actions", "schedule", "files"];
@@ -689,6 +693,44 @@ export function MeetingDetail({
                         <p>{s.text}</p>
                       </div>
                     ))
+                  ) : m.transcript && turns ? (
+                    <>
+                      <p className="transcript-note">
+                        {transcriptionModelName(m.transcriptionModel)}
+                        が声の違いから話者を推定しています。録音が10分ごとに分割されている場合、分割した部分をまたぐと同じ人でも別の話者番号になることがあります。
+                      </p>
+                      {turns.map((t, i) =>
+                        "heading" in t ? (
+                          <h3 className="transcript-heading" key={i}>
+                            {t.heading}
+                          </h3>
+                        ) : (
+                          <div className="transcript-segment" key={i}>
+                            {t.speaker && (
+                              <div>
+                                <span
+                                  className={`speaker-avatar color-${
+                                    (Number(t.speaker.replace(/\D/g, "")) + 2) %
+                                    3
+                                  }`}
+                                >
+                                  {t.speaker.replace(/\D/g, "")}
+                                </span>
+                                <strong>{t.speaker}</strong>
+                                {t.start !== null && (
+                                  <span className="time-code">
+                                    {clock(t.start)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {transcriptParagraphs(t.text).map((p, j) => (
+                              <p key={j}>{p}</p>
+                            ))}
+                          </div>
+                        ),
+                      )}
+                    </>
                   ) : m.transcript ? (
                     <>
                       {m.source === "audio" && (

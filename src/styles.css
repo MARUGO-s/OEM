@@ -2283,6 +2283,13 @@ button {
   color: #3d4355;
   margin: 9px 0 0 35px;
 }
+.transcript-heading {
+  font-size: 14px;
+  color: #62687a;
+  margin: 8px 0 18px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e6e8ef;
+}
 .transcript-note {
   color: #62687a;
   font-size: 13px;

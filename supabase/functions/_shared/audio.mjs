@@ -219,6 +219,19 @@ export async function prepareAudio(file) {
   }
 }
 
+// Seconds from the start of the original recording to this split part, or null
+// when an earlier part's length is unknown (timestamps are then omitted).
+export function partOffset(parts, index) {
+  const part = parts[index];
+  if (!Number.isInteger(part?.sourceIndex)) return 0;
+  let offset = 0;
+  for (const earlier of parts.slice(0, index)) {
+    if (earlier.sourceIndex !== part.sourceIndex) continue;
+    if (!Number.isFinite(earlier.duration)) return null;
+    offset += earlier.duration;
+  }
+  return offset;
+}
 /** @param {any} document @param {string | null} legacyAudioPath */
 export function recordingsFor(document, legacyAudioPath = null) {
   return document.audioParts?.length

@@ -37,3 +37,29 @@ export function transcriptParagraphs(text) {
   }
   return paragraphs;
 }
+
+const TURN = /^(?:\[(\d{2,}):(\d{2})\]\s*)?(話者\d+)[：:]\s*(.*)$/;
+const RECORDING = /^【録音 \d+】$/;
+
+// Parses "[mm:ss] 話者1：..." lines written by speaker-aware transcription.
+// Returns null for plain transcripts so they fall back to paragraphs.
+export function speakerTurns(text) {
+  const items = [];
+  let found = false;
+  for (const raw of String(text || "").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const turn = TURN.exec(line);
+    if (turn) {
+      found = true;
+      items.push({
+        speaker: turn[3],
+        start: turn[1] ? Number(turn[1]) * 60 + Number(turn[2]) : null,
+        text: turn[4],
+      });
+    } else if (RECORDING.test(line)) items.push({ heading: line.slice(1, -1) });
+    else if (items.at(-1)?.speaker) items.at(-1).text += `\n${line}`;
+    else items.push({ speaker: null, start: null, text: line });
+  }
+  return found ? items : null;
+}

@@ -41,6 +41,7 @@ import {
   prepareAudio,
   publicRecordings,
   recordingsFor,
+  partOffset,
   transcribeRecordings,
   validateRecordings,
 } from "../_shared/audio.mjs";
@@ -484,7 +485,8 @@ async function processMeeting(
             }
             return transcribeWithGemini(keys.gemini, data, fileName,
               (response: Doc) => recordApiUsage(owner, record.document,
-                "transcription", GEMINI_TRANSCRIPTION_MODEL, response, duration));
+                "transcription", GEMINI_TRANSCRIPTION_MODEL, response, duration),
+              { offset: partOffset(recordingsFor(record.document, record.audioPath), index) });
           }
           const form = new FormData();
           // The display name may be .aac, while storage contains a remuxed .m4a.

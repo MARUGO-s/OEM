@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { transcribeWithGemini } from "../supabase/functions/_shared/gemini-transcribe.mjs";
+import {
+  speakerTranscript,
+  transcribeWithGemini,
+} from "../supabase/functions/_shared/gemini-transcribe.mjs";
 import { safeError } from "../supabase/functions/_shared/domain.mjs";
 
 // REST shape from https://ai.google.dev/gemini-api/docs/transcribe#parsing-transcription-output
@@ -47,7 +50,14 @@ function mockGoogle(t, result, { fileState = "ACTIVE", failure } = {}) {
         { type: "audio", uri: fileUri, mime_type: "audio/wav" },
       ]);
       assert.deepEqual(body.generation_config, {
-        transcription_config: { language_codes: ["ja-JP"] },
+        transcription_config: {
+          language_codes: ["ja-JP"],
+          mode: {
+            type: "verbatim",
+            diarization_mode: "speaker",
+            timestamp_granularities: ["word"],
+          },
+        },
       });
       if (failure) throw failure;
       return Response.json(result);
@@ -160,4 +170,52 @@ test("Geminiのファイル処理が失敗した場合も後片付けする", as
     !calls.some(({ target }) => target.pathname === "/v1beta/interactions"),
   );
   assert.ok(wasCleaned(calls));
+});
+
+const word = (text, speaker, start) => ({
+  type: "word_info",
+  text,
+  speaker,
+  start_offset: `${start}s`,
+  end_offset: `${start + 0.4}s`,
+});
+
+test("話者つきの単語情報を発言ごとにまとめ、分割部分の開始時刻を足す", async (t) => {
+  const response = completed([
+    {
+      type: "text",
+      text: "では始めますはいお願いしますAI会議",
+      annotations: [
+        word("では", "spk_1", 0.1),
+        word("始めます", "spk_1", 0.5),
+        word("はい", "spk_2", 2.2),
+        word("お願いします", "spk_2", 2.6),
+        word("AI", "spk_1", 64.9),
+        word("meeting", "spk_1", 65.3),
+      ],
+    },
+  ]);
+  mockGoogle(t, response);
+  assert.equal(
+    await transcribeWithGemini(
+      key,
+      new Blob([new Uint8Array(44)]),
+      "meeting.wav",
+      () => {},
+      { offset: 600 },
+    ),
+    "[10:00] 話者1：では始めます\n\n[10:02] 話者2：はいお願いします\n\n[11:04] 話者1：AI meeting",
+  );
+});
+
+test("前の部分の長さが不明なら時刻を省き、単語情報がなければ本文を使う", () => {
+  const parts = [
+    {
+      type: "text",
+      text: "こんにちは",
+      annotations: [word("こんにちは", "spk_3", 1)],
+    },
+  ];
+  assert.equal(speakerTranscript(parts, null), "話者3：こんにちは");
+  assert.equal(speakerTranscript([{ type: "text", text: "本文" }]), null);
 });
