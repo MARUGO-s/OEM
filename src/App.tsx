@@ -58,6 +58,8 @@ import { UsagePage } from "./UsagePage";
 import { StatsPage } from "./StatsPage";
 import { ComparePage } from "./ComparePage";
 import { Modal } from "./Modal";
+import { TagSuggestionDialog } from "./TagSuggestionDialog";
+import { createTagCompletionTracker, createTagSuggestionCache } from "./tag-suggestions.mjs";
 import { meetingEvents, tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
 import { MeetingTagsSchema, TagNameSchema } from "../supabase/functions/_shared/domain.mjs";
 
@@ -118,6 +120,9 @@ export default function App() {
   const [tagBusy, setTagBusy] = useState(false);
   const tagMutation = useRef({ busy: false, version: 0 });
   const [tagAssignmentTarget, setTagAssignmentTarget] = useState<string | null>(null);
+  const tagCompletion = useRef(createTagCompletionTracker());
+  const tagRequests = useRef(createTagSuggestionCache());
+  const [aiTagQueue, setAiTagQueue] = useState<{ id: string; key: string }[]>([]);
   const [templates, setTemplates] = useState<MeetingTemplate[]>([]);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
@@ -274,6 +279,13 @@ export default function App() {
   }, [refresh]);
   const processing = meetings.some(isWorking);
   useEffect(() => {
+    const completed = tagCompletion.current.observe(meetings);
+    setAiTagQueue(previous => {
+      const valid = previous.filter(item => meetings.some(m => m.id === item.id && m.status === "done" && !m.isDemo && m.minutes) && item.key === tagCompletion.current.key(item.id));
+      return [...valid, ...completed.filter(item => !valid.some(queued => queued.key === item.key))];
+    });
+  }, [meetings]);
+  useEffect(() => {
     if ((!processing && !isCloud) || editing || renameTarget) return;
     let stop = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -362,12 +374,55 @@ export default function App() {
             await import("./upload-recordings")
           ).uploadRecordings(data, progress)
         : await api<Meeting>("/meetings", { method: "POST", body: data });
+    tagCompletion.current.expect(m.id);
     updateMeeting(m);
     setNewOpen(false);
     openMeeting(m.id);
   }
 
   // タグ管理関数
+  function openAiTags(meeting: Meeting) {
+    const item = { id: meeting.id, key: tagCompletion.current.key(meeting.id) };
+    setAiTagQueue(previous => [item, ...previous.filter(queued => queued.key !== item.key)]);
+  }
+  const aiTagTarget = aiTagQueue[0];
+  const aiTagMeeting = meetings.find(m => m.id === aiTagTarget?.id && m.status === "done");
+  async function loadAiTags(retry = false): Promise<string[]> {
+    if (!aiTagTarget) return [];
+    return tagRequests.current(aiTagTarget.key, async () => {
+      const result = await api<{ tags: string[] }>("/suggest-tags", {
+        method: "POST", body: JSON.stringify({ meetingId: aiTagTarget.id }),
+      });
+      return MeetingTagsSchema.parse(result.tags);
+    }, retry);
+  }
+  async function saveAiTags(selectedTags: string[]) {
+    if (!aiTagTarget || tagMutation.current.busy) throw new Error("タグを保存中です。少し待ってから再試行してください。");
+    const target = aiTagTarget;
+    tagMutation.current.busy = true;
+    tagMutation.current.version++;
+    setTagBusy(true);
+    try {
+      // Merge against the latest server tags instead of the popup's old snapshot.
+      const fresh = await api<Meeting>(`/meetings/${target.id}`);
+      if (fresh.status !== "done" || fresh.isDemo || target.key !== tagCompletion.current.key(target.id)) {
+        throw new Error("会議の状態が変わりました。解析完了後にタグ候補を開き直してください。");
+      }
+      const merged = MeetingTagsSchema.safeParse([...new Set([...(fresh.tags || []), ...selectedTags])]);
+      if (!merged.success) throw new Error("タグは各50文字以内、1会議50個まで設定できます。");
+      const updated = await api<Meeting>(`/meetings/${target.id}`, {
+        method: "PATCH", body: JSON.stringify({ tags: merged.data }),
+      });
+      updateMeeting(updated);
+      setTagCandidates(prev => prev.filter(name => !updated.tags?.includes(name)));
+      notify("選んだタグを議事録に保存しました。");
+    } finally {
+      tagMutation.current.busy = false;
+      tagMutation.current.version++;
+      setTagBusy(false);
+    }
+  }
+
   function createTag() {
     const parsed = TagNameSchema.safeParse(newTagName);
     if (!parsed.success) return notify("タグ名は1〜50文字で入力してください。");
@@ -684,6 +739,7 @@ export default function App() {
                 go("calendar");
               }}
               onRename={openRename}
+              onChooseTags={openAiTags}
               onChange={updateMeeting}
               onDelete={(id) => {
                 setMeetings((prev) => prev.filter((m) => m.id !== id));
@@ -1487,6 +1543,15 @@ export default function App() {
           )}
         </main>
       </div>
+      {aiTagTarget && aiTagMeeting && !editing && !newOpen && !settingsOpen && !renameTarget && !tagAssignmentTarget && !showTagManager && !showExportDialog && (
+        <TagSuggestionDialog
+          key={aiTagTarget.key}
+          meeting={aiTagMeeting}
+          load={loadAiTags}
+          save={saveAiTags}
+          onClose={() => setAiTagQueue(previous => previous.filter(item => item.key !== aiTagTarget.key))}
+        />
+      )}
       {newOpen && (
         <NewMeeting
           settings={settings}
@@ -1640,7 +1705,13 @@ function Help({
             時間比較・総録音時間は分割音声の時間を合計します。時間が不明な会議は「未取得」と表示し、平均・合計から除外します。既存の会議も再解析せず反映されます。
           </p>
           <p>
-            AIサマリーは「今月」「先月」「直近7日」「期間指定」から選べます。先月は前月1日〜末日、期間指定は開始日と終了日を含む範囲です。日本時間の今日までに開催した解析完了の会議が対象です。見出し・段落・箇条書きで整理し、タグ提案とともにOpenAIの追加料金がかかり、API使用料に記録します。サマリーは画面内だけの表示です。タグの提案を押すと会議に保存して全員に共有します。未使用のタグ候補だけはこのブラウザーに保存します。会議比較は2〜5件を選べます。一括Markdownには保存済み本文を含み、ICSは会議の開催日を終日予定として書き出します。通知を許可すると、アプリを開いている間だけ確定した期限の超過を同じタブで1回通知します。アプリを閉じている間の通知・外部カレンダーへの自動同期はありません。
+            AIサマリーは「今月」「先月」「直近7日」「期間指定」から選べます。先月は前月1日〜末日、期間指定は開始日と終了日を含む範囲です。日本時間の今日までに開催した解析完了の会議が対象です。見出し・段落・箇条書きで整理し、タグ提案とともにOpenAIの追加料金がかかり、API使用料に記録します。サマリーは画面内だけの表示です。
+          </p>
+          <p>
+            アプリを開いている間に議事録が完成すると、AIタグ候補をポップアップで自動表示します。必要な候補にチェックし、「選んだタグを保存」を押すと、その議事録に紐付けて全員に共有します。既存タグは残ります。選ぶだけ・閉じるだけでは保存しません。複数会議は順番に表示します。候補の取得に失敗しても議事録は利用でき、再取得は手動です。閉じた候補や過去の会議は、詳細の「タグ候補を開く」から選べます。同じ画面内では候補を再利用し、再読み込み後は再生成（追加料金）になります。画面を閉じている間に完了した会議の候補は手動で開いてください。手動作成した未使用のタグ名だけはこのブラウザーに保存します。
+          </p>
+          <p>
+            会議比較は2〜5件を選べます。一括Markdownには保存済み本文を含み、ICSは会議の開催日を終日予定として書き出します。通知を許可すると、アプリを開いている間だけ確定した期限の超過を同じタブで1回通知します。アプリを閉じている間の通知・外部カレンダーへの自動同期はありません。
           </p>
         </div>
       </section>
