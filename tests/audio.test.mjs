@@ -148,3 +148,19 @@ test("完了順でなく録音順に統合し、失敗分だけ再試行する",
     "【録音 1】\n前半の提案\n\n【録音 2】\n中盤の議論\n\n【録音 3】\n最後の決定",
   );
 });
+
+test("分割した録音の開始時刻を、同じ元ファイルの前の部分の長さから求める", async () => {
+  const { partOffset } = await import("../supabase/functions/_shared/audio.mjs");
+  const parts = [
+    { sourceIndex: 0, duration: 600 },
+    { sourceIndex: 0, duration: 600 },
+    { sourceIndex: 1, duration: 300 },
+    { sourceIndex: 1, duration: 300 },
+  ];
+  assert.equal(partOffset(parts, 0), 0);
+  assert.equal(partOffset(parts, 1), 600);
+  assert.equal(partOffset(parts, 2), 0);
+  assert.equal(partOffset(parts, 3), 300);
+  assert.equal(partOffset([{ sourceIndex: 0 }, { sourceIndex: 0 }], 1), null);
+  assert.equal(partOffset([{ fileName: "a.m4a" }], 0), 0);
+});

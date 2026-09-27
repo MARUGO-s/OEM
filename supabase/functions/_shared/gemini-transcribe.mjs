@@ -93,7 +93,61 @@ async function activeFile(apiKey, initial) {
   return file;
 }
 
-function transcriptFromInteraction(interaction) {
+const seconds = (value) => {
+  const n = Number.parseFloat(String(value ?? "").replace(/s$/, ""));
+  return Number.isFinite(n) ? n : null;
+};
+const clockLabel = (value) => {
+  const total = Math.max(0, Math.floor(value));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(
+    total % 60,
+  ).padStart(2, "0")}`;
+};
+
+// Diarized output annotates every word with its speaker ("spk_1") and offsets.
+// Consecutive words of one speaker become one "[mm:ss] 話者1：..." line, the
+// same shape transcriptFromSegments produces, so display and minutes share it.
+export function speakerTranscript(parts, offset = 0) {
+  const words = parts
+    .flatMap((part) =>
+      Array.isArray(part.annotations) ? part.annotations : [],
+    )
+    .filter(
+      (a) =>
+        a?.type === "word_info" &&
+        typeof a.text === "string" &&
+        typeof a.speaker === "string",
+    );
+  if (!words.length) return null;
+  const turns = [];
+  for (const word of words) {
+    const speaker = `話者${word.speaker.match(/\d+/)?.[0] || word.speaker}`;
+    const last = turns.at(-1);
+    if (last?.speaker === speaker) {
+      const ascii =
+        /[A-Za-z0-9]$/.test(last.text) && /^[A-Za-z0-9]/.test(word.text);
+      last.text += (ascii ? " " : "") + word.text;
+    } else {
+      turns.push({
+        speaker,
+        start: seconds(word.start_offset),
+        text: word.text,
+      });
+    }
+  }
+  return turns
+    .map(({ speaker, start, text }) => {
+      const time =
+        start === null || offset === null
+          ? ""
+          : `[${clockLabel(start + offset)}] `;
+      return `${time}${speaker}：${text.trim()}`;
+    })
+    .filter((line) => !line.endsWith("："))
+    .join("\n\n");
+}
+
+function transcriptFromInteraction(interaction, offset) {
   // REST responses contain model_output steps; candidates belongs to the
   // legacy generateContent API, not the Transcribe Interactions API.
   if (!interaction || typeof interaction !== "object") {
@@ -125,7 +179,10 @@ function transcriptFromInteraction(interaction) {
       .filter((step) => step?.type === "model_output")
       .flatMap((step) => (Array.isArray(step.content) ? step.content : []))
       .filter((part) => part?.type === "text" && typeof part.text === "string");
-    if (parts.length) text = parts.map((part) => part.text).join("");
+    if (parts.length)
+      text =
+        speakerTranscript(parts, offset) ??
+        parts.map((part) => part.text).join("");
   } else if (typeof interaction.output_text === "string") {
     text = interaction.output_text;
   }
@@ -144,7 +201,21 @@ function transcriptFromInteraction(interaction) {
   return text.trim();
 }
 
-export async function transcribeWithGemini(apiKey, audio, fileName, onUsage = (_response) => {}) {
+// offset (seconds) shifts timestamps when the audio is a later split part.
+/**
+ * @param {string} apiKey
+ * @param {Blob} audio
+ * @param {string} fileName
+ * @param {(response: any) => unknown} [onUsage]
+ * @param {{ offset?: number | null }} [options]
+ */
+export async function transcribeWithGemini(
+  apiKey,
+  audio,
+  fileName,
+  onUsage = (_response) => {},
+  { offset = 0 } = {},
+) {
   const mimeType = mimeFor(fileName, audio.type);
   const start = await google(
     await geminiFetch(
@@ -210,7 +281,14 @@ export async function transcribeWithGemini(apiKey, audio, fileName, onUsage = (_
               },
             ],
             generation_config: {
-              transcription_config: { language_codes: ["ja-JP"] },
+              transcription_config: {
+                language_codes: ["ja-JP"],
+                mode: {
+                  type: "verbatim",
+                  diarization_mode: "speaker",
+                  timestamp_granularities: ["word"],
+                },
+              },
             },
           }),
           signal: AbortSignal.timeout(110_000),
@@ -218,7 +296,7 @@ export async function transcribeWithGemini(apiKey, audio, fileName, onUsage = (_
       ),
     ).then((response) => geminiJson(response, "GEMINI_TRANSCRIPT_INVALID"));
     await onUsage(generated);
-    return transcriptFromInteraction(generated);
+    return transcriptFromInteraction(generated, offset);
   } finally {
     await fetch(
       `https://generativelanguage.googleapis.com/v1beta/${uploaded.file.name}?key=${encodeURIComponent(

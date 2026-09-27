@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { transcriptParagraphs } from "../src/transcript-paragraphs.mjs";
+import {
+  speakerTurns,
+  transcriptParagraphs,
+} from "../src/transcript-paragraphs.mjs";
 
 test("改行のない文字起こしを文末で段落に分け、本文を欠落させない", () => {
   const text =
@@ -30,4 +33,21 @@ test("句点のない文や英語も扱い、空の入力では段落を返さ�
   ]);
   assert.deepEqual(transcriptParagraphs(""), []);
   assert.deepEqual(transcriptParagraphs(undefined), []);
+});
+
+test("話者つきの文字起こしを発言ごとに読み取り、録音の見出しと続きの行を保つ", () => {
+  assert.deepEqual(
+    speakerTurns(
+      "【録音 1】\n[00:03] 話者1：では始めます。\n\n[01:15] 話者2：資料です。\n補足です。\n\n【録音 2】\n話者1：続きです。",
+    ),
+    [
+      { heading: "録音 1" },
+      { speaker: "話者1", start: 3, text: "では始めます。" },
+      { speaker: "話者2", start: 75, text: "資料です。\n補足です。" },
+      { heading: "録音 2" },
+      { speaker: "話者1", start: null, text: "続きです。" },
+    ],
+  );
+  assert.equal(speakerTurns("話者のいない普通の文章です。"), null);
+  assert.equal(speakerTurns(""), null);
 });
