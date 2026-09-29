@@ -62,6 +62,7 @@ import { TagSuggestionDialog } from "./TagSuggestionDialog";
 import { createTagCompletionTracker, createTagSuggestionCache } from "./tag-suggestions.mjs";
 import { meetingEvents, tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
 import { MeetingTagsSchema, TagNameSchema } from "../supabase/functions/_shared/domain.mjs";
+import { BOT_PHASE_LABELS, botActive, botPhase } from "../supabase/functions/_shared/bot.mjs";
 
 const TAG_CANDIDATES_KEY = "kotonoha.tag-candidates.v1";
 const NOTIFIED_DEADLINES_KEY = "kotonoha.notified-deadlines.v1";
@@ -278,6 +279,8 @@ export default function App() {
     void refresh();
   }, [refresh]);
   const processing = meetings.some(isWorking);
+  // While a Meet bot is waiting/recording/uploading, refresh the list a little faster.
+  const botWaiting = meetings.some((m) => botActive(m));
   useEffect(() => {
     const completed = tagCompletion.current.observe(meetings);
     setAiTagQueue(previous => {
@@ -302,14 +305,14 @@ export default function App() {
       } catch (e) {
         if (!stop) setError(e instanceof Error ? e.message : String(e));
       }
-      if (!stop) timer = setTimeout(poll, processing ? 2500 : 10000);
+      if (!stop) timer = setTimeout(poll, processing ? 2500 : botWaiting ? 5000 : 10000);
     }
-    timer = setTimeout(poll, processing ? 2500 : 10000);
+    timer = setTimeout(poll, processing ? 2500 : botWaiting ? 5000 : 10000);
     return () => {
       stop = true;
       if (timer) clearTimeout(timer);
     };
-  }, [processing, editing, renameTarget, isCloud]);
+  }, [processing, botWaiting, editing, renameTarget, isCloud]);
   function updateMeeting(next: Meeting) {
     setMeetings((prev) =>
       prev.some((m) => m.id === next.id)
@@ -378,6 +381,20 @@ export default function App() {
     updateMeeting(m);
     setNewOpen(false);
     openMeeting(m.id);
+  }
+  async function requestBot(request: {
+    meetUrl: string;
+    metadata: { title: string; date: string; participants: string; template: string };
+  }) {
+    const m = await api<Meeting>("/bot/requests", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    tagCompletion.current.expect(m.id);
+    updateMeeting(m);
+    setNewOpen(false);
+    openMeeting(m.id);
+    notify("Botに参加を依頼しました。状況は会議の画面に表示されます。");
   }
 
   // タグ管理関数
@@ -1411,8 +1428,14 @@ export default function App() {
                               : m.status === "analyzing"
                                 ? "解析中"
                                 : m.status === "uploading"
-                                  ? "取り込み途中"
-                                  : "要確認"}
+                                  ? m.bot
+                                    ? "Botアップロード中"
+                                    : "取り込み途中"
+                                  : m.status === "bot"
+                                    ? botPhase(m) === "error"
+                                      ? "Botエラー"
+                                      : `Bot${BOT_PHASE_LABELS[botPhase(m) as keyof typeof BOT_PHASE_LABELS]}`
+                                    : "要確認"}
                         </span>
                         <ChevronRight size={17} />
                       </div>
@@ -1557,6 +1580,7 @@ export default function App() {
           settings={settings}
           onClose={() => setNewOpen(false)}
           onCreate={create}
+          onBot={requestBot}
           onSettings={() => setSettingsOpen(true)}
           templates={templates}
         />

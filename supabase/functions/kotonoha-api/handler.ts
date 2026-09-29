@@ -66,6 +66,18 @@ import {
   tickCandidates,
   verifyTickSecret,
 } from "../_shared/tick.mjs";
+import {
+  BotRequestSchema,
+  BotStatusSchema,
+  BotUploadSchema,
+  botDocument,
+  botView,
+  createUploadToken,
+  uploadTokenFrom,
+  WEBHOOK_SECRET_HEADER,
+  WEBHOOK_TIMEOUT_MS,
+  webhookPayload,
+} from "../_shared/bot.mjs";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 type Doc = Record<string, any>;
@@ -147,6 +159,15 @@ async function store(
         409,
         "音声・添付資料の取り込みが未完了、または順序が不正です。",
       );
+    }
+    if (error.message.includes("BOT_LIMIT")) {
+      throw fail(
+        429,
+        "Botの参加待ちの会議が多すぎます。不要な会議を削除してから再度お試しください。",
+      );
+    }
+    if (error.message.includes("BOT_CLOSED")) {
+      throw fail(409, "この会議はBotの録音を受け付けていません。");
     }
     if (error.message.includes("NOT_FOUND")) {
       throw fail(404, "会議が見つかりません。");
@@ -756,11 +777,213 @@ async function runTick() {
   return { meetings: candidates.length, advanced };
 }
 
+// Chunked upload steps shared by the logged-in routes (/meetings/:id/...) and the bot routes
+// (/bot/meetings/:id/..., upload-token auth). Both go through the same RPCs and checks.
+async function appendPart(
+  req: Request,
+  owner: string,
+  id: string,
+  record: RecordRow,
+): Promise<RecordRow> {
+  const index = Number(new URL(req.url).searchParams.get("index"));
+  let expected;
+  try {
+    expected = uploadPart(record.document, index);
+  } catch (error) {
+    throw fail(409, (error as Error).message);
+  }
+  const bytes = await bodyBytes(req, expected.size);
+  if (bytes.length !== expected.size) {
+    throw fail(400, "録音のサイズが一致しません。");
+  }
+  const partPath = `${owner}/${id}/${crypto.randomUUID()}-${expected.name}`;
+  const ext = expected.name.split(".").pop();
+  const mime = (
+    {
+      m4a: "audio/mp4",
+      mp3: "audio/mpeg",
+      wav: "audio/wav",
+      ogg: "audio/ogg",
+      flac: "audio/flac",
+    } as Record<string, string>
+  )[ext];
+  const { error } = await service.storage
+    .from(BUCKET)
+    .upload(partPath, new Blob([bytes], { type: mime }), {
+      contentType: mime,
+      upsert: false,
+    });
+  if (error) {
+    throw fail(503, "音声を保存できませんでした。再度取り込んでください。");
+  }
+  try {
+    return await store(
+      "append",
+      owner,
+      id,
+      { index, part: { ...expected, audioPath: partPath, transcript: "" } },
+      "kotonoha_audio_upload",
+    );
+  } catch (error) {
+    // A network error may mean the append committed but its response was
+    // lost. Do not destroy a potentially registered recording in that case.
+    if ([404, 409].includes((error as any).status)) {
+      await service.storage.from(BUCKET).remove([partPath]);
+    }
+    throw error;
+  }
+}
+async function completeUpload(
+  owner: string,
+  id: string,
+  config: Doc,
+  record: RecordRow,
+): Promise<RecordRow> {
+  const keys = await getKeys(
+    owner,
+    config,
+    record.document.transcriptionModel,
+  );
+  const claimed = await store(
+    "complete",
+    owner,
+    id,
+    { runId: crypto.randomUUID() },
+    "kotonoha_attachments",
+  );
+  return reconcile(owner, claimed, keys);
+}
+
+const apiBaseUrl = () =>
+  (
+    Deno.env.get("MEETBOT_API_BASE_URL") ||
+    `${Deno.env.get("SUPABASE_URL")}/functions/v1/kotonoha-api`
+  ).replace(/\/$/, "");
+async function sendBotWebhook(url: string, secret: string, payload: Doc) {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "Content-Type": "application/json",
+        ...(secret ? { [WEBHOOK_SECRET_HEADER]: secret } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
+    });
+  } catch {
+    throw fail(502, "Botに接続できませんでした。Botの稼働状況を確認して再度お試しください。");
+  }
+  await response.body?.cancel().catch(() => {});
+  if (!response.ok) {
+    throw fail(
+      502,
+      `Botが依頼を受け付けませんでした（HTTP ${response.status}）。しばらくしてから再度お試しください。`,
+    );
+  }
+}
+// Upload-token routes used by the Meet bot. The token only works for its own meeting and only
+// for status / upload plan / parts / complete; it is never a login session.
+async function handleBotRoute(
+  req: Request,
+  route: string,
+  json: (value: unknown, status?: number) => Response,
+) {
+  const match = route.match(
+    /^\/bot\/meetings\/([a-f0-9-]{36})(?:\/(status|uploads|parts|complete))?$/,
+  );
+  if (!match) throw fail(404, "指定された機能が見つかりません。");
+  const token = uploadTokenFrom(req.headers);
+  if (!token) return json({ error: "アップロードトークンが必要です。" }, 401);
+  const { data: grant, error } = await service.rpc("kotonoha_bot", {
+    p_operation: "auth",
+    p_payload: { tokenHash: await hashToken(token) },
+  });
+  if (error) {
+    return json(
+      { error: "トークンを確認できません。しばらくしてから再試行してください。" },
+      503,
+    );
+  }
+  if (!grant?.workspaceId || grant.error) {
+    return json(
+      { error: "アップロードトークンが無効か、有効期限が切れています。" },
+      401,
+    );
+  }
+  const id = z.uuid().parse(match[1]);
+  if (grant.meetingId !== id) {
+    return json({ error: "このトークンでは操作できない会議です。" }, 403);
+  }
+  const owner: string = grant.workspaceId;
+  let record: RecordRow = await store("get", owner, id);
+  const brief = (r: RecordRow) => ({
+    id,
+    status: r.document.status,
+    uploadedParts: r.document.audioParts?.length || 0,
+    plannedParts: r.document.uploadPlan?.length || 0,
+    bot: botView(r.document),
+  });
+  if (!match[2] && req.method === "GET") return json(brief(record));
+  if (req.method !== "POST") throw fail(405, "この操作には対応していません。");
+  if (match[2] === "status") {
+    const input = BotStatusSchema.parse(await jsonBody(req));
+    record = await store(
+      "status",
+      owner,
+      id,
+      { state: input.state, message: input.message || null },
+      "kotonoha_bot",
+    );
+    return json(brief(record));
+  }
+  const config = await store("get", owner, null, {}, "kotonoha_settings");
+  if (match[2] === "uploads") {
+    const body = BotUploadSchema.parse(await jsonBody(req));
+    const d = record.document;
+    const input = UploadSchema.parse({
+      ...body,
+      // Title, date, participants and depth are what the user entered when calling the bot.
+      metadata: { title: d.title, date: d.date, participants: d.participants || "", template: d.template },
+      transcript: "",
+      attachments: [],
+    });
+    await getKeys(owner, config, d.transcriptionModel || config.transcriptionModel);
+    const document = uploadDocument(
+      input,
+      id,
+      d.minutesModel || config.model,
+      d.transcriptionModel || config.transcriptionModel,
+    );
+    record = await store(
+      "plan",
+      owner,
+      id,
+      { document: { ...document, analysisId: crypto.randomUUID() } },
+      "kotonoha_bot",
+    );
+    return json(brief(record), 201);
+  }
+  if (match[2] === "parts") {
+    return json(brief(await appendPart(req, owner, id, record)));
+  }
+  // complete: same claim + first reconcile as POST /meetings/:id/complete, then revoke the token.
+  record = await completeUpload(owner, id, config, record);
+  try {
+    await store("revoke", owner, id, {}, "kotonoha_bot");
+  } catch {
+    // The meeting has left 'uploading', which already makes the token unusable.
+    console.error("kotonoha bot token revoke failed");
+  }
+  return json(brief(record), 202);
+}
+
 export async function handler(req: Request) {
   const origin = req.headers.get("origin");
   const cors: Record<string, string> = {
     "Access-Control-Allow-Headers":
-      "authorization, apikey, content-type, x-kotonoha, x-client-info",
+      "authorization, apikey, content-type, x-kotonoha, x-client-info, x-upload-token",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     Vary: "Origin",
     "Cache-Control": "no-store",
@@ -797,6 +1020,9 @@ export async function handler(req: Request) {
         );
       }
       return json(await runTick());
+    }
+    if (route.startsWith("/bot/meetings/")) {
+      return await handleBotRoute(req, route, json);
     }
     if (route === "/auth/login" && req.method === "POST") {
       const input = z
@@ -979,6 +1205,47 @@ export async function handler(req: Request) {
         },
         "kotonoha_audio_upload",
       );
+      return json(expose(record), 201);
+    }
+    if (route === "/bot/requests" && req.method === "POST") {
+      const webhookUrl = Deno.env.get("MEETBOT_WEBHOOK_URL") || "";
+      if (!webhookUrl) {
+        throw fail(
+          503,
+          "Bot連携が設定されていません。管理者にBotの接続先（MEETBOT_WEBHOOK_URL）の設定を依頼してください。",
+        );
+      }
+      const input = BotRequestSchema.parse(await jsonBody(req));
+      await getKeys(owner, config, config.transcriptionModel);
+      const id = crypto.randomUUID();
+      const uploadToken = createUploadToken();
+      const document = botDocument({
+        id,
+        requestId: crypto.randomUUID(),
+        meetUrl: input.meetUrl,
+        metadata: input.metadata,
+        model: config.model,
+        transcriptionModel: config.transcriptionModel,
+      });
+      const record: RecordRow = await store(
+        "create",
+        owner,
+        id,
+        { document, tokenHash: await hashToken(uploadToken) },
+        "kotonoha_bot",
+      );
+      try {
+        await sendBotWebhook(
+          webhookUrl,
+          Deno.env.get("MEETBOT_WEBHOOK_SECRET") || "",
+          webhookPayload({ meeting: record.document, uploadToken, apiBaseUrl: apiBaseUrl() }),
+        );
+      } catch (error) {
+        await store("discard", owner, id, {}, "kotonoha_bot").catch(() =>
+          console.error("kotonoha bot placeholder cleanup failed"),
+        );
+        throw error;
+      }
       return json(expose(record), 201);
     }
     if (route === "/meetings" && req.method === "POST") {
@@ -1291,76 +1558,27 @@ export async function handler(req: Request) {
       return json(parseInsight(result, "tags"));
     }
     const match = route.match(
-      /^\/meetings\/([a-f0-9-]{36})(?:\/(audio|retry|parts|complete))?$/,
+      /^\/meetings\/([a-f0-9-]{36})(?:\/(audio|retry|parts|complete|bot))?$/,
     );
     if (!match) throw fail(404, "指定された機能が見つかりません。");
     const id = z.uuid().parse(match[1]);
     let record: RecordRow = await store("get", owner, id);
     if (match[2] === "parts" && req.method === "POST") {
-      const index = Number(new URL(req.url).searchParams.get("index"));
-      let expected;
-      try {
-        expected = uploadPart(record.document, index);
-      } catch (error) {
-        throw fail(409, (error as Error).message);
-      }
-      const bytes = await bodyBytes(req, expected.size);
-      if (bytes.length !== expected.size) {
-        throw fail(400, "録音のサイズが一致しません。");
-      }
-      const partPath = `${owner}/${id}/${crypto.randomUUID()}-${expected.name}`;
-      const ext = expected.name.split(".").pop();
-      const mime = (
-        {
-          m4a: "audio/mp4",
-          mp3: "audio/mpeg",
-          wav: "audio/wav",
-          ogg: "audio/ogg",
-          flac: "audio/flac",
-        } as Record<string, string>
-      )[ext];
-      const { error } = await service.storage
-        .from(BUCKET)
-        .upload(partPath, new Blob([bytes], { type: mime }), {
-          contentType: mime,
-          upsert: false,
-        });
-      if (error) {
-        throw fail(503, "音声を保存できませんでした。再度取り込んでください。");
-      }
-      try {
-        record = await store(
-          "append",
-          owner,
-          id,
-          { index, part: { ...expected, audioPath: partPath, transcript: "" } },
-          "kotonoha_audio_upload",
-        );
-      } catch (error) {
-        // A network error may mean the append committed but its response was
-        // lost. Do not destroy a potentially registered recording in that case.
-        if ([404, 409].includes((error as any).status)) {
-          await service.storage.from(BUCKET).remove([partPath]);
-        }
-        throw error;
-      }
-      return json(expose(record));
+      return json(expose(await appendPart(req, owner, id, record)));
     }
     if (match[2] === "complete" && req.method === "POST") {
-      const keys = await getKeys(
-        owner,
-        config,
-        record.document.transcriptionModel,
-      );
-      record = await store(
-        "complete",
-        owner,
-        id,
-        { runId: crypto.randomUUID() },
-        "kotonoha_attachments",
-      );
-      record = await reconcile(owner, record, keys);
+      record = await completeUpload(owner, id, config, record);
+      if (record.document.bot) {
+        await store("revoke", owner, id, {}, "kotonoha_bot").catch(() =>
+          console.error("kotonoha bot token revoke failed"),
+        );
+      }
       return json(expose(record), 202);
+    }
+    if (match[2] === "bot" && req.method === "GET") {
+      const view = botView(record.document);
+      if (!view) throw fail(404, "この会議はBotで録音していません。");
+      return json(view);
     }
     if (match[2] === "audio" && req.method === "GET") {
       const index = Number(new URL(req.url).searchParams.get("part") ?? 0);
@@ -1379,6 +1597,9 @@ export async function handler(req: Request) {
     }
     if (match[2] === "retry" && req.method === "POST") {
       const options = RetrySchema.parse(await jsonBody(req, true));
+      if (record.document.status === "bot") {
+        throw fail(409, "Botの録音が届くまでお待ちください。");
+      }
       if (record.document.status === "uploading") {
         throw fail(
           409,

@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowDown,
+  Bot,
   Check,
   FileAudio,
   FileText,
@@ -17,6 +18,8 @@ import {
   LayoutTemplate,
 } from "lucide-react";
 import { Modal } from "./Modal";
+import { isCloud } from "./cloud";
+import { normalizeMeetUrl } from "../supabase/functions/_shared/bot.mjs";
 import { AttachmentPicker } from "./Attachments";
 import {
   today,
@@ -57,6 +60,7 @@ export function NewMeeting({
   onClose,
   onCreate,
   onSettings,
+  onBot,
   templates,
 }: {
   settings: Settings | null;
@@ -66,9 +70,15 @@ export function NewMeeting({
     progress: (message: string) => void,
   ) => Promise<void>;
   onSettings: () => void;
+  onBot: (request: {
+    meetUrl: string;
+    metadata: { title: string; date: string; participants: string; template: string };
+  }) => Promise<void>;
   templates: MeetingTemplate[];
 }) {
-  const [mode, setMode] = useState<"record" | "file" | "text">("file");
+  const [mode, setMode] = useState<"record" | "file" | "text" | "bot">("file");
+  const [meetUrl, setMeetUrl] = useState("");
+  const meetUrlValid = normalizeMeetUrl(meetUrl) !== null;
   const [showTemplateSelector, setShowTemplateSelector] = useState(templates.length > 0);
   const [selectedTemplate, setSelectedTemplate] = useState<MeetingTemplate | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -294,6 +304,22 @@ export function NewMeeting({
     e.preventDefault();
     setBusy(true);
     setError("");
+    if (mode === "bot") {
+      try {
+        const url = normalizeMeetUrl(meetUrl);
+        if (!url)
+          throw new Error(
+            "Google MeetのURL（https://meet.google.com/xxx-xxxx-xxx）を入力してください。",
+          );
+        setProgress("Botに参加を依頼しています…");
+        await onBot({ meetUrl: url, metadata: { title, date, participants, template } });
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const data = new FormData();
       data.set("title", title);
@@ -384,6 +410,7 @@ export function NewMeeting({
               ["record", Mic, "その場で録音"],
               ["file", UploadCloud, "録音ファイル"],
               ["text", FileText, "文字起こし済みテキスト"],
+              ...(isCloud ? ([["bot", Bot, "Botを呼ぶ"]] as const) : []),
             ] as const
           ).map(([id, Icon, label]) => (
             <button
@@ -625,7 +652,37 @@ export function NewMeeting({
             </span>
           </label>
         )}
-        {files.length > 0 && mode !== "text" && (
+        {mode === "bot" && (
+          <div className="bot-panel">
+            <label className="field">
+              Google MeetのURL
+              <input
+                type="url"
+                inputMode="url"
+                value={meetUrl}
+                onChange={(e) => setMeetUrl(e.target.value)}
+                placeholder="https://meet.google.com/abc-defg-hij"
+                maxLength={500}
+                autoComplete="off"
+                required
+                aria-invalid={meetUrl !== "" && !meetUrlValid}
+              />
+              {meetUrl !== "" && !meetUrlValid ? (
+                <span className="field-hint bot-url-error">
+                  https://meet.google.com/xxx-xxxx-xxx の形式で入力してください。
+                </span>
+              ) : (
+                <span className="field-hint">
+                  Bot（録音専用アカウント）が会議に参加し、カメラ・マイクはオフで音声のみ録音します。会議終了後に自動で取り込み、議事録を作成します。参加者に録音することを必ず伝えてください。
+                </span>
+              )}
+            </label>
+            <p className="field-hint">
+              下の会議名・開催日・参加者・詳しさで議事録を作成します。Botの状況は会議の画面に表示されます（待機中 → 参加中 → 録音中 → アップロード中 → 議事録作成中 → 完了）。
+            </p>
+          </div>
+        )}
+        {files.length > 0 && mode !== "text" && mode !== "bot" && (
           <div className="recording-list">
             <p className="field-hint">
               上から録音順に並べてください。{files.length}ファイル / 合計
@@ -687,11 +744,13 @@ export function NewMeeting({
             </p>
           </div>
         )}
-        <AttachmentPicker
-          files={attachments}
-          onChange={setAttachments}
-          disabled={busy}
-        />
+        {mode !== "bot" && (
+          <AttachmentPicker
+            files={attachments}
+            onChange={setAttachments}
+            disabled={busy}
+          />
+        )}
         <div className="form-grid">
           <label className="field full">
             会議名
@@ -767,8 +826,12 @@ export function NewMeeting({
         {busy && (
           <p className="notice" role="status" aria-live="polite">
             {progress || "取り込み中…"}
-            <br />
-            送信完了までこの画面を開いておいてください。
+            {mode !== "bot" && (
+              <>
+                <br />
+                送信完了までこの画面を開いておいてください。
+              </>
+            )}
           </p>
         )}
         {error && (
@@ -778,7 +841,11 @@ export function NewMeeting({
         )}
         <p className="muted">議事録が完成すると、AIタグ候補を自動表示します。必要なタグだけを選んで保存できます。</p>
         <div className="modal-footer">
-          <span>取り込んだ音声はあとから再生できます</span>
+          <span>
+            {mode === "bot"
+              ? "Botの録音は会議終了後に自動で取り込まれます"
+              : "取り込んだ音声はあとから再生できます"}
+          </span>
           <button
             className="button primary"
             disabled={
@@ -788,15 +855,27 @@ export function NewMeeting({
               (mode !== "text" &&
                 settings?.transcriptionModel === "gemini-3.5-transcribe" &&
                 !settings?.geminiConfigured) ||
-              (mode === "text" ? !transcript.trim() : !files.length)
+              (mode === "text"
+                ? !transcript.trim()
+                : mode === "bot"
+                  ? !meetUrlValid || !title.trim()
+                  : !files.length)
             }
           >
             {busy ? (
               <LoaderCircle size={17} className="spin" />
+            ) : mode === "bot" ? (
+              <Bot size={17} />
             ) : (
               <span className="sparkle">✧</span>
             )}
-            {busy ? "取り込み中…" : "解析して議事録を作成"}
+            {mode === "bot"
+              ? busy
+                ? "依頼中…"
+                : "Botを呼ぶ"
+              : busy
+                ? "取り込み中…"
+                : "解析して議事録を作成"}
             <ArrowRight size={16} />
           </button>
         </div>
