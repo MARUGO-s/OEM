@@ -149,6 +149,7 @@ DB実動確認は `tests/cloud-database.sql` を使用します。専用領域�
 | 変数 | 必須 | 内容 |
 |---|---|---|
 | `MEETBOT_WEBHOOK_URL` | はい | 参加依頼を送るBotのURL。未設定の場合「Botを呼ぶ」は503と案内を返し、会議は作成しません。 |
+| `MEETBOT_WEBHOOK_AUTHORIZATION` | 任意 | 設定するとWebhookに `Authorization: <値>` ヘッダーをそのまま付けます（Grok Bot のルーティンWebhookの「Authorization header」の値をそのまま入れる）。 |
 | `MEETBOT_WEBHOOK_SECRET` | 推奨 | 設定するとWebhookにヘッダー `X-Meetbot-Secret: <値>` を付けます。Bot側で照合してください。 |
 | `MEETBOT_API_BASE_URL` | いいえ | Botに伝えるAPIのURL。省略時は `SUPABASE_URL` + `/functions/v1/kotonoha-api`。 |
 

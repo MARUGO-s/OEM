@@ -859,7 +859,7 @@ const apiBaseUrl = () =>
     Deno.env.get("MEETBOT_API_BASE_URL") ||
     `${Deno.env.get("SUPABASE_URL")}/functions/v1/kotonoha-api`
   ).replace(/\/$/, "");
-async function sendBotWebhook(url: string, secret: string, payload: Doc) {
+async function sendBotWebhook(url: string, secret: string, payload: Doc, authorization = "") {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -868,6 +868,7 @@ async function sendBotWebhook(url: string, secret: string, payload: Doc) {
       headers: {
         "Content-Type": "application/json",
         ...(secret ? { [WEBHOOK_SECRET_HEADER]: secret } : {}),
+        ...(authorization ? { Authorization: authorization } : {}),
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
@@ -1239,6 +1240,7 @@ export async function handler(req: Request) {
           webhookUrl,
           Deno.env.get("MEETBOT_WEBHOOK_SECRET") || "",
           webhookPayload({ meeting: record.document, uploadToken, apiBaseUrl: apiBaseUrl() }),
+          Deno.env.get("MEETBOT_WEBHOOK_AUTHORIZATION") || "",
         );
       } catch (error) {
         await store("discard", owner, id, {}, "kotonoha_bot").catch(() =>

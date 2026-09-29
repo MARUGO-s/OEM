@@ -219,6 +219,7 @@ Deno.test("bot request: needs MEETBOT_WEBHOOK_URL, a session and a valid Meet UR
   assert.equal(rows.size, 0);
   Deno.env.set("MEETBOT_WEBHOOK_URL", webhookUrl);
   Deno.env.set("MEETBOT_WEBHOOK_SECRET", webhookSecret);
+  Deno.env.set("MEETBOT_WEBHOOK_AUTHORIZATION", "Bearer test-routine-key");
   assert.equal((await call("/bot/requests", { method: "POST", body: "{}" })).status, 401);
   for (const bad of [
     "http://meet.google.com/abc-defg-hij", "https://meet.google.com.evil.example/abc-defg-hij",
@@ -239,6 +240,7 @@ Deno.test("bot request: pre-creates the meeting, stores only the token hash and 
   const ttl = Date.parse(meeting.bot.expiresAt) - Date.parse(meeting.bot.requestedAt);
   assert.equal(ttl, 6 * 3600 * 1000);
   assert.equal(hook.headers.get("x-meetbot-secret"), webhookSecret);
+  assert.equal(hook.headers.get("authorization"), "Bearer test-routine-key");
   assert.equal(hook.headers.get("content-type"), "application/json");
   assert.deepEqual(Object.keys(hook.body).sort(), [
     "apiBaseUrl", "date", "event", "expiresAt", "meetUrl", "meetingId", "participants", "requestId", "requestedAt", "template", "title", "uploadToken",
