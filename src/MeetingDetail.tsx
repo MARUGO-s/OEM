@@ -537,7 +537,7 @@ export function MeetingDetail({
                 : m.status === "transcribing"
                   ? `${transcriptionModelName(m.transcriptionModel)}が音声を読み取っています。`
                   : `${modelName(m.minutesModel)}が議題・決定事項・アクションを整理しています。`}{" "}
-              完了分は保存されます。アプリを閉じた場合、残りの処理は次回開いたときに再開します。
+              完了分は保存されます。アプリを閉じても、残りの処理はサーバーで自動的に続きます。
             </p>
           </div>
         </div>
