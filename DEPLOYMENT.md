@@ -137,6 +137,68 @@ DB実動確認は `tests/cloud-database.sql` を使用します。専用領域�
 - 停止・ロールバックは `select cron.unschedule('kotonoha-tick');` です。Edge Functionは定期処理がなくても従来どおり動きます。`cron.job_run_details` は1日1,440行増えるため、必要に応じて古い履歴を削除してください。
 - 検証：Node 91テスト、`deno check`、既存クラウドHTTPテスト、`tests/cloud-tick.test.ts`（5件：合言葉の拒否、一覧取得なしで3分割が定期処理だけで完成、定期処理3本と一覧取得2本の同時実行で8部分を各1回だけ文字起こし・同時AI処理2件以内、待機時刻前は再開しない・3件目は2件完了まで開始しない、1件のAI結果取得の一時失敗が他の会議を止めない）。`bash scripts/check-tick-migration.sh` はローカルの使い捨てPostgreSQL（pg_cron入り、Vault/pg_netは模擬）で、拡張機能なしでも失敗しないこと、権限、ジョブの重複なし、Vault未設定・短い合言葉で送信しないこと、設定後にURLと合言葉ヘッダーで送信することを確認します。本番DB・Supabaseには接続していません。
 
+## Google Meet録音Bot（アップロードトークン方式、2026-09-30）
+
+- 画面の「Botを呼ぶ」から、Google MeetのURL（`https://meet.google.com/xxx-xxxx-xxx`）と会議名・開催日・参加者・詳しさを送ると、サーバーが会議を先に作成し（状態 `bot`）、Botの受付口（Webhook）へ参加依頼を送ります。
+- Botには共通パスワードを渡しません。依頼ごとにランダムなアップロードトークン（`ktu_` ＋64桁の16進数）を作り、DBにはSHA-256だけを保存します。トークンは**その1会議**の「状況報告・取り込み計画・音声の送信・完了」だけに使え、ログインが必要な他のAPIでは使えません。有効期限は6時間で、完了（`complete`）時、または会議が処理中に進んだ時点で無効になります。
+- 専用マイグレーション `20260930000200_kotonoha_meet_bot.sql` は、非公開テーブル `kotonoha.bot_requests`（依頼ID・会議ID・Meet URL・トークンのハッシュ・期限・使用日時）と service_role 限定のRPC `public.kotonoha_bot` だけを追加します。他アプリのテーブル・関数・Auth・Storage・cronは変更しません。
+- 音声の取り込み・完了は既存の分割アップロード（`kotonoha_audio_upload('append')`・`kotonoha_attachments('complete')`）と同じ処理を共用します。完了後の文字起こし・議事録作成は既存の定期処理（`POST /internal/tick`）で進むため、Botも画面も開いておく必要はありません。
+
+### 環境変数（Edge Function）
+
+| 変数 | 必須 | 内容 |
+|---|---|---|
+| `MEETBOT_WEBHOOK_URL` | はい | 参加依頼を送るBotのURL。未設定の場合「Botを呼ぶ」は503と案内を返し、会議は作成しません。 |
+| `MEETBOT_WEBHOOK_AUTHORIZATION` | 任意 | 設定するとWebhookに `Authorization: <値>` ヘッダーをそのまま付けます（Grok Bot のルーティンWebhookの「Authorization header」の値をそのまま入れる）。 |
+| `MEETBOT_WEBHOOK_SECRET` | 推奨 | 設定するとWebhookにヘッダー `X-Meetbot-Secret: <値>` を付けます。Bot側で照合してください。 |
+| `MEETBOT_API_BASE_URL` | いいえ | Botに伝えるAPIのURL。省略時は `SUPABASE_URL` + `/functions/v1/kotonoha-api`。 |
+
+### API
+
+ログインが必要（`Authorization: Bearer ktn_…`）:
+
+- `POST /bot/requests` `{"meetUrl":"https://meet.google.com/abc-defg-hij","metadata":{"title":"定例","date":"2026-09-30","participants":"田中, 佐藤","template":"standard"}}` → 201 会議（`status:"bot"`, `bot:{requestId, meetUrl, state:"waiting", message, requestedAt, updatedAt, expiresAt}`）。Webhookが失敗（接続不可・10秒超過・2xx以外）した場合は仮の会議を削除しトークンを無効にして502。参加待ちの会議は5件まで（429）。
+- `GET /meetings/:id/bot` → `{meetingId, requestId, meetUrl, state, phase, label, message, meetingStatus, requestedAt, updatedAt, expiresAt}`。`phase` は `waiting|joining|recording|uploading|processing|done|error`、`label` は「待機中／参加中／録音中／アップロード中／議事録作成中／完了／エラー」。Botの会議でなければ404。
+- 会議一覧 `GET /meetings` の各会議にも同じ `bot` 情報が入ります。
+
+Webhook（サーバー → Bot）: `POST $MEETBOT_WEBHOOK_URL`、`Content-Type: application/json`、`X-Meetbot-Secret`（設定時）
+
+```json
+{"event":"bot.join","requestId":"…","meetingId":"…","meetUrl":"https://meet.google.com/abc-defg-hij",
+ "title":"定例","date":"2026-09-30","participants":"田中, 佐藤","template":"standard",
+ "requestedAt":"2026-09-30T01:00:00.000Z","expiresAt":"2026-09-30T07:00:00.000Z",
+ "apiBaseUrl":"https://hjhkccbktkscwtgzxjfq.supabase.co/functions/v1/kotonoha-api","uploadToken":"ktu_…"}
+```
+
+アップロードトークンが必要（`Authorization: Bearer ktu_…` または `X-Upload-Token: ktu_…`、URLの会議IDはトークンの会議と一致すること。不一致403、無効・期限切れ・完了済み401）:
+
+- `POST /bot/meetings/:id/status` `{"state":"joining|recording|uploading|error","message":"任意・500文字まで"}` → 200 `{id, status, uploadedParts, plannedParts, bot}`
+- `POST /bot/meetings/:id/uploads` → `POST /uploads` と同じ `sources` / `parts`（`metadata` は送っても無視し、依頼時の値を使用。テキスト・添付は不可）→ 201。状態が `uploading` になります。最初の部分を送る前なら再送で計画を置き換えられます。
+- `POST /meetings/:id/parts?index=i` と同じ仕様の `POST /bot/meetings/:id/parts?index=i`（生のバイト列、順番どおり、サイズ一致）→ 200
+- `POST /bot/meetings/:id/complete` → 202（処理開始）。この時点でトークンは無効になります。
+- `GET /bot/meetings/:id` → `{id, status, uploadedParts, plannedParts, bot}`（送信が不確かな時の確認用）
+
+### 反映手順（管理者）
+
+1. `supabase/migrations/20260930000200_kotonoha_meet_bot.sql` だけをSQL Editorなどで適用します（`db push` / `db reset` は使わない）。
+2. Botの受付URLと合言葉を設定します。一時ファイル `meetbot.env` に `MEETBOT_WEBHOOK_URL=https://…` と `MEETBOT_WEBHOOK_SECRET=<openssl rand -hex 32 の値>` を書き、設定後に削除します。
+
+   ```sh
+   supabase secrets set --env-file meetbot.env --project-ref hjhkccbktkscwtgzxjfq && rm meetbot.env
+   ```
+
+3. `kotonoha-api` をデプロイします。
+
+   ```sh
+   supabase functions deploy kotonoha-api --project-ref hjhkccbktkscwtgzxjfq --no-verify-jwt
+   ```
+
+4. 画面（GitHub Pages）は `main` へのマージで自動公開されます。手順1〜3を先に行ってください（未反映のまま公開すると「Botを呼ぶ」が「指定された機能が見つかりません」になります）。
+5. 確認：「Botを呼ぶ」で会議が作られ、Bot側にWebhookが届くこと。`select id, meeting_id, expires_at, used_at from kotonoha.bot_requests order by created_at desc limit 5;` で期限と完了時の `used_at` を確認できます（トークン本体は保存されません）。
+
+- ロールバック：旧版の `kotonoha-api` に戻すとBot用APIはなくなります（状態 `bot` の会議は「要確認」と表示され、削除できます）。テーブル・RPCは残しても既存機能に影響しません。
+- 検証：`tests/bot.test.mjs`（URL検証・トークン形式・状態表示）、`tests/cloud-bot.test.ts`（実ハンドラーでのHTTP結合テスト6件）、`bash scripts/check-bot-migration.sh`（ローカルPostgreSQLで権限・ハッシュ保存・期限上限・トークンの範囲・完了後の無効化・Webhook失敗時の削除・件数上限）。本番DB・Supabase・実際のGoogle Meetには接続していません。
+
 ## 復旧
 
 旧OEMの全Git履歴を `codex/backup-oem-before-kotonoha-20260923` に退避しています。置き換え前のコミットは `ec92fbfd9727024afac239a350cf955d075d59c8`。旧画面へ戻す場合は、この退避ブランチから内容を復元する新しいコミットを作成してください。共有DBはリセットしません。

@@ -49,7 +49,7 @@ export interface Meeting {
   date: string;
   participants: string;
   createdAt: string;
-  status: "uploading" | "transcribing" | "analyzing" | "done" | "error";
+  status: "bot" | "uploading" | "transcribing" | "analyzing" | "done" | "error";
   template: "standard" | "brief" | "detailed";
   source: "audio" | "text" | "demo";
   isDemo: boolean;
@@ -83,6 +83,38 @@ export interface Meeting {
     attempt: number;
   } | null;
   tags?: string[];
+  /** Set when a Google Meet recording bot was requested for this meeting. */
+  bot?: {
+    requestId: string;
+    meetUrl: string;
+    state: "waiting" | "joining" | "recording" | "uploading" | "error";
+    message: string | null;
+    requestedAt: string;
+    updatedAt: string;
+    expiresAt: string;
+    completedAt?: string;
+  };
+}
+export type BotPhase =
+  | "waiting"
+  | "joining"
+  | "recording"
+  | "uploading"
+  | "processing"
+  | "done"
+  | "error";
+export interface BotStatusView {
+  meetingId: string;
+  requestId: string;
+  meetUrl: string;
+  state: NonNullable<Meeting["bot"]>["state"];
+  phase: BotPhase;
+  label: string;
+  message: string | null;
+  meetingStatus: Meeting["status"];
+  requestedAt: string;
+  updatedAt: string;
+  expiresAt: string;
 }
 export interface Settings {
   configured: boolean;

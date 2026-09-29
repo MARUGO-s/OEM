@@ -21,6 +21,7 @@ import {
   Lightbulb,
 } from "lucide-react";
 import { meetingEvents } from "../supabase/functions/_shared/calendar.mjs";
+import { BotStatus } from "./BotStatus";
 import { api, download, audioUrl } from "./api";
 import {
   clock,
@@ -465,7 +466,9 @@ export function MeetingDetail({
                   ? "要確認"
                   : m.status === "uploading"
                     ? "取り込み途中"
-                    : "AI処理中"}
+                    : m.status === "bot"
+                      ? "Bot録音"
+                      : "AI処理中"}
           </span>
           <span>MEETING NOTES</span>
         </div>
@@ -513,11 +516,12 @@ export function MeetingDetail({
           操作確認用の架空の会議です。実際の録音を解析した結果ではありません。
         </div>
       )}
-      {m.status === "uploading" && (
+      {m.status === "uploading" && !m.bot && (
         <div className="notice" role="status">
           音声の取り込み途中です。送信中の画面で完了をお待ちください。送信を中断した場合は、この会議を削除してファイルを選び直してください。
         </div>
       )}
+      {m.bot && <BotStatus meeting={m} onChange={onChange} />}
       {processing && (
         <div className="progress-panel" role="status">
           <LoaderCircle className="spin" size={23} />

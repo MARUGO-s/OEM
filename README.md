@@ -66,6 +66,7 @@
 - OpenAIキーとGeminiキーはワークスペース共通で別々にAES-256-GCM暗号化し、会議録専用のサーバー鍵で保存します。他アプリのAPIキーは使用・変更しません。旧個人キーは共通キーへ自動転用しません。
 - GPT-4o文字起こしでは音声をOpenAIへ送信します。Gemini文字起こしでは音声をGoogleのGemini Files APIへ一時送信し、文字起こし後に一時ファイルの削除を要求します。テキスト・議事録生成はOpenAIへ送信します。添付資料はAIへ送信しません。議事録はResponses APIのStructured Outputs（medium）を使用。クラウド版は長い生成に対応するため `background: true, store: true` です。結果取得に必要なデータがOpenAI側にも保存されます。機密情報の利用可否を確認してください。
 - 削除は論理削除で、通常画面から非表示になります。音声は保持します。復元・完全消去は管理者対応で、自動消去はありません。
+- 「新しい会議」の「Botを呼ぶ」でGoogle MeetのURLを入力すると、録音専用のBotに参加を依頼できます（クラウド版のみ）。Botにはパスワードを渡さず、その会議だけに使える6時間有効のアップロードトークンを渡します。状況（待機中／参加中／録音中／アップロード中／議事録作成中／完了／エラー）は会議の画面に表示されます。設定は [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
 - 画面を閉じた後の処理は、Supabaseの定期実行（pg_cron、毎分）が内部API `POST /internal/tick` を呼んで進めます。内部APIは専用の合言葉（Vaultと関数の環境変数に保存）でのみ実行でき、利用者のログインでは呼べません。会議内容は返さず、処理の排他制御と同時AI処理2件の上限は画面からの処理と共通です。初回設定は [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
 - Supabaseの計算資源は共用なので、負荷や利用枠まで完全に分離するものではありません。同時AI処理は共有ワークスペース全体で2件です。
 - 共通ログイン情報を知っている人は全記録と設定を操作できます。利用者ごとの権限・監査ログはありません。共用端末では利用後にログアウトしてください。
@@ -116,7 +117,10 @@ npm run check
 deno check --config supabase/functions/kotonoha-api/deno.json supabase/functions/kotonoha-api/index.ts
 deno test --allow-env --config supabase/functions/kotonoha-api/deno.json tests/cloud-api.test.ts
 deno test --allow-env --config supabase/functions/kotonoha-api/deno.json tests/cloud-tick.test.ts
+deno test --allow-env --config supabase/functions/kotonoha-api/deno.json tests/cloud-bot.test.ts
 ```
+
+`tests/cloud-bot.test.ts` はGoogle Meet録音Botの流れ（Botの依頼→Webhook→アップロードトークンでの状況報告・取り込み・完了→定期処理で議事録完成）を検証します。トークンが自分の会議以外・ログインが必要なAPIでは使えないこと、完了後・6時間後に無効になること、Webhook失敗時に仮の会議を消すことを確認します。`bash scripts/check-bot-migration.sh` はBot用マイグレーションを使い捨てのローカルPostgreSQLで検証します（本番DBには接続しません）。
 
 `tests/cloud-tick.test.ts` は定期処理（`POST /internal/tick`）を検証します。一覧を取得する画面がなくても分割音声が議事録完成まで進むこと、定期処理と一覧取得が同時に走っても同じ部分を二重に文字起こししないこと、同時AI処理2件の上限、待機時刻前に再開しないこと、合言葉なし・不一致・未設定の要求を拒否することを確認します。
 
