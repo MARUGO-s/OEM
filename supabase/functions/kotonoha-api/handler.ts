@@ -59,6 +59,13 @@ import {
   hashToken,
   validTokenFormat,
 } from "../_shared/session.mjs";
+import {
+  MAX_TICK_MEETINGS,
+  MIN_TICK_SECRET_LENGTH,
+  TICK_HEADER,
+  tickCandidates,
+  verifyTickSecret,
+} from "../_shared/tick.mjs";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 type Doc = Record<string, any>;
@@ -679,6 +686,76 @@ async function reconcile(
   return record;
 }
 
+// Advance every working meeting one step: claim and start the next audio part, resume after a
+// Gemini wait, collect a background minutes result, or mark an abandoned lease as interrupted.
+// Used by GET /meetings (open clients) and POST /internal/tick (scheduled, no client needed).
+// Claims go through the `next` RPC (advisory lock + partReady flag + 2-job limit) and job updates
+// are guarded by runId, so concurrent callers never process the same part twice.
+async function advanceMeetings(
+  owner: string,
+  config: Doc,
+  records: RecordRow[],
+  isolate = false,
+): Promise<RecordRow[]> {
+  const active = records.filter(
+    (r) => working(r.document) && (r.responseId || r.document.partReady),
+  );
+  const keys = active.length
+    ? await getKeys(
+        owner,
+        config,
+        active.some(
+          (r) =>
+            !r.responseId &&
+            r.document.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL,
+        )
+          ? GEMINI_TRANSCRIPTION_MODEL
+          : null,
+      )
+    : null;
+  if (!isolate)
+    return Promise.all(records.map((record) => reconcile(owner, record, keys)));
+  // Scheduled ticks: one meeting's transient failure (e.g. OpenAI 5xx) must not block others;
+  // it is retried on the next tick exactly like a failed list refresh.
+  const settled = await Promise.allSettled(
+    records.map((record) => reconcile(owner, record, keys)),
+  );
+  return settled.map((result, i) => {
+    if (result.status === "fulfilled") return result.value;
+    console.error("kotonoha tick reconcile failed", (result.reason as any)?.status || "");
+    return records[i];
+  });
+}
+async function runTick() {
+  // The shared workspace id lives in kotonoha.access_config; only service_role may read it.
+  const { data: workspace, error } = await service.rpc("kotonoha_tick", {
+    p_operation: "workspace",
+  });
+  if (error) {
+    throw fail(503, "Tick is not configured. Apply the kotonoha tick migration.");
+  }
+  const owner = workspace?.workspaceId;
+  if (!owner) return { meetings: 0, advanced: 0 };
+  const records: RecordRow[] = await store("list", owner);
+  const candidates = tickCandidates(records, MAX_TICK_MEETINGS) as RecordRow[];
+  if (!candidates.length) return { meetings: 0, advanced: 0 };
+  const config = await store("get", owner, null, {}, "kotonoha_settings");
+  let resolved: RecordRow[];
+  try {
+    resolved = await advanceMeetings(owner, config, candidates, true);
+  } catch (error) {
+    // Missing keys: nothing can progress until settings are fixed; report without detail.
+    if ((error as any).status === 428) return { meetings: candidates.length, advanced: 0, waiting: "KEYS" };
+    throw error;
+  }
+  const advanced = resolved.filter((r, i) =>
+    r.document.runId !== candidates[i].document.runId ||
+    r.document.status !== candidates[i].document.status ||
+    r.responseId !== candidates[i].responseId
+  ).length;
+  return { meetings: candidates.length, advanced };
+}
+
 export async function handler(req: Request) {
   const origin = req.headers.get("origin");
   const cors: Record<string, string> = {
@@ -709,6 +786,18 @@ export async function handler(req: Request) {
       pathname.slice(
         pathname.indexOf("/kotonoha-api") + "/kotonoha-api".length,
       ) || "/";
+    if (route === "/internal/tick") {
+      // Server-to-server only (pg_cron + pg_net). Never reachable with a user session.
+      if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+      const expected = Deno.env.get("KOTONOHA_TICK_SECRET") || "";
+      if (!(await verifyTickSecret(req.headers.get(TICK_HEADER), expected))) {
+        return json(
+          { error: "Unauthorized" },
+          expected.length >= MIN_TICK_SECRET_LENGTH ? 401 : 503,
+        );
+      }
+      return json(await runTick());
+    }
     if (route === "/auth/login" && req.method === "POST") {
       const input = z
         .object({
@@ -861,26 +950,7 @@ export async function handler(req: Request) {
     }
     if (route === "/meetings" && req.method === "GET") {
       const records: RecordRow[] = await store("list", owner);
-      const active = records.filter(
-        (r) => working(r.document) && (r.responseId || r.document.partReady),
-      );
-      const keys = active.length
-        ? await getKeys(
-            owner,
-            config,
-            active.some(
-              (r) =>
-                !r.responseId &&
-                r.document.transcriptionModel === GEMINI_TRANSCRIPTION_MODEL,
-            )
-              ? GEMINI_TRANSCRIPTION_MODEL
-              : null,
-          )
-        : null;
-      const resolved = await Promise.all(
-        records.map((record) => reconcile(owner, record, keys)),
-      );
-      return json(resolved.map(expose));
+      return json((await advanceMeetings(owner, config, records)).map(expose));
     }
     if (route === "/demo" && req.method === "POST") {
       const demo = createDemo();

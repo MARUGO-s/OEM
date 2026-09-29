@@ -26,6 +26,7 @@ jobs:
           deno-version: v2.x
       - run: deno check --config supabase/functions/kotonoha-api/deno.json supabase/functions/kotonoha-api/index.ts
       - run: deno test --allow-env --config supabase/functions/kotonoha-api/deno.json tests/cloud-api.test.ts
+      - run: deno test --allow-env --config supabase/functions/kotonoha-api/deno.json tests/cloud-tick.test.ts
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

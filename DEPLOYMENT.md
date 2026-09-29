@@ -88,6 +88,55 @@ DB実動確認は `tests/cloud-database.sql` を使用します。専用領域�
 - ローカル画面検証は `node scripts/check-gemini-wait-server.mjs`（5194番）で実行できます。保存済み前半＋未完了後半の架空会議に対し、模擬429を1回発生させます。実APIキー・外部AI通信は使用しません。
 - ロールバック時は自動待機中の会議がなくなってから旧関数に戻してください。旧版は保存済み待機時刻を認識しません。専用テーブル・RPCは残しても既存アプリには影響しません。
 
+## 画面を閉じても処理を進める定期処理（2026-09-30）
+
+- これまでクラウドの分割文字起こし・Geminiの待機明け再開・議事録結果の取得は、画面が `GET /meetings` を再取得した時だけ進みました（上記「常駐ワーカー／cronではありません」）。今回、同じ処理を `advanceMeetings()` に切り出し、`GET /meetings` と新しい内部API `POST /internal/tick` の両方から呼びます。一覧取得の動作は従来どおりです。
+- `POST /internal/tick` は利用者セッションでは呼べません。ヘッダー `x-kotonoha-tick` をEdge Functionの環境変数 `KOTONOHA_TICK_SECRET`（32文字以上）とSHA-256後に定数時間で照合し、不一致は401、未設定・短すぎる場合は503で何もしません。会議の内容は返さず、`{"meetings":件数,"advanced":進んだ件数}` だけを返します。
+- 1回の定期処理は処理中の会議を更新が古い順に最大10件だけ確認し、各会議で1部分の開始または1回の結果取得までに限ります。処理権は従来の `kotonoha_audio_upload('next')`（行ロック・`partReady`・runId）で排他的に取得し、共有ワークスペース全体の同時AI処理2件、Geminiの送信間隔・待機時刻も従来どおり守ります。画面の一覧取得と定期処理が同時に走っても同じ部分を二重に処理しません。
+- 専用マイグレーション `20260930000100_kotonoha_background_tick.sql` は、service_role限定の `public.kotonoha_tick`（共有ワークスペースIDの取得のみ）、非公開の `kotonoha.tick_request()`、pg_cronのジョブ `kotonoha-tick`（毎分）だけを追加します。URLと合言葉はSupabase Vaultから実行時に読み、マイグレーションやリポジトリに秘密情報を含めません。pg_cron・pg_net・Vaultの値がない場合は通知だけで失敗せず、ジョブは何もしません。他アプリのテーブル・関数・Auth・Storage・既存のcronジョブは変更しません。
+- 反映前（合言葉・Vault・マイグレーション未設定）の間は従来どおり、画面を開いている間だけ進みます。
+
+### 初回設定（管理者が1回だけ実行）
+
+1. 合言葉を作成します（64文字）。コマンド履歴やGitHubに残さないでください。
+
+   ```sh
+   openssl rand -hex 32
+   ```
+
+2. Edge Functionの環境変数に設定します。一時ファイル `tick.env` に `KOTONOHA_TICK_SECRET=<合言葉>` の1行を書き、設定後に削除します。
+
+   ```sh
+   supabase secrets set --env-file tick.env --project-ref hjhkccbktkscwtgzxjfq && rm tick.env
+   ```
+
+3. 定期処理に対応した `kotonoha-api` をデプロイします（従来と同じコマンド）。
+
+   ```sh
+   supabase functions deploy kotonoha-api --project-ref hjhkccbktkscwtgzxjfq --no-verify-jwt
+   ```
+
+4. ダッシュボードの Database → Extensions で `pg_cron` と `pg_net` が有効か確認し、無効なら有効にします（SQLでは `create extension if not exists pg_cron; create extension if not exists pg_net;`）。拡張機能はプロジェクト共通の機能追加で、既存アプリのデータは変更しません。
+5. SQL EditorでVaultに2件登録します。合言葉は手順2と同じ値です。変更時は `vault.update_secret` を使います。
+
+   ```sql
+   select vault.create_secret('https://hjhkccbktkscwtgzxjfq.supabase.co/functions/v1/kotonoha-api/internal/tick', 'kotonoha_tick_url', 'kotonoha background tick URL');
+   select vault.create_secret('<手順1の合言葉>', 'kotonoha_tick_secret', 'kotonoha background tick secret');
+   ```
+
+6. `supabase/migrations/20260930000100_kotonoha_background_tick.sql` だけをSQL Editorなどで適用します（`db push` / `db reset` は使わない）。手順4より先に適用した場合は、同じファイルを再実行すればジョブを1件だけ登録し直します。
+7. 確認します。`net._http_response` の直近が `200` と `{"meetings":…}` なら動作しています。401は合言葉の不一致、503は環境変数未設定またはマイグレーション未適用です。
+
+   ```sql
+   select jobid, schedule, command, active from cron.job where jobname = 'kotonoha-tick';
+   select status, return_message, start_time from cron.job_run_details
+     where jobid = (select jobid from cron.job where jobname = 'kotonoha-tick') order by start_time desc limit 5;
+   select status_code, content, created from net._http_response order by created desc limit 5;
+   ```
+
+- 停止・ロールバックは `select cron.unschedule('kotonoha-tick');` です。Edge Functionは定期処理がなくても従来どおり動きます。`cron.job_run_details` は1日1,440行増えるため、必要に応じて古い履歴を削除してください。
+- 検証：Node 91テスト、`deno check`、既存クラウドHTTPテスト、`tests/cloud-tick.test.ts`（5件：合言葉の拒否、一覧取得なしで3分割が定期処理だけで完成、定期処理3本と一覧取得2本の同時実行で8部分を各1回だけ文字起こし・同時AI処理2件以内、待機時刻前は再開しない・3件目は2件完了まで開始しない、1件のAI結果取得の一時失敗が他の会議を止めない）。`bash scripts/check-tick-migration.sh` はローカルの使い捨てPostgreSQL（pg_cron入り、Vault/pg_netは模擬）で、拡張機能なしでも失敗しないこと、権限、ジョブの重複なし、Vault未設定・短い合言葉で送信しないこと、設定後にURLと合言葉ヘッダーで送信することを確認します。本番DB・Supabaseには接続していません。
+
 ## 復旧
 
 旧OEMの全Git履歴を `codex/backup-oem-before-kotonoha-20260923` に退避しています。置き換え前のコミットは `ec92fbfd9727024afac239a350cf955d075d59c8`。旧画面へ戻す場合は、この退避ブランチから内容を復元する新しいコミットを作成してください。共有DBはリセットしません。
