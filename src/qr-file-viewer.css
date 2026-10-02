@@ -79,3 +79,44 @@ body {
     min-height: 350px;
   }
 }
+.pdf-preview {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 12px;
+}
+.pdf-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.pdf-pagination button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pdf-canvas-container {
+  width: 100%;
+  min-height: 200px;
+  display: flex;
+  justify-content: center;
+  background: #e9eaf0;
+  overflow: auto;
+  padding: 12px 0;
+}
+.pdf-canvas-container canvas {
+  background: white;
+  max-width: 100%;
+  box-shadow: 0 2px 8px #0002;
+}
+.pdf-text {
+  padding: 16px;
+  color: #697184;
+  line-height: 1.8;
+}
+.pdf-text p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

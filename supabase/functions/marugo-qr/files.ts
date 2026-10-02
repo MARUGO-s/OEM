@@ -52,7 +52,9 @@ async function signed(path: string, upload = false, download?: string) {
   const relative = data.url ?? data.signedURL;
   if (typeof relative !== "string" || !relative.startsWith("/"))
     throw new FileError(503, "ファイルのリンクを確認できませんでした。");
-  return `${credentials().base}/storage/v1${relative}`;
+  const url = new URL(`${credentials().base}/storage/v1${relative}`);
+  if (download) url.searchParams.set("download", download);
+  return url.href;
 }
 async function verified(file: any) {
   // Both DB ownership and server-side object metadata are checked before publish.
