@@ -120,6 +120,11 @@ Deno.test("QR API: public scan, shared authorization, validated URLs and safe fa
       )).status,
       400,
     );
+    assert.equal(
+      (await handler(request("/links", "POST", {
+        id, title: "poster", targetUrl: "https://marugo-s.github.io/OEM/#abcdefgh1234",
+      }, token))).status, 400,
+    );
     const created = await handler(
       request("/links", "POST", {
         id,

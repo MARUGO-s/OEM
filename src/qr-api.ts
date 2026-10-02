@@ -4,6 +4,7 @@ import {
   SUPABASE_PUBLISHABLE_KEY,
   SUPABASE_URL,
 } from "./cloud";
+import { buildTrackingUrl } from "./qr-routing.mjs";
 
 export type QrLink = {
   id: string;
@@ -20,9 +21,7 @@ export type QrHistory = {
   total: number;
 };
 export function trackingUrl(code: string) {
-  return `${
-    new URL(`${import.meta.env.BASE_URL}marugo/`, location.origin).href
-  }#${code}`;
+  return buildTrackingUrl(import.meta.env.BASE_URL, location.origin, code);
 }
 export async function qrApi<T>(
   path: string,

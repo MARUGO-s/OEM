@@ -1,38 +1,4 @@
-.qr-home-entry {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  width: 100%;
-  padding: 24px;
-  margin: 24px 0;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  text-align: left;
-  cursor: pointer;
-  color: var(--ink);
-  font: inherit;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.qr-home-entry:hover, .qr-home-entry:focus-visible {
-  border-color: var(--purple);
-  box-shadow: 0 6px 24px #6960d810;
-}
-.qr-home-entry > span:nth-child(2) {
-  flex: 1;
-}
-.qr-home-entry b {
-  display: block;
-  font-size: 18px;
-}
-.qr-home-entry small {
-  display: block;
-  color: var(--muted);
-  margin-top: 6px;
-  font-size: 14px;
-  line-height: 1.7;
-}
-.qr-home-icon, .qr-link-icon {
+.qr-link-icon {
   display: grid;
   place-items: center;
   background: #f0edf9;
@@ -289,16 +255,6 @@
   }
 }
 @media (max-width: 600px) {
-  .qr-home-entry {
-    padding: 18px;
-    gap: 12px;
-  }
-  .qr-home-entry small {
-    font-size: 12px;
-  }
-  .qr-home-entry b {
-    font-size: 16px;
-  }
   .qr-create-card, .qr-detail-card {
     padding: 18px;
   }

@@ -1,0 +1,49 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  color: #263144;
+}
+.tracking-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f6f7fb;
+  box-sizing: border-box;
+}
+.tracking-screen section {
+  max-width: 440px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 36px;
+  border: 1px solid #e3e6ed;
+  border-radius: 20px;
+  background: white;
+  text-align: center;
+}
+.tracking-screen small {
+  color: #6b61bc;
+  letter-spacing: 0.15em;
+  font-weight: 700;
+}
+.tracking-screen h1 {
+  font-size: 22px;
+  margin: 24px 0 16px;
+}
+.tracking-screen p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #606c7b;
+}
+.tracking-screen button {
+  background: #6b61bc;
+  color: white;
+  border: 0;
+  padding: 12px 20px;
+  border-radius: 9px;
+  font: inherit;
+  cursor: pointer;
+}
+.tracking-screen [hidden] {
+  display: none !important;
+}
