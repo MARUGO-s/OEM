@@ -36,18 +36,18 @@ test("Charts safely render empty, flat, and large-count series", () => {
   }
 });
 test("One redirect code has distinct, short QR/button/link attribution URLs", () => {
-  const args = ["/OEM/", "https://marugo-s.github.io", "abcdefgh1234"];
+  const args = ["/multiapp/", "https://marugo-s.github.io", "abcdefgh1234"];
   assert.equal(
     buildTrackingUrl(...args, "qr"),
-    "https://marugo-s.github.io/OEM/?s=q#abcdefgh1234",
+    "https://marugo-s.github.io/multiapp/?s=q#abcdefgh1234",
   );
   assert.equal(
     buildTrackingUrl(...args, "button"),
-    "https://marugo-s.github.io/OEM/?s=b#abcdefgh1234",
+    "https://marugo-s.github.io/multiapp/?s=b#abcdefgh1234",
   );
   assert.equal(
     buildTrackingUrl(...args, "link"),
-    "https://marugo-s.github.io/OEM/?s=l#abcdefgh1234",
+    "https://marugo-s.github.io/multiapp/?s=l#abcdefgh1234",
   );
 });
 test("Link button HTML escapes names and attributes", () => {

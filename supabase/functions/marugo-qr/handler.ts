@@ -45,8 +45,11 @@ export function normalizeTarget(value: unknown): string {
   }
   if (
     url.hostname === "marugo-s.github.io" &&
-    (url.pathname.replace(/\/$/, "") === "/OEM/marugo" ||
-      (url.pathname.replace(/\/$/, "") === "/OEM" && url.hash.length > 1))
+    (["/multiapp/marugo", "/OEM/marugo"].includes(
+      url.pathname.replace(/\/$/, ""),
+    ) ||
+      (["/multiapp", "/OEM"].includes(url.pathname.replace(/\/$/, "")) &&
+        url.hash.length > 1))
   ) {
     throw new ApiError(
       400,
