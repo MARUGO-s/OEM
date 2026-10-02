@@ -17,6 +17,7 @@ import {
   type SharedSession,
 } from "./cloud";
 import { api } from "./api";
+import { ExternalApplications } from "./ExternalApplications";
 
 export type Application = "kotonoha" | "qr";
 export function AuthGate({
@@ -133,29 +134,21 @@ export function AuthGate({
             <QrCode size={24} />
           </span>
           <span>
-            MARUGO<small>仕事を進める、ふたつの道具。</small>
+            MARUGO<small>仕事を進める、アプリの入口。</small>
           </span>
         </div>
         <div className="login-story-body">
-          <span className="eyebrow">MARUGO WORKSPACE</span>
+          <span className="eyebrow">MARUGO APPS</span>
           <h1>
-            記録する。届ける。
+            仕事の入口を、
             <br />
-            その先を、見える化。
+            ひとつに。
           </h1>
-          <p>
-            会議の記録は「kotonoha」。
-            <br />
-            QRコードの作成・アクセス分析は「MARUGO QR」。
-          </p>
-          <div className="login-flow">
-            <span>アプリを選ぶ</span>
-            <ArrowRight size={16} />
-            <span>共通のIDで利用</span>
-          </div>
+          <p>記録・共有・管理・分析。使いたいアプリを選んでください。</p>
+          <ExternalApplications />
         </div>
         <span className="login-models">
-          同じログイン・同じクラウド。用途に合わせて使い分け。
+          移動先のログイン・アクセス権は各アプリの設定に従います。
         </span>
       </section>
       <section className="login-form-panel">
@@ -163,7 +156,7 @@ export function AuthGate({
           <span className="login-lock">
             <LockKeyhole size={25} />
           </span>
-          <h2>使うアプリを選択</h2>
+          <h2>このページで開く</h2>
           <p>
             {session
               ? "ログイン済みです。アプリを選んで開いてください。"

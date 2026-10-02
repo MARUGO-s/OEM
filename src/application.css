@@ -39,10 +39,80 @@
 }
 .application-option > span {
   flex: 1;
+  min-width: 0;
 }
 .application-option strong,
 .application-option small {
   display: block;
+}
+.login-story-body {
+  padding: 28px 0;
+}
+.external-applications {
+  margin-top: 26px;
+}
+.external-applications h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.external-applications > p {
+  color: #666078;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0 0 14px;
+}
+.external-application-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.external-application {
+  background: white;
+  color: var(--ink);
+  margin: 0;
+  padding: 15px 12px;
+  gap: 10px;
+  text-decoration: none;
+  min-height: 82px;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
+}
+.external-application:hover {
+  border-color: var(--purple);
+  background: #f5f3ff;
+}
+.external-application:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 3px;
+}
+.external-application strong {
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.external-application small {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.external-application > svg:last-child {
+  width: 16px;
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .login-story {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+@media (max-width: 420px) {
+  .external-application-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .external-application {
+    transition: none;
+  }
 }
 .application-option small {
   color: var(--muted);
