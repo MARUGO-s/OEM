@@ -1,0 +1,91 @@
+.application-options {
+  padding: 0;
+  margin: 0 0 26px;
+  border: 0;
+  min-width: 0;
+}
+.application-options legend {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.application-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 17px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.application-option.selected {
+  border-color: var(--purple);
+  background: #f5f3ff;
+}
+.application-option:focus-within {
+  outline: 2px solid var(--purple);
+  outline-offset: 3px;
+}
+.application-option input {
+  accent-color: var(--purple);
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+}
+.application-option > svg {
+  flex-shrink: 0;
+  color: var(--purple);
+}
+.application-option > span {
+  flex: 1;
+}
+.application-option strong,
+.application-option small {
+  display: block;
+}
+.application-option small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin-top: 4px;
+}
+.qr-workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px max(24px, calc((100vw - 1200px) / 2));
+  background: white;
+  border-bottom: 1px solid var(--border);
+}
+.qr-workspace-header .brand {
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
+}
+.qr-workspace-tools {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.qr-workspace-main {
+  width: 100%;
+  max-width: 1248px;
+  margin: 0 auto;
+  padding: 36px 24px;
+}
+@media (max-width: 760px) {
+  .qr-workspace-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 24px 18px;
+    gap: 18px;
+  }
+  .qr-workspace-main {
+    padding: 28px 18px;
+  }
+  .qr-workspace-tools .button {
+    font-size: 13px;
+  }
+}

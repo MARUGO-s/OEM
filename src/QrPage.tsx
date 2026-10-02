@@ -251,7 +251,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
                   : <QrCode size={17} />}QRコードを作成
               </button>
               <p>
-                QRには「marugo」の短い計測用URLが入ります。開くとアクセスを記録し、リンク先へ自動転送します。
+                QRには短い計測用URLが入ります。開くとアクセスを記録し、リンク先へ自動転送します。
               </p>
             </form>
             <p className="qr-measure-note">

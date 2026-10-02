@@ -5,6 +5,8 @@ import {
   LoaderCircle,
   LockKeyhole,
   ShieldCheck,
+  QrCode,
+  Check,
 } from "lucide-react";
 import {
   isCloud,
@@ -16,7 +18,18 @@ import {
 } from "./cloud";
 import { api } from "./api";
 
-export function AuthGate({ children }: { children: ReactNode }) {
+export type Application = "kotonoha" | "qr";
+export function AuthGate({
+  children,
+}: {
+  children: (
+    application: Application,
+    chooseApplication: () => void,
+  ) => ReactNode;
+}) {
+  const [selectedApplication, setSelectedApplication] =
+    useState<Application>("kotonoha");
+  const [application, setApplication] = useState<Application | null>(null);
   const [session, setSession] = useState<SharedSession | null>(null);
   const [loading, setLoading] = useState(isCloud);
   const [loginId, setLoginId] = useState("");
@@ -27,7 +40,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (!isCloud) return;
     let alive = true;
     const sync = () => {
-      setSession(getSession());
+      const restored = getSession();
+      setSession(restored);
+      if (!restored) setApplication(null);
       setLoading(false);
     };
     async function restore() {
@@ -64,13 +79,26 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
     return () => clearTimeout(timer);
   }, [session]);
+  useEffect(() => {
+    document.title =
+      application === "qr"
+        ? "MARUGO QR — QRコード作成・アクセス分析"
+        : application === "kotonoha"
+          ? "kotonoha — 会議録ワークスペース"
+          : "MARUGO — アプリ選択・ログイン";
+  }, [application]);
   async function login(e: FormEvent) {
     e.preventDefault();
+    if (!isCloud || session) {
+      setApplication(selectedApplication);
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       await signIn(loginId.trim(), password);
       setPassword("");
+      setApplication(selectedApplication);
     } catch (e) {
       setError(
         e instanceof Error
@@ -81,7 +109,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setBusy(false);
     }
   }
-  if (!isCloud || session) return <>{children}</>;
+  if (application && (!isCloud || session))
+    return (
+      <>
+        {children(application, () => {
+          setApplication(null);
+          setError("");
+        })}
+      </>
+    );
   if (loading)
     return (
       <div className="auth-loading">
@@ -94,34 +130,32 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <section className="login-story">
         <div className="brand">
           <span className="brand-symbol">
-            <AudioLines size={24} />
+            <QrCode size={24} />
           </span>
           <span>
-            kotonoha<small>会話を、次の一歩に。</small>
+            MARUGO<small>仕事を進める、ふたつの道具。</small>
           </span>
         </div>
         <div className="login-story-body">
-          <span className="eyebrow">YOUR MEETING, CLEARLY.</span>
+          <span className="eyebrow">MARUGO WORKSPACE</span>
           <h1>
-            話したことを、
+            記録する。届ける。
             <br />
-            使える記録に。
+            その先を、見える化。
           </h1>
           <p>
-            録音を渡すだけで、文字起こしから議事録まで。
+            会議の記録は「kotonoha」。
             <br />
-            会議の大切なことと、次にやることをひとつに。
+            QRコードの作成・アクセス分析は「MARUGO QR」。
           </p>
           <div className="login-flow">
-            <span>録音ファイル</span>
+            <span>アプリを選ぶ</span>
             <ArrowRight size={16} />
-            <span>文字起こし</span>
-            <ArrowRight size={16} />
-            <span>議事録</span>
+            <span>共通のIDで利用</span>
           </div>
         </div>
         <span className="login-models">
-          GPT Transcribe / Gemini × GPT-6 Astra / Sol / Luna
+          同じログイン・同じクラウド。用途に合わせて使い分け。
         </span>
       </section>
       <section className="login-form-panel">
@@ -129,31 +163,82 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <span className="login-lock">
             <LockKeyhole size={25} />
           </span>
-          <h2>おかえりなさい。</h2>
-          <p>ワークスペースにログインして、会議を整理しましょう。</p>
-          <label className="field">
-            ログインID
-            <input
-              type="text"
-              autoComplete="username"
-              value={loginId}
-              onChange={(e) => setLoginId(e.target.value)}
-              autoCapitalize="none"
-              spellCheck={false}
-              required
-              placeholder="ログインIDを入力"
-            />
-          </label>
-          <label className="field">
-            パスワード
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
+          <h2>使うアプリを選択</h2>
+          <p>
+            {session
+              ? "ログイン済みです。アプリを選んで開いてください。"
+              : "アプリを選び、共通のID・パスワードでログインしてください。"}
+          </p>
+          <fieldset className="application-options" disabled={busy}>
+            <legend>利用するアプリ</legend>
+            {(
+              [
+                {
+                  id: "kotonoha",
+                  name: "kotonoha",
+                  note: "会議録・文字起こし・議事録",
+                  Icon: AudioLines,
+                },
+                {
+                  id: "qr",
+                  name: "MARUGO QR",
+                  note: "QRコード作成・アクセス分析",
+                  Icon: QrCode,
+                },
+              ] as const
+            ).map(({ id, name, note, Icon }) => (
+              <label
+                className={`application-option ${selectedApplication === id ? "selected" : ""}`}
+                key={id}
+              >
+                <input
+                  type="radio"
+                  name="application"
+                  value={id}
+                  checked={selectedApplication === id}
+                  onChange={() => {
+                    setSelectedApplication(id);
+                    setError("");
+                  }}
+                />
+                <Icon size={25} />
+                <span>
+                  <strong>{name}</strong>
+                  <small>{note}</small>
+                </span>
+                {selectedApplication === id && (
+                  <Check size={20} aria-hidden="true" />
+                )}
+              </label>
+            ))}
+          </fieldset>
+          {isCloud && !session && (
+            <>
+              <label className="field">
+                ログインID
+                <input
+                  type="text"
+                  autoComplete="username"
+                  value={loginId}
+                  onChange={(e) => setLoginId(e.target.value)}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  required
+                  placeholder="ログインIDを入力"
+                />
+              </label>
+              <label className="field">
+                パスワード
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </label>
+            </>
+          )}
           {error && (
             <div className="error-message" role="alert">
               {error}
@@ -165,12 +250,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
             ) : (
               <ArrowRight size={17} />
             )}
-            {busy ? "ログインしています…" : "ログイン"}
+            {busy
+              ? "ログインしています…"
+              : `${selectedApplication === "qr" ? "MARUGO QR" : "kotonoha"}${session || !isCloud ? "を開く" : "にログイン"}`}
           </button>
           <div className="login-account-note">
             <ShieldCheck size={17} />
             <p>
-              共通のID・パスワードでログインします。ログインした全員が、同じ会議・音声・議事録を閲覧・編集できます。共用端末では利用後にログアウトしてください。
+              両アプリは共通のID・パスワードで利用します。会議の記録とQRの登録・アクセス履歴はチームで共有されます。アプリの切り替えでログイン状態は変わりません。共用端末では利用後にログアウトしてください。
             </p>
           </div>
         </form>
