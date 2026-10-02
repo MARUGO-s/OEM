@@ -18,27 +18,13 @@ body {
 .public-qr-file header {
   border-bottom: 1px solid #ddd;
   padding-bottom: 16px;
+  margin-bottom: 20px;
 }
 .public-qr-file small {
   color: #7664bc;
   letter-spacing: 0.16em;
   font-weight: 700;
 }
-.public-qr-file h1 {
-  font-size: clamp(22px, 4vw, 32px);
-  overflow-wrap: anywhere;
-}
-.public-qr-file header p {
-  color: #697184;
-  overflow-wrap: anywhere;
-}
-.public-qr-file nav {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 20px 0;
-}
-.public-qr-file a,
 .public-qr-file button {
   font: inherit;
   display: inline-block;
@@ -65,11 +51,6 @@ body {
   margin: auto;
   border-radius: 12px;
   background: white;
-}
-.public-file-note {
-  color: #697184;
-  font-size: 13px;
-  line-height: 1.8;
 }
 @media (max-width: 600px) {
   .public-qr-file {

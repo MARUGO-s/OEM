@@ -7,7 +7,7 @@ import {
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 GlobalWorkerOptions.workerSrc = workerUrl;
-export function PdfPreview({ url, title }: { url: string; title: string }) {
+export function PdfPreview({ url }: { url: string }) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(1);
   const [width, setWidth] = useState(900);
@@ -48,7 +48,7 @@ export function PdfPreview({ url, title }: { url: string; title: string }) {
       .catch(() => {
         if (alive) {
           setError(
-            "PDFを表示できませんでした。パスワード付き・壊れたPDFや期限切れの場合は、表示を更新するか、別画面・ダウンロードで確認してください。",
+            "PDFを表示できませんでした。ブラウザーでページを再読み込みしてください。解決しない場合は公開元にお問い合わせください。",
           );
           setLoading(false);
         }
@@ -100,7 +100,7 @@ export function PdfPreview({ url, title }: { url: string; title: string }) {
     })().catch((e) => {
       if (alive && e?.name !== "RenderingCancelledException") {
         setError(
-          "このページを表示できませんでした。別画面で開くか、ダウンロードしてください。",
+          "このページを表示できませんでした。ブラウザーでページを再読み込みしてください。解決しない場合は公開元にお問い合わせください。",
         );
         setLoading(false);
       }
@@ -111,8 +111,8 @@ export function PdfPreview({ url, title }: { url: string; title: string }) {
     };
   }, [pdf, page, width]);
   return (
-    <section aria-label={`${title}のPDF`} className="pdf-preview">
-      {pdf && (
+    <section aria-label="公開PDF" className="pdf-preview">
+      {pdf && pdf.numPages > 1 && (
         <div className="pdf-pagination">
           <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
             前のページ
@@ -133,7 +133,7 @@ export function PdfPreview({ url, title }: { url: string; title: string }) {
       <div ref={container} className="pdf-canvas-container">
         <canvas
           ref={canvas}
-          aria-label={`${title} ${page}ページ`}
+          aria-label={`公開PDF ${page}ページ`}
           role="img"
           hidden={!pdf || !!error}
         />

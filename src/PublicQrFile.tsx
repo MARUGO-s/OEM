@@ -4,13 +4,8 @@ import { PdfPreview } from "./PdfPreview";
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./cloud";
 import "./qr-file-viewer.css";
 type PublicFile = {
-  title: string;
-  fileName: string;
   mime: string;
-  size: number;
   url: string;
-  downloadUrl: string;
-  expiresAt: string;
 };
 function PublicQrFile() {
   const code = new URLSearchParams(location.search).get("file") ?? "";
@@ -19,6 +14,7 @@ function PublicQrFile() {
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
+    document.title = "公開ファイル — MARUGO QR";
     let alive = true;
     const abort = new AbortController();
     setLoading(true);
@@ -39,7 +35,6 @@ function PublicQrFile() {
         throw new Error(data.error || "ファイルを開けませんでした。");
       if (alive) {
         setFile(data);
-        document.title = `${data.title} — MARUGO QR`;
       }
     })()
       .catch((e) => {
@@ -57,15 +52,9 @@ function PublicQrFile() {
     };
   }, [code, reload]);
   return (
-    <main className="public-qr-file">
+    <main className="public-qr-file" aria-label="公開ファイル">
       <header>
         <small>MARUGO QR</small>
-        <h1>{file?.title || "公開ファイル"}</h1>
-        {file && (
-          <p>
-            {file.fileName} · {(file.size / 1024 / 1024).toFixed(2)} MB
-          </p>
-        )}
       </header>
       {loading && <p role="status">ファイルを準備しています…</p>}
       {error && (
@@ -75,29 +64,11 @@ function PublicQrFile() {
         </section>
       )}
       {file && (
-        <>
-          <nav>
-            <a href={file.url} target="_blank" rel="noopener noreferrer">
-              別画面で開く
-            </a>
-            <a
-              href={file.downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              ダウンロード
-            </a>
-            <button onClick={() => setReload((n) => n + 1)}>表示を更新</button>
-          </nav>
-          {file.mime === "application/pdf" ? (
-            <PdfPreview key={file.url} url={file.url} title={file.title} />
-          ) : (
-            <img src={file.url} alt={file.title} referrerPolicy="no-referrer" />
-          )}
-          <p className="public-file-note">
-            PDFが表示されない端末では「別画面で開く」または「ダウンロード」をお使いください。リンクが期限切れの場合は「表示を更新」で読み直せます。
-          </p>
-        </>
+        file.mime === "application/pdf" ? (
+          <PdfPreview key={file.url} url={file.url} />
+        ) : (
+          <img src={file.url} alt="公開画像" referrerPolicy="no-referrer" />
+        )
       )}
     </main>
   );
