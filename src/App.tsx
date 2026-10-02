@@ -32,6 +32,7 @@ import {
   Trash2,
   TrendingUp,
   GitCompare,
+  QrCode,
 } from "lucide-react";
 import { api, download, exportMultipleMeetings } from "./api";
 import { formatDuration } from "../supabase/functions/_shared/duration.mjs";
@@ -58,6 +59,7 @@ import { UsagePage } from "./UsagePage";
 import { StatsPage } from "./StatsPage";
 import { ComparePage } from "./ComparePage";
 import { Modal } from "./Modal";
+import { QrPage } from "./QrPage";
 import { TagSuggestionDialog } from "./TagSuggestionDialog";
 import { createTagCompletionTracker, createTagSuggestionCache } from "./tag-suggestions.mjs";
 import { meetingEvents, tokyoToday } from "../supabase/functions/_shared/calendar.mjs";
@@ -78,7 +80,7 @@ function meetingTag(name: string): MeetingTag {
   return { id: name, name, color: colors[hash % colors.length] };
 }
 
-type Page = "meetings" | "calendar" | "actions" | "usage" | "stats" | "compare" | "help";
+type Page = "meetings" | "calendar" | "actions" | "usage" | "stats" | "compare" | "help" | "qr";
 export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -553,7 +555,9 @@ export default function App() {
     return basicFilter && searchFilter && statusFilter && participantsFilter && dateFilter && tagFilter;
   });
   const pageTitle =
-    page === "calendar"
+    page === "qr"
+      ? "QRコード作成・管理"
+      : page === "calendar"
       ? "共有カレンダー"
       : page === "actions"
         ? "アクション"
@@ -611,6 +615,7 @@ export default function App() {
           {(
             [
               { id: "meetings", Icon: LayoutGrid, label: "すべての会議" },
+              { id: "qr", Icon: QrCode, label: "QRコード作成・管理" },
               { id: "calendar", Icon: CalendarDays, label: "カレンダー" },
               { id: "actions", Icon: ListTodo, label: "アクション" },
               { id: "stats", Icon: TrendingUp, label: "統計" },
@@ -874,6 +879,11 @@ export default function App() {
                   </div>
                 </div>
               </section>
+              <button className="qr-home-entry" onClick={() => go("qr")}>
+                <span className="qr-home-icon"><QrCode size={29} /></span>
+                <span><b>QRコードを作成する</b><small>短縮URLでサイトへ転送し、アクセス回数を確認</small></span>
+                <ArrowRight size={21} />
+              </button>
               <div className="workflow-strip">
                 {[
                   {
@@ -1552,6 +1562,8 @@ export default function App() {
                 </div>
               )}
             </>
+          ) : page === "qr" ? (
+            <QrPage notify={notify} />
           ) : page === "usage" ? (
             <UsagePage meetings={meetings} />
           ) : page === "stats" ? (
@@ -1662,6 +1674,10 @@ function Help({
       </div>
       <div className="help-steps">
         {[
+          {
+            title: "QRコード作成・アクセス計測",
+            text: "トップ画面または左メニューの「QRコード作成・管理」で名前とリンク先URLを登録します。QRにはmarugoを含む短縮URLが入り、開くと履歴を記録して元サイトへ自動転送します。QR画像はPNGで保存でき、管理画面で回数・日時・端末情報を全員で確認できます。転送の停止・再開も可能です。回数はリンクが開かれた回数で、同じ方の再アクセス・直接クリック・ボットを含みます。カメラで認識しただけの回数や移動先の表示完了は計測しません。転送にはネット接続とJavaScriptが必要です。",
+          },
           {
             title: "AIの接続設定",
             text: "OpenAIのAPIキーを設定し、議事録に使うGPT-6 Astra・Sol・Lunaを選択します。文字起こしはGPT TranscribeまたはGemini 3.5 Transcribeから選べます。Geminiを使う場合はGemini APIキーも設定してください。",
