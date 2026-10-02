@@ -16,7 +16,7 @@ const source = ts
     },
   )
   .outputText.replace(/^import .*qr-routing.mjs.*;\s*/m, "")
-  .replaceAll("import.meta.env.BASE_URL", JSON.stringify("/OEM/"))
+  .replaceAll("import.meta.env.BASE_URL", JSON.stringify("/multiapp/"))
   .replaceAll("import(", "loadModule(");
 function boot(hash) {
   const root = { innerHTML: "" };
@@ -57,7 +57,7 @@ function boot(hash) {
 test("QR bootstrap avoids authentication and meeting workspace for root tracking links", () => {
   const state = boot("#abcdefgh1234");
   assert.deepEqual(state.imports, ["./tracking.css"]);
-  assert.equal(state.scripts[0].src, "/OEM/marugo/redirect.js");
+  assert.equal(state.scripts[0].src, "/multiapp/marugo/redirect.js");
   assert.match(state.root.innerHTML, /id="status"/);
   assert.equal(
     state.metadata.find((item) => item.name === "referrer").content,

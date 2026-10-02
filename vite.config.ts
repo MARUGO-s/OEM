@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig(({ mode }) => ({
-  base: mode === "production" ? "/OEM/" : "/",
+  base: mode === "production" ? "/multiapp/" : "/",
   plugins: [react()],
   // The audio worker lazy-loads the AC-3 decoder, which needs code splitting.
   worker: { format: "es" },

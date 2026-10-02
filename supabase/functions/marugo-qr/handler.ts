@@ -1,4 +1,9 @@
 import { hashToken, validTokenFormat } from "../_shared/session.mjs";
+import {
+  accessBrowser,
+  accessDevice,
+  QR_SOURCES,
+} from "../_shared/qr-attribution.mjs";
 
 const origins = new Set([
   "https://marugo-s.github.io",
@@ -40,8 +45,11 @@ export function normalizeTarget(value: unknown): string {
   }
   if (
     url.hostname === "marugo-s.github.io" &&
-    (url.pathname.replace(/\/$/, "") === "/OEM/marugo" ||
-      (url.pathname.replace(/\/$/, "") === "/OEM" && url.hash.length > 1))
+    (["/multiapp/marugo", "/OEM/marugo"].includes(
+      url.pathname.replace(/\/$/, ""),
+    ) ||
+      (["/multiapp", "/OEM"].includes(url.pathname.replace(/\/$/, "")) &&
+        url.hash.length > 1))
   ) {
     throw new ApiError(
       400,
@@ -154,13 +162,27 @@ export async function handler(req: Request): Promise<Response> {
       ) {
         throw new ApiError(400, "QRコードのURLが正しくありません。");
       }
-      const data = await rpc("kotonoha_qr", {
-        p_operation: "scan",
-        p_payload: {
-          code: input.code,
-          eventId: input.eventId,
-          userAgent: (req.headers.get("user-agent") || "").slice(0, 512),
-        },
+      const source = input.source ?? "unknown";
+      const referrer = input.referrerHost ?? null;
+      if (
+        typeof source !== "string" || !QR_SOURCES.includes(source) ||
+        (referrer !== null &&
+          (typeof referrer !== "string" || referrer.length > 253 ||
+            !/^[a-z0-9.-]+$/i.test(referrer)))
+      ) {
+        throw new ApiError(400, "アクセス情報の形式が正しくありません。");
+      }
+      const agent = (req.headers.get("user-agent") || "").slice(0, 512);
+      const data = await rpc("kotonoha_qr_scan", {
+        p_code: input.code,
+        p_event: input.eventId,
+        p_source: source,
+        p_referrer_host: typeof referrer === "string"
+          ? referrer.toLowerCase()
+          : null,
+        p_device: accessDevice(agent),
+        p_browser: accessBrowser(agent),
+        p_user_agent: agent,
       });
       return json({ targetUrl: normalizeTarget(data.targetUrl) });
     }
@@ -220,15 +242,35 @@ export async function handler(req: Request): Promise<Response> {
         201,
       );
     }
-    const match = route.match(/^\/links\/([^/]+)(\/history)?$/);
+    const match = route.match(/^\/links\/([^/]+)(\/history|\/analytics)?$/);
     if (match && uuid.test(match[1])) {
-      if (match[2] && req.method === "GET") {
+      if (match[2] === "/analytics" && req.method === "GET") {
+        const days = Number(url.searchParams.get("days") ?? "30");
+        const source = url.searchParams.get("source") ?? "all";
+        if (![7, 30, 90].includes(days)) {
+          throw new ApiError(
+            400,
+            "集計期間は7日・30日・90日から選んでください。",
+          );
+        }
+        if (source !== "all" && !QR_SOURCES.includes(source)) {
+          throw new ApiError(400, "流入経路の指定が正しくありません。");
+        }
         return json(
-          await rpc("kotonoha_qr", {
-            ...args,
-            p_operation: "history",
+          await rpc("kotonoha_qr_analytics", {
+            p_owner: session.workspaceId,
             p_id: match[1],
-            p_payload: { page },
+            p_days: days,
+            p_source: source,
+          }),
+        );
+      }
+      if (match[2] === "/history" && req.method === "GET") {
+        return json(
+          await rpc("kotonoha_qr_history", {
+            p_owner: session.workspaceId,
+            p_id: match[1],
+            p_page: page,
           }),
         );
       }

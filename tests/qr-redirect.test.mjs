@@ -7,19 +7,21 @@ const source = readFileSync(
   new URL("../public/marugo/redirect.js", import.meta.url),
   "utf8",
 ).replace("export async function scan", "async function scan");
-async function setup(hash, responses) {
+async function setup(hash, responses, search = "", referrer = "") {
   const calls = [];
   const destinations = [];
   const elements = new Map(
-    ["#status", "#retry", "#heading"].map(
-      (id) => [id, { textContent: "", hidden: true, addEventListener() {} }],
-    ),
+    ["#status", "#retry", "#heading"].map((id) => [
+      id,
+      { textContent: "", hidden: true, addEventListener() {} },
+    ]),
   );
   const context = vm.createContext({
-    location: { hash, replace: (url) => destinations.push(url) },
-    document: { querySelector: (id) => elements.get(id) },
+    location: { hash, search, replace: (url) => destinations.push(url) },
+    document: { referrer, querySelector: (id) => elements.get(id) },
     crypto: { randomUUID: () => "00000000-0000-4000-8000-000000000001" },
     URL,
+    URLSearchParams,
     AbortSignal,
     fetch: async (_, args) => {
       calls.push(JSON.parse(args.body));
@@ -37,10 +39,13 @@ async function setup(hash, responses) {
   return { context, calls, destinations, elements };
 }
 test("Public QR: redirects only after recording and reuses event ID on a lost response", async () => {
-  const state = await setup("#abcdefgh1234", [new Error("response lost"), {
-    status: 200,
-    body: { targetUrl: "https://example.com/landing" },
-  }]);
+  const state = await setup("#abcdefgh1234", [
+    new Error("response lost"),
+    {
+      status: 200,
+      body: { targetUrl: "https://example.com/landing" },
+    },
+  ]);
   assert.equal(state.destinations.length, 0);
   assert.equal(state.elements.get("#retry").hidden, false);
   await vm.runInContext("scan()", state.context);
@@ -50,18 +55,50 @@ test("Public QR: redirects only after recording and reuses event ID on a lost re
 test("Public QR: invalid code and stopped links never redirect", async () => {
   const invalid = await setup("#bad", []);
   assert.equal(invalid.calls.length, 0);
-  const paused = await setup("#abcdefgh1234", [{
-    status: 410,
-    body: { error: "停止中" },
-  }]);
+  const paused = await setup("#abcdefgh1234", [
+    {
+      status: 410,
+      body: { error: "停止中" },
+    },
+  ]);
   assert.equal(paused.destinations.length, 0);
   assert.equal(paused.elements.get("#retry").hidden, true);
 });
 test("Public QR: non-http destination is rejected", async () => {
-  const state = await setup("#abcdefgh1234", [{
-    status: 200,
-    body: { targetUrl: "javascript:alert(1)" },
-  }]);
+  const state = await setup("#abcdefgh1234", [
+    {
+      status: 200,
+      body: { targetUrl: "javascript:alert(1)" },
+    },
+  ]);
   assert.equal(state.destinations.length, 0);
   assert.equal(state.elements.get("#retry").hidden, false);
+});
+test("QR attribution records a channel and domain only, excluding private path/query", async () => {
+  const state = await setup(
+    "#abcdefgh1234",
+    [{ status: 200, body: { targetUrl: "https://example.com/" } }],
+    "?s=b",
+    "https://shop.example/private/customer?token=secret",
+  );
+  assert.equal(state.calls[0].source, "button");
+  assert.equal(state.calls[0].referrerHost, "shop.example");
+  assert.equal(JSON.stringify(state.calls).includes("secret"), false);
+  const qr = await setup(
+    "#abcdefgh1234",
+    [{ status: 200, body: { targetUrl: "https://example.com/" } }],
+    "?s=q",
+  );
+  assert.equal(qr.calls[0].source, "qr");
+  assert.equal(qr.calls[0].referrerHost, null);
+});
+test("Old URLs and invalid source markers stay unknown", async () => {
+  for (const query of ["", "?s=invalid"]) {
+    const state = await setup(
+      "#abcdefgh1234",
+      [{ status: 200, body: { targetUrl: "https://example.com/" } }],
+      query,
+    );
+    assert.equal(state.calls[0].source, "unknown");
+  }
 });
