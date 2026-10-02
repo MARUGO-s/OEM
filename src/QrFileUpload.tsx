@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { FileUp, LoaderCircle } from "lucide-react";
 import { qrApi, type QrLink } from "./qr-api";
+import { isFileDrag, selectedQrFile } from "./qr-file-selection.mjs";
 import {
   fileSpecification,
   matchesFileSignature,
@@ -54,10 +55,41 @@ export function QrFileUpload({
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
   const [pending, setPending] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
   const attempt = useRef<{ id: string; file: File; title: string } | null>(
     null,
   );
   const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // Dropping outside the box must not navigate away from the application.
+    const preventFileNavigation = (event: DragEvent) => {
+      if (isFileDrag(event.dataTransfer)) event.preventDefault();
+    };
+    window.addEventListener("dragover", preventFileNavigation);
+    window.addEventListener("drop", preventFileNavigation);
+    return () => {
+      window.removeEventListener("dragover", preventFileNavigation);
+      window.removeEventListener("drop", preventFileNavigation);
+    };
+  }, []);
+  function selectFile(files: FileList | null) {
+    if (busy || pending) return;
+    setConfirmed(false);
+    setError("");
+    try {
+      const value = selectedQrFile(files);
+      setFile(value);
+      if (value && !title.trim())
+        setTitle(value.name.replace(/\.[^.]+$/, "").slice(0, 120));
+    } catch (e) {
+      setFile(null);
+      setError(
+        e instanceof Error ? e.message : "ファイルを選択できませんでした。",
+      );
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
   useEffect(() => {
     if (!busy || !pending) return;
     const warn = (e: BeforeUnloadEvent) => {
@@ -186,24 +218,70 @@ export function QrFileUpload({
             placeholder="例：秋のメニュー・店舗案内"
           />
         </label>
-        <label>
-          公開するファイル
+        <div className="qr-file-picker">
+          <span>公開するファイル</span>
+          <div
+            className={`qr-file-dropzone ${dragging ? "dragging" : ""} ${busy || pending ? "locked" : ""}`}
+            role="group"
+            aria-label="ファイルをドラッグ＆ドロップ、または選択"
+            aria-disabled={busy || pending}
+            onDragEnter={(e) => {
+              if (!isFileDrag(e.dataTransfer)) return;
+              e.preventDefault();
+              if (busy || pending) return;
+              dragDepth.current += 1;
+              setDragging(true);
+            }}
+            onDragOver={(e) => {
+              if (!isFileDrag(e.dataTransfer)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = busy || pending ? "none" : "copy";
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              dragDepth.current = Math.max(0, dragDepth.current - 1);
+              if (dragDepth.current === 0) setDragging(false);
+            }}
+            onDrop={(e) => {
+              if (!isFileDrag(e.dataTransfer)) return;
+              e.preventDefault();
+              e.stopPropagation();
+              dragDepth.current = 0;
+              setDragging(false);
+              if (busy || pending) return;
+              // A dropped file is held in state, not input.files. Clear any old
+              // picker value so selecting that same file again still fires change.
+              if (fileInput.current) fileInput.current.value = "";
+              selectFile(e.dataTransfer.files);
+            }}
+          >
+            <button
+              type="button"
+              className="qr-file-drop-button"
+              disabled={busy || pending}
+              onClick={() => fileInput.current?.click()}
+            >
+              <FileUp size={27} />
+              <strong>
+                {dragging
+                  ? "ここで離してファイルを選択"
+                  : "ここにファイルをドラッグ＆ドロップ"}
+              </strong>
+              <span>またはクリックしてファイルを選ぶ</span>
+              <small>PDF・JPG・PNG ／ 1ファイル20MBまで ／ 1つずつ</small>
+            </button>
+          </div>
           <input
             ref={fileInput}
             type="file"
             accept={QR_FILE_ACCEPT}
-            required
+            hidden
+            aria-label="公開するファイル"
             disabled={busy || pending}
-            onChange={(e) => {
-              const value = e.target.files?.[0] ?? null;
-              setFile(value);
-              setConfirmed(false);
-              setError("");
-              if (value && !title) setTitle(value.name.replace(/\.[^.]+$/, ""));
-            }}
+            onChange={(e) => selectFile(e.target.files)}
           />
-          <small>PDF・JPG・PNG ／ 1ファイル20MBまで ／ 合計500MBまで</small>
-        </label>
+          <small>合計500MBまで。ドロップしただけでは公開されません。</small>
+        </div>
       </div>
       {file && (
         <p className="qr-file-summary">
@@ -228,7 +306,8 @@ export function QrFileUpload({
       {error && (
         <p className="error-message" role="alert">
           {error}{" "}
-          同じ内容で再試行すると重複発行しません。公開済みの場合は一覧も確認してください。
+          {pending &&
+            "同じ内容で再試行すると重複発行しません。公開済みの場合は一覧も確認してください。"}
         </p>
       )}
       {status && (
