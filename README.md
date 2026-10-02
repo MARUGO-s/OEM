@@ -183,3 +183,12 @@ Geminiの文字起こしには [Interactions APIの文字起こし仕様](https:
 - [Gemini audio transcription](https://ai.google.dev/gemini-api/docs/transcribe)
 - `gemini-1.5-flash` は2025年9月29日に提供終了したため、現行の音声文字起こし専用モデル `gemini-3.5-transcribe` を使用します。
 - [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra) / [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol) / [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna)
+# MARUGO QR：ファイル公開
+
+- QR管理画面の「ファイルを公開してQRを発行」からPDF・JPG・PNGをアップロードできます。一般公開の確認が必要です。1ファイル20MiB、ワークスペース合計500MiB（未完了アップロードは20MiB予約、公開済みは最低512KiB分計上）です。HTML・SVG・PSDは対象外です。
+- 新しい専用 **非公開** Storage bucket `marugo-qr-files` を使い、共有セッションを検証したEdge APIだけがアップロード用URLを発行します。アップロードは直接Storageに送るためEdgeに大きなファイルを通しません。公開前にサーバーでサイズ・MIME・先頭シグネチャを検証します。上書きは禁止です。ウイルス検査・PDFの完全な安全性検査ではありません。
+- QRアクセスの計測後、`/multiapp/?file=<code>` の一般閲覧画面へ遷移します。閲覧者はログイン不要。ファイル一覧・所有者・内部保存パスは公開しません。閲覧画面はPDF/画像表示とダウンロードを提供します。モバイルのPDF埋め込み非対応時は「別画面で開く」かダウンロードを使用します。閲覧画面の更新・保存自体はQRアクセス数に加算しません。
+- 一般閲覧APIは有効・ゴミ箱外のQRに限り、5分有効の署名付き閲覧URLを発行します。停止・ゴミ箱でも発行済みのURLは最大5分有効です。ダウンロード済みのファイルは回収できません。URLを知る人が共有できる一般公開であり、会員限定・機密資料配布用ではありません。
+- ゴミ箱はファイル・履歴を保持し、復元は停止中です。完全削除はStorage APIによる本体削除→DB/履歴削除の順です。DBのガードで旧API経由の本体未削除purgeや削除途中の復元を防ぎます。失敗時はゴミ箱で再試行します。Storage SQLで本体の管理行を削除しません。
+- 同じ作成IDでアップロード・QR発行を再試行できます。失敗した未公開ファイルは「未公開のアップロードを破棄」で片付けられます。画面を閉じた未完了データは自動削除しません。必要な場合は管理者が所有者と状態を確認して専用Storage API/DB経由で整理します。署名付きアップロードURLは短時間のアップロード権限なので第三者へ共有しないでください。
+- セキュリティ確認：既存bucket/認証は変更しない、`qr_files` RLS・匿名/認証済み直接アクセス禁止、RPCはservice-role専用、セッション由来の所有者検証、公開ファイル種別/サイズ制限、一般公開確認、削除時Storage連携を検証してください。
