@@ -35,6 +35,18 @@ if (isTrackingNavigation(location.hash)) {
       "転送処理を読み込めませんでした。接続を確認して、ページを再読み込みしてください。";
   };
   document.body.append(script);
+} else if (new URLSearchParams(location.search).has("file")) {
+  document.title = "MARUGO QR — 公開ファイル";
+  for (const [name, content] of [
+    ["robots", "noindex, nofollow"],
+    ["referrer", "no-referrer"],
+  ]) {
+    const meta = document.createElement("meta");
+    meta.name = name;
+    meta.content = content;
+    document.head.append(meta);
+  }
+  void import("./PublicQrFile");
 } else {
   void import("./Workspace");
 }

@@ -18,7 +18,7 @@ const source = ts
   .outputText.replace(/^import .*qr-routing.mjs.*;\s*/m, "")
   .replaceAll("import.meta.env.BASE_URL", JSON.stringify("/multiapp/"))
   .replaceAll("import(", "loadModule(");
-function boot(hash) {
+function boot(hash, search = "") {
   const root = { innerHTML: "" };
   const scripts = [],
     metadata = [],
@@ -26,6 +26,7 @@ function boot(hash) {
   const handlers = {};
   const location = {
     hash,
+    search,
     reloads: 0,
     reload() {
       this.reloads++;
@@ -40,6 +41,7 @@ function boot(hash) {
   };
   vm.runInNewContext(source, {
     location,
+    URLSearchParams,
     window: {
       addEventListener: (name, handler) => {
         handlers[name] = handler;
@@ -77,4 +79,13 @@ test("Pasting a QR URL into an already-open chooser dispatches the tracking page
   state.location.hash = "#abcdefgh1234";
   state.handlers.hashchange();
   assert.equal(state.location.reloads, 1);
+});
+test("Public file viewer bypasses login and does not load meeting workspace", () => {
+  const state = boot("", "?file=abcdefgh1234");
+  assert.deepEqual(state.imports, ["./PublicQrFile"]);
+  assert.equal(state.scripts.length, 0);
+  assert.equal(
+    state.metadata.find((item) => item.name === "robots").content,
+    "noindex, nofollow",
+  );
 });

@@ -21,6 +21,7 @@ import {
 import { qrApi, type QrHistory, type QrLink, trackingUrl } from "./qr-api";
 import { isCloud } from "./cloud";
 import { QrAnalytics } from "./QrAnalytics";
+import { QrFileUpload } from "./QrFileUpload";
 import { Modal } from "./Modal";
 import { lifecycleRequest } from "./qr-lifecycle.mjs";
 import {
@@ -347,6 +348,17 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
           )}
           {view === "active" && (
             <>
+              <QrFileUpload
+                busy={busy}
+                onBusy={setBusy}
+                onCreated={(link) => {
+                  setSelected(link);
+                  setHistoryPage(0);
+                  setPage(0);
+                  notify("ファイルを公開してQRコードを発行しました。");
+                  void refresh();
+                }}
+              />
               <form className="qr-create-card" onSubmit={create}>
                 <label>
                   管理用の名前
@@ -390,7 +402,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
           )}
           {view === "trash" && (
             <p className="qr-measure-note">
-              ゴミ箱内のQR・短縮URLは転送されません。アクセス数・履歴は復元するまで保持されます。復元後も転送は停止中です。完全削除するとQRの設定と全アクセス履歴が消え、元に戻せません。自動削除はしません。
+              ゴミ箱内のQR・短縮URLは転送されません。アクセス数・履歴・公開ファイルは復元するまで保持されます。復元後も転送は停止中です。完全削除するとQRの設定・全アクセス履歴・公開ファイル本体が消え、元に戻せません。自動削除はしません。
             </p>
           )}
           {selected && (
@@ -739,7 +751,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
         >
           <p className="qr-deletion-note">
             {confirmation.action === "purge"
-              ? "このQRコードの設定・累計アクセス数・全アクセス履歴を完全に削除します。復元できず、配布済みのQR・短縮URLも利用できなくなります。"
+              ? "このQRコードの設定・累計アクセス数・全アクセス履歴・公開ファイル本体を完全に削除します。復元できず、配布済みのQR・短縮URLも利用できなくなります。"
               : "このQRコードと短縮URLの転送を停止し、登録済み一覧からゴミ箱へ移動します。アクセス数・履歴は残り、ゴミ箱から復元できます。"}
           </p>
           {confirmation.action === "purge" && (
@@ -752,7 +764,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
                   setPermanentConfirmed(event.target.checked)
                 }
               />
-              QRコードと全アクセス履歴が消え、復元できないことを確認しました
+              QRコード・全アクセス履歴・公開ファイルが消え、復元できないことを確認しました
             </label>
           )}
           {actionError && (

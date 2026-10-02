@@ -1,5 +1,12 @@
 import { hashToken, validTokenFormat } from "../_shared/session.mjs";
 import {
+  FileError,
+  publicFile,
+  prepareFile,
+  completeFile,
+  removeFile,
+} from "./files.ts";
+import {
   accessBrowser,
   accessDevice,
   QR_SOURCES,
@@ -14,13 +21,17 @@ const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const codePattern = /^[A-Za-z0-9_-]{12}$/;
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message);
   }
 }
 export function normalizeTarget(value: unknown): string {
   if (
-    typeof value !== "string" || value.trim().length > 2048 ||
+    typeof value !== "string" ||
+    value.trim().length > 2048 ||
     /[\u0000-\u001f\u007f]/.test(value)
   ) {
     throw new ApiError(400, "正しいURLを入力してください。");
@@ -35,8 +46,10 @@ export function normalizeTarget(value: unknown): string {
     );
   }
   if (
-    !["http:", "https:"].includes(url.protocol) || url.username ||
-    url.password || url.href.length > 2048
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.href.length > 2048
   ) {
     throw new ApiError(
       400,
@@ -132,6 +145,19 @@ async function rpc(name: string, args: unknown) {
     if (data.message === "CONFIRM_REQUIRED") {
       throw new ApiError(400, "削除対象の確認が必要です。");
     }
+    if (data.message === "FILE_QUOTA")
+      throw new ApiError(
+        409,
+        "ファイルの保存容量（500MB）に達しました。不要なファイルQRを完全削除してください。",
+      );
+    if (
+      data.message === "FILE_DELETING" ||
+      data.message === "FILE_CLEANUP_REQUIRED"
+    )
+      throw new ApiError(
+        409,
+        "ファイルの削除処理中です。ゴミ箱で完全削除を再試行してください。",
+      );
     throw new ApiError(
       503,
       "保存・計測結果を確認できませんでした。もう一度お試しください。",
@@ -166,23 +192,30 @@ export async function handler(req: Request): Promise<Response> {
     const index = url.pathname.indexOf(prefix);
     if (index < 0) return json({ error: "ページが見つかりません。" }, 404);
     const route = url.pathname.slice(index + prefix.length);
+    const fileRoute = route.match(/^\/files\/([A-Za-z0-9_-]{12})$/);
+    if (fileRoute && req.method === "GET")
+      return json(await publicFile(fileRoute[1], rpc));
     if (route === "/scan") {
       if (req.method !== "POST") {
         return json({ error: "Method not allowed" }, 405);
       }
       const input = await body(req);
       if (
-        typeof input.code !== "string" || !codePattern.test(input.code) ||
-        typeof input.eventId !== "string" || !uuid.test(input.eventId)
+        typeof input.code !== "string" ||
+        !codePattern.test(input.code) ||
+        typeof input.eventId !== "string" ||
+        !uuid.test(input.eventId)
       ) {
         throw new ApiError(400, "QRコードのURLが正しくありません。");
       }
       const source = input.source ?? "unknown";
       const referrer = input.referrerHost ?? null;
       if (
-        typeof source !== "string" || !QR_SOURCES.includes(source) ||
+        typeof source !== "string" ||
+        !QR_SOURCES.includes(source) ||
         (referrer !== null &&
-          (typeof referrer !== "string" || referrer.length > 253 ||
+          (typeof referrer !== "string" ||
+            referrer.length > 253 ||
             !/^[a-z0-9.-]+$/i.test(referrer)))
       ) {
         throw new ApiError(400, "アクセス情報の形式が正しくありません。");
@@ -192,9 +225,8 @@ export async function handler(req: Request): Promise<Response> {
         p_code: input.code,
         p_event: input.eventId,
         p_source: source,
-        p_referrer_host: typeof referrer === "string"
-          ? referrer.toLowerCase()
-          : null,
+        p_referrer_host:
+          typeof referrer === "string" ? referrer.toLowerCase() : null,
         p_device: accessDevice(agent),
         p_browser: accessBrowser(agent),
         p_user_agent: agent,
@@ -202,8 +234,9 @@ export async function handler(req: Request): Promise<Response> {
       return json({ targetUrl: normalizeTarget(data.targetUrl) });
     }
     // All management requests use exactly the existing shared-session check.
-    const token = req.headers.get("authorization")?.match(/^Bearer (.+)$/i)
-      ?.[1];
+    const token = req.headers
+      .get("authorization")
+      ?.match(/^Bearer (.+)$/i)?.[1];
     if (!validTokenFormat(token)) {
       throw new ApiError(401, "ログインが必要です。");
     }
@@ -218,6 +251,27 @@ export async function handler(req: Request): Promise<Response> {
       );
     }
     const args = { p_owner: session.workspaceId };
+    if (route === "/uploads" && req.method === "POST") {
+      const input = await body(req);
+      if (typeof input.id !== "string" || !uuid.test(input.id))
+        throw new ApiError(400, "アップロードのIDが正しくありません。");
+      return json(await prepareFile(input, session.workspaceId, rpc));
+    }
+    const uploadRoute = route.match(/^\/uploads\/([^/]+)(\/complete)?$/);
+    if (uploadRoute && uuid.test(uploadRoute[1])) {
+      if (uploadRoute[2] === "/complete" && req.method === "POST")
+        return json(
+          await completeFile(uploadRoute[1], session.workspaceId, rpc),
+          201,
+        );
+      if (!uploadRoute[2] && req.method === "DELETE") {
+        const input = await body(req);
+        if (input.confirmId !== uploadRoute[1])
+          throw new ApiError(400, "削除対象の確認が必要です。");
+        await removeFile(uploadRoute[1], session.workspaceId, rpc, true);
+        return json({ removed: true });
+      }
+    }
     const page = Number(url.searchParams.get("page") || 0);
     if (!Number.isInteger(page) || page < 0 || page > 100000) {
       throw new ApiError(400, "ページ指定が正しくありません。");
@@ -238,15 +292,19 @@ export async function handler(req: Request): Promise<Response> {
     if (route === "/links" && req.method === "POST") {
       const input = await body(req);
       if (
-        typeof input.id !== "string" || !uuid.test(input.id) ||
-        typeof input.title !== "string" || !input.title.trim() ||
+        typeof input.id !== "string" ||
+        !uuid.test(input.id) ||
+        typeof input.title !== "string" ||
+        !input.title.trim() ||
         input.title.trim().length > 120
       ) {
         throw new ApiError(400, "名前（120文字以内）とURLを入力してください。");
       }
       const code = btoa(
         String.fromCharCode(...crypto.getRandomValues(new Uint8Array(9))),
-      ).replace(/\+/g, "-").replace(/\//g, "_");
+      )
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_");
       return json(
         await rpc("kotonoha_qr", {
           ...args,
@@ -282,6 +340,7 @@ export async function handler(req: Request): Promise<Response> {
         if (input.confirmId !== match[1]) {
           throw new ApiError(400, "削除対象の確認が必要です。");
         }
+        await removeFile(match[1], session.workspaceId, rpc);
         return json(
           await rpc("kotonoha_qr_lifecycle", {
             ...args,
@@ -338,15 +397,18 @@ export async function handler(req: Request): Promise<Response> {
     }
     return json({ error: "ページが見つかりません。" }, 404);
   } catch (error) {
-    if (error instanceof ApiError) {
+    if (error instanceof ApiError || error instanceof FileError) {
       return json({ error: error.message }, error.status);
     }
     console.error(
       "QR request failed",
       error instanceof Error ? error.name : "unknown",
     );
-    return json({
-      error: "通信結果を確認できませんでした。もう一度お試しください。",
-    }, 503);
+    return json(
+      {
+        error: "通信結果を確認できませんでした。もう一度お試しください。",
+      },
+      503,
+    );
   }
 }
