@@ -15,6 +15,7 @@ export type QrLink = {
   active: boolean;
   created_at: string;
   last_accessed_at: string | null;
+  deleted_at: string | null;
 };
 export type QrHistory = {
   events: {

@@ -117,6 +117,21 @@ async function rpc(name: string, args: unknown) {
         "入力内容が変わりました。もう一度作成してください。",
       );
     }
+    if (data.message === "TRASHED") {
+      throw new ApiError(
+        409,
+        "このQRコードはゴミ箱にあります。復元してから操作してください。",
+      );
+    }
+    if (data.message === "NOT_TRASHED") {
+      throw new ApiError(
+        409,
+        "完全削除はゴミ箱内のQRコードだけに実行できます。",
+      );
+    }
+    if (data.message === "CONFIRM_REQUIRED") {
+      throw new ApiError(400, "削除対象の確認が必要です。");
+    }
     throw new ApiError(
       503,
       "保存・計測結果を確認できませんでした。もう一度お試しください。",
@@ -132,7 +147,7 @@ export async function handler(req: Request): Promise<Response> {
     "X-Content-Type-Options": "nosniff",
     Vary: "Origin",
     "Access-Control-Allow-Headers": "authorization,apikey,content-type",
-    "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
   };
   if (origin && origins.has(origin)) {
     headers["Access-Control-Allow-Origin"] = origin;
@@ -208,10 +223,14 @@ export async function handler(req: Request): Promise<Response> {
       throw new ApiError(400, "ページ指定が正しくありません。");
     }
     if (route === "/links" && req.method === "GET") {
+      const view = url.searchParams.get("view") ?? "active";
+      if (view !== "active" && view !== "trash") {
+        throw new ApiError(400, "一覧の指定が正しくありません。");
+      }
       return json(
         await rpc("kotonoha_qr", {
           ...args,
-          p_operation: "list",
+          p_operation: view === "trash" ? "trash_list" : "list",
           p_payload: { page },
         }),
       );
@@ -242,8 +261,36 @@ export async function handler(req: Request): Promise<Response> {
         201,
       );
     }
-    const match = route.match(/^\/links\/([^/]+)(\/history|\/analytics)?$/);
+    const match = route.match(
+      /^\/links\/([^/]+)(\/history|\/analytics|\/trash|\/restore)?$/,
+    );
     if (match && uuid.test(match[1])) {
+      if (
+        (match[2] === "/trash" || match[2] === "/restore") &&
+        req.method === "POST"
+      ) {
+        return json(
+          await rpc("kotonoha_qr_lifecycle", {
+            ...args,
+            p_operation: match[2] === "/trash" ? "trash" : "restore",
+            p_id: match[1],
+          }),
+        );
+      }
+      if (!match[2] && req.method === "DELETE") {
+        const input = await body(req);
+        if (input.confirmId !== match[1]) {
+          throw new ApiError(400, "削除対象の確認が必要です。");
+        }
+        return json(
+          await rpc("kotonoha_qr_lifecycle", {
+            ...args,
+            p_operation: "purge",
+            p_id: match[1],
+            p_confirm_id: input.confirmId,
+          }),
+        );
+      }
       if (match[2] === "/analytics" && req.method === "GET") {
         const days = Number(url.searchParams.get("days") ?? "30");
         const source = url.searchParams.get("source") ?? "all";
