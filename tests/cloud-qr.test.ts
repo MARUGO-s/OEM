@@ -19,6 +19,7 @@ Deno.env.set("SUPABASE_URL", "https://qr-test.invalid");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-key-only");
 let failure = false;
 let suspended = false;
+let lifecycleFailure = "";
 globalThis.fetch = async (input, init: any) => {
   const url = new URL(String(input));
   const args = JSON.parse(init!.body as string);
@@ -60,14 +61,30 @@ globalThis.fetch = async (input, init: any) => {
     assert.equal(args.p_owner, owner);
     return Response.json({ events: [], total: 0 });
   }
+  if (name === "kotonoha_qr_lifecycle") {
+    assert.equal(args.p_owner, owner);
+    assert.equal(args.p_id, id);
+    if (lifecycleFailure) {
+      return Response.json({ message: lifecycleFailure }, { status: 400 });
+    }
+    return Response.json(
+      args.p_operation === "purge" ? { id, purged: true } : {
+        id,
+        active: false,
+        deleted_at: args.p_operation === "trash"
+          ? new Date().toISOString()
+          : null,
+      },
+    );
+  }
   assert.equal(name, "kotonoha_qr");
   assert.equal(args.p_owner, owner);
   return Response.json(
-    args.p_operation === "list"
+    (args.p_operation === "list" || args.p_operation === "trash_list")
       ? { links: [], total: 0 }
       : args.p_operation === "history"
-        ? { events: [], total: 0 }
-        : { id, ...args.p_payload },
+      ? { events: [], total: 0 }
+      : { id, ...args.p_payload },
   );
 };
 function request(
@@ -93,6 +110,91 @@ Deno.test(
     try {
       assert.equal((await handler(request("/links"))).status, 401);
       assert.equal(calls.length, 0);
+      for (
+        const [route, method, input] of [
+          [`/links/${id}/trash`, "POST", undefined],
+          [`/links/${id}/restore`, "POST", undefined],
+          [`/links/${id}`, "DELETE", { confirmId: id }],
+        ] as const
+      ) {
+        assert.equal(
+          (await handler(request(route, method, input))).status,
+          401,
+        );
+      }
+      assert.equal(calls.length, 0);
+      assert.equal(
+        (await handler(request("/links?view=trash", "GET", undefined, token)))
+          .status,
+        200,
+      );
+      assert.equal(calls.at(-1)!.args.p_operation, "trash_list");
+      assert.equal(
+        (await handler(request("/links?view=invalid", "GET", undefined, token)))
+          .status,
+        400,
+      );
+      for (const action of ["trash", "restore"]) {
+        assert.equal(
+          (await handler(
+            request(
+              `/links/${id}/${action}`,
+              "POST",
+              { p_owner: eventId },
+              token,
+            ),
+          )).status,
+          200,
+        );
+        assert.equal(calls.at(-1)!.name, "kotonoha_qr_lifecycle");
+        assert.equal(calls.at(-1)!.args.p_operation, action);
+        assert.equal(calls.at(-1)!.args.p_owner, owner);
+      }
+      assert.equal(
+        (await handler(request(`/links/${id}`, "DELETE", {}, token))).status,
+        400,
+      );
+      assert.equal(
+        (await handler(
+          request(`/links/${id}`, "DELETE", { confirmId: eventId }, token),
+        )).status,
+        400,
+      );
+      assert.equal(
+        (await handler(
+          request(`/links/${id}`, "DELETE", { confirmId: id }, token),
+        )).status,
+        200,
+      );
+      assert.equal(calls.at(-1)!.args.p_confirm_id, id);
+      assert.equal(calls.at(-1)!.args.p_operation, "purge");
+      for (const message of ["TRASHED", "NOT_TRASHED"]) {
+        lifecycleFailure = message;
+        assert.equal(
+          (await handler(
+            request(`/links/${id}`, "DELETE", { confirmId: id }, token),
+          )).status,
+          409,
+        );
+      }
+      lifecycleFailure = "CONFIRM_REQUIRED";
+      assert.equal(
+        (await handler(
+          request(`/links/${id}`, "DELETE", { confirmId: id }, token),
+        )).status,
+        400,
+      );
+      lifecycleFailure = "";
+      assert.equal(
+        (await handler(request(`/links/${id}/trash`, "GET", undefined, token)))
+          .status,
+        404,
+      );
+      const preflight = await handler(request(`/links/${id}`, "OPTIONS"));
+      assert.match(
+        preflight.headers.get("access-control-allow-methods")!,
+        /DELETE/,
+      );
       assert.equal(
         (await handler(request("/links", "GET", undefined, createToken())))
           .status,
@@ -176,10 +278,12 @@ Deno.test(
         ).status,
         400,
       );
-      for (const path of [
-        "/multiapp/?s=q#abcdefgh1234",
-        "/multiapp/marugo/#abcdefgh1234",
-      ]) {
+      for (
+        const path of [
+          "/multiapp/?s=q#abcdefgh1234",
+          "/multiapp/marugo/#abcdefgh1234",
+        ]
+      ) {
         assert.equal(
           (
             await handler(
@@ -248,13 +352,15 @@ Deno.test(
         ).status,
         401,
       );
-      for (const query of [
-        "days=1",
-        "days=-7",
-        "days=90.5",
-        "days=oops",
-        "source=untrusted",
-      ]) {
+      for (
+        const query of [
+          "days=1",
+          "days=-7",
+          "days=90.5",
+          "days=oops",
+          "source=untrusted",
+        ]
+      ) {
         assert.equal(
           (
             await handler(
@@ -315,13 +421,15 @@ Deno.test(
       assert.equal(calls.at(-1)!.args.p_referrer_host, "example.com");
       assert.equal(calls.at(-1)!.args.p_device, "mobile");
       assert.equal(calls.at(-1)!.args.p_browser, "safari");
-      for (const extra of [
-        { source: "admin" },
-        {
-          referrerHost: "https://example.com/private?token=secret",
-        },
-        { referrerHost: "test@evil.invalid" },
-      ]) {
+      for (
+        const extra of [
+          { source: "admin" },
+          {
+            referrerHost: "https://example.com/private?token=secret",
+          },
+          { referrerHost: "test@evil.invalid" },
+        ]
+      ) {
         assert.equal(
           (
             await handler(

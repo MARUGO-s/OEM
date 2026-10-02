@@ -14,11 +14,15 @@ import {
   Play,
   QrCode,
   RefreshCw,
+  Trash2,
+  RotateCcw,
   X,
 } from "lucide-react";
 import { qrApi, type QrHistory, type QrLink, trackingUrl } from "./qr-api";
 import { isCloud } from "./cloud";
 import { QrAnalytics } from "./QrAnalytics";
+import { Modal } from "./Modal";
+import { lifecycleRequest } from "./qr-lifecycle.mjs";
 import {
   sourceLabels,
   deviceLabels,
@@ -41,6 +45,13 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
   const [links, setLinks] = useState<QrLink[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
+  const [view, setView] = useState<"active" | "trash">("active");
+  const [confirmation, setConfirmation] = useState<{
+    action: "trash" | "purge";
+    link: QrLink;
+  } | null>(null);
+  const [permanentConfirmed, setPermanentConfirmed] = useState(false);
+  const [actionError, setActionError] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -58,7 +69,10 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
   } | null>(null);
   const mounted = useRef(true);
   const currentPage = useRef(page);
+  const currentView = useRef(view);
+  const listRequest = useRef(0);
   currentPage.current = page;
+  currentView.current = view;
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -67,23 +81,34 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
   }, []);
   const refresh = useCallback(async () => {
     const requestedPage = page;
+    const requestedView = view;
+    const requestId = ++listRequest.current;
+    const current = () =>
+      mounted.current &&
+      currentPage.current === requestedPage &&
+      currentView.current === requestedView &&
+      listRequest.current === requestId;
     try {
       const data = await qrApi<{ links: QrLink[]; total: number }>(
-        `/links?page=${page}`,
+        `/links?page=${page}&view=${view}`,
       );
-      if (!mounted.current || currentPage.current !== requestedPage) return;
+      if (!current()) return;
+      if (page > 0 && page * 50 >= data.total) {
+        setPage(Math.max(0, Math.ceil(data.total / 50) - 1));
+        return;
+      }
       setLinks(data.links);
       setTotal(data.total);
       setError("");
       setSelected((prev) =>
-        prev ? data.links.find((link) => link.id === prev.id) || prev : null,
+        prev ? data.links.find((link) => link.id === prev.id) || null : null,
       );
     } catch (e) {
-      if (mounted.current) setError(errorText(e));
+      if (current()) setError(errorText(e));
     } finally {
-      if (mounted.current) setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [page]);
+  }, [page, view]);
   useEffect(() => {
     if (!isCloud) {
       setLoading(false);
@@ -212,6 +237,57 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
       setBusy(false);
     }
   }
+  function chooseView(next: "active" | "trash") {
+    if (busy || view === next) return;
+    setView(next);
+    setPage(0);
+    setLinks([]);
+    setTotal(0);
+    setLoading(true);
+    setSelected(null);
+    setError("");
+  }
+  function askDelete(link: QrLink, action: "trash" | "purge") {
+    setConfirmation({ link, action });
+    setPermanentConfirmed(false);
+    setActionError("");
+  }
+  async function lifecycle(
+    link: QrLink,
+    action: "trash" | "restore" | "purge",
+  ) {
+    if (busy || (action === "purge" && !permanentConfirmed)) return;
+    setBusy(true);
+    setActionError("");
+    setError("");
+    try {
+      const { path, ...options } = lifecycleRequest(
+        link.id,
+        action,
+        permanentConfirmed,
+      );
+      await qrApi(path, options);
+      ++listRequest.current;
+      setConfirmation(null);
+      setSelected((previous) => (previous?.id === link.id ? null : previous));
+      setLinks((previous) => previous.filter((row) => row.id !== link.id));
+      setTotal((previous) => Math.max(0, previous - 1));
+      notify(
+        action === "trash"
+          ? "ゴミ箱へ移動しました。転送は停止し、アクセス履歴は保持しています。"
+          : action === "restore"
+            ? "QRコードを復元しました。転送は停止中です。登録済み一覧から必要に応じて再開してください。"
+            : "QRコードとアクセス履歴を完全削除しました。復元はできません。",
+      );
+      await refresh();
+    } catch (e) {
+      const message = `${errorText(e)} 一覧を更新して状態を確認してください。`;
+      if (action === "restore") setError(message);
+      else setActionError(message);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div className="qr-page">
       <div className="page-heading">
@@ -228,7 +304,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
             void refresh();
             setDetailRefreshKey((n) => n + 1);
           }}
-          disabled={loading || !isCloud}
+          disabled={loading || busy || !isCloud}
         >
           <RefreshCw size={16} />
           更新
@@ -240,50 +316,83 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
         </div>
       ) : (
         <>
+          <div
+            className="qr-view-tabs qr-segmented"
+            role="group"
+            aria-label="QRコードの一覧"
+          >
+            <button
+              type="button"
+              aria-pressed={view === "active"}
+              disabled={busy}
+              onClick={() => chooseView("active")}
+            >
+              <QrCode size={16} />
+              登録済みQRコード
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === "trash"}
+              disabled={busy}
+              onClick={() => chooseView("trash")}
+            >
+              <Trash2 size={16} />
+              ゴミ箱
+            </button>
+          </div>
           {error && (
             <div className="error-message" role="alert">
               {error}
             </div>
           )}
-          <form className="qr-create-card" onSubmit={create}>
-            <label>
-              管理用の名前
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={120}
-                placeholder="例：店頭ポスター・秋のキャンペーン"
-                required
-                disabled={busy}
-              />
-            </label>
-            <label>
-              リンク先URL
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                maxLength={2048}
-                placeholder="https://example.com/"
-                required
-                disabled={busy}
-              />
-            </label>
-            <button className="button primary" disabled={busy}>
-              {busy ? (
-                <LoaderCircle size={17} className="spin" />
-              ) : (
-                <QrCode size={17} />
-              )}
-              QRコードを作成
-            </button>
-            <p>
-              QRには短い計測用URLが入ります。開くとアクセスを記録し、リンク先へ自動転送します。
+          {view === "active" && (
+            <>
+              <form className="qr-create-card" onSubmit={create}>
+                <label>
+                  管理用の名前
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    maxLength={120}
+                    placeholder="例：店頭ポスター・秋のキャンペーン"
+                    required
+                    disabled={busy}
+                  />
+                </label>
+                <label>
+                  リンク先URL
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    maxLength={2048}
+                    placeholder="https://example.com/"
+                    required
+                    disabled={busy}
+                  />
+                </label>
+                <button className="button primary" disabled={busy}>
+                  {busy ? (
+                    <LoaderCircle size={17} className="spin" />
+                  ) : (
+                    <QrCode size={17} />
+                  )}
+                  QRコードを作成
+                </button>
+                <p>
+                  QRには短い計測用URLが入ります。開くとアクセスを記録し、リンク先へ自動転送します。
+                </p>
+              </form>
+              <p className="qr-measure-note">
+                QR用・ボタン用・通常リンク用のURLで経路を識別します。回数には再読み込み・直接クリック・ボットも含み、人数や移動先の表示完了は計測しません。流入元が渡されない場合や以前のURLは「不明」です。端末・ブラウザーは推定です。
+              </p>
+            </>
+          )}
+          {view === "trash" && (
+            <p className="qr-measure-note">
+              ゴミ箱内のQR・短縮URLは転送されません。アクセス数・履歴は復元するまで保持されます。復元後も転送は停止中です。完全削除するとQRの設定と全アクセス履歴が消え、元に戻せません。自動削除はしません。
             </p>
-          </form>
-          <p className="qr-measure-note">
-            QR用・ボタン用・通常リンク用のURLで経路を識別します。回数には再読み込み・直接クリック・ボットも含み、人数や移動先の表示完了は計測しません。流入元が渡されない場合や以前のURLは「不明」です。端末・ブラウザーは推定です。
-          </p>
+          )}
           {selected && (
             <section className="qr-detail-card" aria-label="QRコードの詳細">
               <div className="qr-preview">
@@ -409,6 +518,15 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
                   {selected.active ? <Pause size={15} /> : <Play size={15} />}
                   {selected.active ? "転送を停止" : "転送を再開"}
                 </button>
+                <button
+                  type="button"
+                  className="button danger qr-trash-button"
+                  disabled={busy}
+                  onClick={() => askDelete(selected, "trash")}
+                >
+                  <Trash2 size={15} />
+                  ゴミ箱へ移動
+                </button>
                 <h3>
                   アクセス履歴 <small>日本時間</small>
                 </h3>
@@ -494,7 +612,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
             <QrAnalytics linkId={selected.id} refreshKey={detailRefreshKey} />
           )}
           <div className="qr-list-heading">
-            <h2>登録済みQRコード</h2>
+            <h2>{view === "trash" ? "ゴミ箱" : "登録済みQRコード"}</h2>
             <span>{total}件</span>
           </div>
           {loading ? (
@@ -504,38 +622,85 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
             </p>
           ) : !links.length ? (
             <div className="empty-state">
-              名前とURLを入力して、最初のQRコードを作成してください。
+              {view === "trash"
+                ? "ゴミ箱は空です。"
+                : "名前とURLを入力して、最初のQRコードを作成してください。"}
             </div>
           ) : (
             <div className="qr-link-list">
-              {links.map((link) => (
-                <button
-                  key={link.id}
-                  className={`qr-link-row ${
-                    selected?.id === link.id ? "selected" : ""
-                  }`}
-                  onClick={() => {
-                    setSelected(link);
-                    setHistoryPage(0);
-                  }}
-                >
-                  <span className="qr-link-icon">
-                    <QrCode size={24} />
-                  </span>
-                  <span className="qr-link-title">
-                    <b>{link.title}</b>
-                    <small>{link.target_url}</small>
-                    <small>作成 {dateTime(link.created_at)}</small>
-                  </span>
-                  <span className={`qr-status ${link.active ? "" : "paused"}`}>
-                    {link.active ? "転送中" : "停止中"}
-                  </span>
-                  <span className="qr-row-count">
-                    {link.scan_count.toLocaleString()}
-                    <small>アクセス</small>
-                  </span>
-                </button>
-              ))}
+              {links.map((link) =>
+                view === "trash" ? (
+                  <div key={link.id} className="qr-link-row qr-trash-row">
+                    <span className="qr-link-icon">
+                      <Trash2 size={24} />
+                    </span>
+                    <span className="qr-link-title">
+                      <b>{link.title}</b>
+                      <small>{link.target_url}</small>
+                      <small>
+                        ゴミ箱へ移動{" "}
+                        {link.deleted_at ? dateTime(link.deleted_at) : "—"}
+                      </small>
+                      <small>
+                        {link.scan_count.toLocaleString()}
+                        回のアクセス・履歴を保持
+                      </small>
+                    </span>
+                    <div className="qr-trash-actions">
+                      <button
+                        type="button"
+                        className="button secondary"
+                        aria-label={`${link.title}を復元`}
+                        disabled={busy}
+                        onClick={() => void lifecycle(link, "restore")}
+                      >
+                        <RotateCcw size={16} />
+                        復元
+                      </button>
+                      <button
+                        type="button"
+                        className="button danger"
+                        aria-label={`${link.title}を完全削除`}
+                        disabled={busy}
+                        onClick={() => askDelete(link, "purge")}
+                      >
+                        <Trash2 size={16} />
+                        完全削除
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    key={link.id}
+                    className={`qr-link-row ${
+                      selected?.id === link.id ? "selected" : ""
+                    }`}
+                    disabled={busy}
+                    onClick={() => {
+                      setSelected(link);
+                      setHistoryPage(0);
+                    }}
+                  >
+                    <span className="qr-link-icon">
+                      <QrCode size={24} />
+                    </span>
+                    <span className="qr-link-title">
+                      <b>{link.title}</b>
+                      <small>{link.target_url}</small>
+                      <small>作成 {dateTime(link.created_at)}</small>
+                    </span>
+                    <span
+                      className={`qr-status ${link.active ? "" : "paused"}`}
+                    >
+                      {link.active ? "転送中" : "停止中"}
+                    </span>
+                    <span className="qr-row-count">
+                      {link.scan_count.toLocaleString()}
+                      <small>アクセス</small>
+                    </span>
+                  </button>
+                ),
+              )}
             </div>
           )}
           {total > 50 && (
@@ -560,6 +725,73 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
             </div>
           )}
         </>
+      )}
+      {confirmation && (
+        <Modal
+          title={
+            confirmation.action === "purge"
+              ? "QRコードを完全削除しますか？"
+              : "QRコードをゴミ箱へ移動しますか？"
+          }
+          subtitle={confirmation.link.title}
+          onClose={() => setConfirmation(null)}
+          locked={busy}
+        >
+          <p className="qr-deletion-note">
+            {confirmation.action === "purge"
+              ? "このQRコードの設定・累計アクセス数・全アクセス履歴を完全に削除します。復元できず、配布済みのQR・短縮URLも利用できなくなります。"
+              : "このQRコードと短縮URLの転送を停止し、登録済み一覧からゴミ箱へ移動します。アクセス数・履歴は残り、ゴミ箱から復元できます。"}
+          </p>
+          {confirmation.action === "purge" && (
+            <label className="qr-purge-confirm">
+              <input
+                type="checkbox"
+                checked={permanentConfirmed}
+                disabled={busy}
+                onChange={(event) =>
+                  setPermanentConfirmed(event.target.checked)
+                }
+              />
+              QRコードと全アクセス履歴が消え、復元できないことを確認しました
+            </label>
+          )}
+          {actionError && (
+            <p className="error-message" role="alert">
+              {actionError}
+            </p>
+          )}
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="button secondary"
+              disabled={busy}
+              onClick={() => setConfirmation(null)}
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              className="button danger"
+              disabled={
+                busy || (confirmation.action === "purge" && !permanentConfirmed)
+              }
+              onClick={() =>
+                void lifecycle(confirmation.link, confirmation.action)
+              }
+            >
+              {busy ? (
+                <LoaderCircle size={16} className="spin" />
+              ) : (
+                <Trash2 size={16} />
+              )}
+              {busy
+                ? "処理しています…"
+                : confirmation.action === "purge"
+                  ? "完全削除する"
+                  : "ゴミ箱へ移動する"}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );
