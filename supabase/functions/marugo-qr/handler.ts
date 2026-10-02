@@ -1,0 +1,262 @@
+import { hashToken, validTokenFormat } from "../_shared/session.mjs";
+
+const origins = new Set([
+  "https://marugo-s.github.io",
+  "http://127.0.0.1:5188",
+  "http://localhost:5188",
+]);
+const uuid =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const codePattern = /^[A-Za-z0-9_-]{12}$/;
+class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+export function normalizeTarget(value: unknown): string {
+  if (
+    typeof value !== "string" || value.trim().length > 2048 ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    throw new ApiError(400, "正しいURLを入力してください。");
+  }
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new ApiError(
+      400,
+      "http:// または https:// で始まるURLを入力してください。",
+    );
+  }
+  if (
+    !["http:", "https:"].includes(url.protocol) || url.username ||
+    url.password || url.href.length > 2048
+  ) {
+    throw new ApiError(
+      400,
+      "認証情報を含まない http/https のURLを入力してください。",
+    );
+  }
+  if (
+    url.hostname === "marugo-s.github.io" &&
+    url.pathname.replace(/\/$/, "") === "/OEM/marugo"
+  ) {
+    throw new ApiError(
+      400,
+      "計測用URL自身には転送できません。元のサイトURLを入力してください。",
+    );
+  }
+  return url.href;
+}
+async function body(req: Request): Promise<Record<string, unknown>> {
+  const reader = req.body?.getReader();
+  if (!reader) throw new ApiError(400, "入力内容を確認してください。");
+  let size = 0;
+  const chunks: Uint8Array[] = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > 8192) {
+      await reader.cancel();
+      throw new ApiError(413, "入力内容が長すぎます。");
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  try {
+    const value = JSON.parse(new TextDecoder().decode(bytes));
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error();
+    }
+    return value;
+  } catch {
+    throw new ApiError(400, "入力内容を確認してください。");
+  }
+}
+async function rpc(name: string, args: unknown) {
+  const base = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!base || !key) throw new ApiError(503, "接続の設定が完了していません。");
+  const response = await fetch(`${base}/rest/v1/rpc/${name}`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(args),
+    signal: AbortSignal.timeout(10000),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    if (data.message === "NOT_FOUND") {
+      throw new ApiError(404, "このQRコードは見つかりません。");
+    }
+    if (data.message === "INACTIVE") {
+      throw new ApiError(410, "このQRコードは停止中です。");
+    }
+    if (data.message === "REQUEST_CONFLICT") {
+      throw new ApiError(
+        409,
+        "入力内容が変わりました。もう一度作成してください。",
+      );
+    }
+    throw new ApiError(
+      503,
+      "保存・計測結果を確認できませんでした。もう一度お試しください。",
+    );
+  }
+  return data;
+}
+export async function handler(req: Request): Promise<Response> {
+  const origin = req.headers.get("origin");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    Vary: "Origin",
+    "Access-Control-Allow-Headers": "authorization,apikey,content-type",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
+  };
+  if (origin && origins.has(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers });
+  if (origin && !origins.has(origin)) {
+    return json({ error: "アクセス元が許可されていません。" }, 403);
+  }
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+  try {
+    const url = new URL(req.url);
+    const prefix = "/marugo-qr";
+    const index = url.pathname.indexOf(prefix);
+    if (index < 0) return json({ error: "ページが見つかりません。" }, 404);
+    const route = url.pathname.slice(index + prefix.length);
+    if (route === "/scan") {
+      if (req.method !== "POST") {
+        return json({ error: "Method not allowed" }, 405);
+      }
+      const input = await body(req);
+      if (
+        typeof input.code !== "string" || !codePattern.test(input.code) ||
+        typeof input.eventId !== "string" || !uuid.test(input.eventId)
+      ) {
+        throw new ApiError(400, "QRコードのURLが正しくありません。");
+      }
+      const data = await rpc("kotonoha_qr", {
+        p_operation: "scan",
+        p_payload: {
+          code: input.code,
+          eventId: input.eventId,
+          userAgent: (req.headers.get("user-agent") || "").slice(0, 512),
+        },
+      });
+      return json({ targetUrl: normalizeTarget(data.targetUrl) });
+    }
+    // All management requests use exactly the existing shared-session check.
+    const token = req.headers.get("authorization")?.match(/^Bearer (.+)$/i)
+      ?.[1];
+    if (!validTokenFormat(token)) {
+      throw new ApiError(401, "ログインが必要です。");
+    }
+    const session = await rpc("kotonoha_auth", {
+      p_operation: "session",
+      p_payload: { tokenHash: await hashToken(token!) },
+    });
+    if (!session?.workspaceId || session.error) {
+      throw new ApiError(
+        401,
+        "ログインの有効期限が切れています。再度ログインしてください。",
+      );
+    }
+    const args = { p_owner: session.workspaceId };
+    const page = Number(url.searchParams.get("page") || 0);
+    if (!Number.isInteger(page) || page < 0 || page > 100000) {
+      throw new ApiError(400, "ページ指定が正しくありません。");
+    }
+    if (route === "/links" && req.method === "GET") {
+      return json(
+        await rpc("kotonoha_qr", {
+          ...args,
+          p_operation: "list",
+          p_payload: { page },
+        }),
+      );
+    }
+    if (route === "/links" && req.method === "POST") {
+      const input = await body(req);
+      if (
+        typeof input.id !== "string" || !uuid.test(input.id) ||
+        typeof input.title !== "string" || !input.title.trim() ||
+        input.title.trim().length > 120
+      ) {
+        throw new ApiError(400, "名前（120文字以内）とURLを入力してください。");
+      }
+      const code = btoa(
+        String.fromCharCode(...crypto.getRandomValues(new Uint8Array(9))),
+      ).replace(/\+/g, "-").replace(/\//g, "_");
+      return json(
+        await rpc("kotonoha_qr", {
+          ...args,
+          p_operation: "create",
+          p_id: input.id,
+          p_payload: {
+            code,
+            title: input.title.trim(),
+            targetUrl: normalizeTarget(input.targetUrl),
+          },
+        }),
+        201,
+      );
+    }
+    const match = route.match(/^\/links\/([^/]+)(\/history)?$/);
+    if (match && uuid.test(match[1])) {
+      if (match[2] && req.method === "GET") {
+        return json(
+          await rpc("kotonoha_qr", {
+            ...args,
+            p_operation: "history",
+            p_id: match[1],
+            p_payload: { page },
+          }),
+        );
+      }
+      if (!match[2] && req.method === "PATCH") {
+        const input = await body(req);
+        if (typeof input.active !== "boolean") {
+          throw new ApiError(400, "停止・再開の指定が正しくありません。");
+        }
+        return json(
+          await rpc("kotonoha_qr", {
+            ...args,
+            p_operation: "active",
+            p_id: match[1],
+            p_payload: { active: input.active },
+          }),
+        );
+      }
+    }
+    return json({ error: "ページが見つかりません。" }, 404);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return json({ error: error.message }, error.status);
+    }
+    console.error(
+      "QR request failed",
+      error instanceof Error ? error.name : "unknown",
+    );
+    return json({
+      error: "通信結果を確認できませんでした。もう一度お試しください。",
+    }, 503);
+  }
+}

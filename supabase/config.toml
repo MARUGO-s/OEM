@@ -3,3 +3,7 @@ project_id = "kotonoha-oem"
 [functions.kotonoha-api]
 # JWT is verified with auth.getUser() inside the function, including new signing keys.
 verify_jwt = false
+
+[functions.marugo-qr]
+# /scan is public; management validates kotonoha's shared sessions in handler.ts.
+verify_jwt = false
