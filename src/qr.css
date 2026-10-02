@@ -703,3 +703,53 @@
     width: 100%;
   }
 }
+.qr-file-picker {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+.qr-file-dropzone {
+  border: 2px dashed #c8bfdf;
+  border-radius: 12px;
+  background: #fff;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.qr-file-dropzone.dragging {
+  border-color: #7556b2;
+  background: #eee7fc;
+}
+.qr-file-dropzone.locked {
+  opacity: 0.6;
+}
+.qr-file-drop-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 145px;
+  width: 100%;
+  padding: 18px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #68538e;
+  font: inherit;
+  cursor: pointer;
+}
+.qr-file-drop-button span {
+  font-size: 13px;
+  color: #697184;
+}
+.qr-file-drop-button:disabled {
+  cursor: not-allowed;
+}
+.qr-file-drop-button:focus-visible {
+  outline: 3px solid #7556b2;
+  outline-offset: 3px;
+}
+.qr-file-upload input[hidden] {
+  display: none;
+}
