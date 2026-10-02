@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { PdfPreview } from "./PdfPreview";
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./cloud";
 import "./qr-file-viewer.css";
 type PublicFile = {
@@ -89,12 +90,7 @@ function PublicQrFile() {
             <button onClick={() => setReload((n) => n + 1)}>表示を更新</button>
           </nav>
           {file.mime === "application/pdf" ? (
-            <iframe
-              key={file.url}
-              src={file.url}
-              title={`${file.title}のPDF`}
-              referrerPolicy="no-referrer"
-            />
+            <PdfPreview key={file.url} url={file.url} title={file.title} />
           ) : (
             <img src={file.url} alt={file.title} referrerPolicy="no-referrer" />
           )}

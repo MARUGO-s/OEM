@@ -169,6 +169,10 @@ Deno.test(
       assert.equal(data.path, undefined);
       assert.match(data.url, /object\/sign/);
       assert.equal(
+        new URL(data.downloadUrl).searchParams.get("download"),
+        "menu.pdf",
+      );
+      assert.equal(
         (
           await handler(
             request(`/links/${id}`, "DELETE", { confirmId: "wrong" }),
