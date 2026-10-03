@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Modal } from "./Modal";
-import { accountApi, type QrMember, type QrStore } from "./qr-account-client";
+import {
+  accountApi,
+  AccountResultUnconfirmedError,
+  type QrMember,
+  type QrStore,
+} from "./qr-account-client";
 type Action =
   "approve" | "suspend" | "grant_admin" | "revoke_admin" | "assign_store";
 const labels: Record<Action, string> = {
@@ -26,6 +31,7 @@ export function QrAccountManagement({
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [uncertain, setUncertain] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<{
     member: QrMember;
@@ -38,6 +44,7 @@ export function QrAccountManagement({
     const id = ++request.current;
     setLoading(true);
     setError("");
+    setUncertain(false);
     try {
       const result = await accountApi<{ members: QrMember[]; total: number }>(
         `/members?page=${page}${filter ? `&storeId=${encodeURIComponent(filter)}` : ""}`,
@@ -50,7 +57,7 @@ export function QrAccountManagement({
       if (id === request.current) {
         setMembers([]);
         setError(
-          e instanceof Error ? e.message : "一覧を取得できませんでした。",
+          `一覧を更新できませんでした。${e instanceof Error ? e.message : "接続を確認してください。"}`,
         );
       }
     } finally {
@@ -81,6 +88,7 @@ export function QrAccountManagement({
       notify("アカウントの設定を保存しました。");
       await refresh();
     } catch (e) {
+      setUncertain(e instanceof AccountResultUnconfirmedError);
       setError(
         e instanceof Error
           ? e.message
@@ -125,7 +133,12 @@ export function QrAccountManagement({
         </button>
       </div>
       {error && (
-        <div className="error-message" role="alert">
+        <div
+          className={
+            uncertain ? "qr-account-message qr-result-unknown" : "error-message"
+          }
+          role="alert"
+        >
           {error}
         </div>
       )}
@@ -192,6 +205,7 @@ export function QrAccountManagement({
                             key={action}
                             disabled={
                               busy ||
+                              uncertain ||
                               ((action === "approve" ||
                                 action === "grant_admin") &&
                                 !member.email_verified)
@@ -273,11 +287,29 @@ export function QrAccountManagement({
             <p>この操作を実行しますか？変更履歴は記録されます。</p>
           )}
           {error && (
-            <div className="error-message" role="alert">
+            <div
+              className={
+                uncertain
+                  ? "qr-account-message qr-result-unknown"
+                  : "error-message"
+              }
+              role="alert"
+            >
               {error}
             </div>
           )}
           <div className="qr-admin-tabs">
+            {uncertain && (
+              <button
+                className="button secondary"
+                onClick={() => {
+                  setConfirmation(null);
+                  void refresh();
+                }}
+              >
+                一覧で保存結果を確認
+              </button>
+            )}
             <button
               className="button secondary"
               disabled={busy}
@@ -288,7 +320,9 @@ export function QrAccountManagement({
             <button
               className="button primary"
               disabled={
-                busy || (confirmation.action === "assign_store" && !storeId)
+                busy ||
+                uncertain ||
+                (confirmation.action === "assign_store" && !storeId)
               }
               onClick={() => void update()}
             >

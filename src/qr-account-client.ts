@@ -88,25 +88,44 @@ export async function qrAccessToken() {
 export function completeAccountRecovery() {
   callback = Promise.resolve({ recovery: false, message: "" });
 }
+export class AccountResultUnconfirmedError extends Error {
+  constructor() {
+    super(
+      "保存結果を確認できませんでした。処理済みの可能性があります。もう一度実行する前に、一覧や承認状態を更新して確認してください。",
+    );
+  }
+}
 export async function accountApi<T>(
   path: string,
   options: RequestInit = {},
   publicRequest = false,
 ): Promise<T> {
   const token = publicRequest ? null : await qrAccessToken();
-  const response = await fetch(
-    `${SUPABASE_URL}/functions/v1/marugo-accounts${path}`,
-    {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_PUBLISHABLE_KEY,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  let response: Response;
+  let data: any;
+  const writing = options.method && options.method !== "GET";
+  try {
+    response = await fetch(
+      `${SUPABASE_URL}/functions/v1/marugo-accounts${path}`,
+      {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        signal: AbortSignal.timeout(15000),
       },
-      signal: AbortSignal.timeout(15000),
-    },
-  );
-  const data = await response.json();
+    );
+    data = await response.json();
+  } catch {
+    if (writing) throw new AccountResultUnconfirmedError();
+    throw new Error(
+      "情報を取得できませんでした。接続を確認し、画面を更新してください。",
+    );
+  }
+  if (!response.ok && response.status >= 500 && writing)
+    throw new AccountResultUnconfirmedError();
   if (!response.ok)
     throw new Error(data.error || "通信結果を確認できませんでした。");
   return data as T;

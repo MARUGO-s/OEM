@@ -4,13 +4,20 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import * as routing from "../src/qr-account-routing.mjs";
-function harness(url, { recovery = false, failure = false } = {}) {
+function harness(
+  url,
+  { recovery = false, failure = false, fetchResult = null } = {},
+) {
   const callbacks = new Set();
   let exchanges = 0;
   let clientOptions;
   const changes = [];
   const module = { exports: {} };
   const auth = {
+    getSession: async () => ({
+      data: { session: { access_token: "test.native.jwt" } },
+      error: null,
+    }),
     onAuthStateChange(fn) {
       callbacks.add(fn);
       return {
@@ -51,6 +58,11 @@ function harness(url, { recovery = false, failure = false } = {}) {
     URL,
     Promise,
     Error,
+    AbortSignal,
+    fetch: async () => {
+      if (fetchResult instanceof Error) throw fetchResult;
+      return fetchResult;
+    },
     location: new URL(url),
     history: {
       replaceState(...args) {
@@ -149,5 +161,44 @@ test("Every QR path is bound to the immutable selected store", () => {
   assert.equal(
     routing.passwordProblem("longpassword123", "longpassword123"),
     "",
+  );
+});
+test("Account mutation transport failures are unconfirmed, not rejected; known denials stay rejected", async () => {
+  const lost = harness("https://marugo-s.github.io/multiapp/", {
+    fetchResult: new Error("offline"),
+  });
+  await assert.rejects(
+    lost.client.accountApi("/members/test", { method: "POST" }),
+    (e) =>
+      e instanceof lost.client.AccountResultUnconfirmedError &&
+      /処理済み/.test(e.message),
+  );
+  await assert.rejects(
+    lost.client.accountApi("/members"),
+    /情報を取得できません/,
+  );
+  const denied = harness("https://marugo-s.github.io/multiapp/", {
+    fetchResult: {
+      ok: false,
+      status: 403,
+      json: async () => ({ error: "全店舗管理者だけが操作できます。" }),
+    },
+  });
+  await assert.rejects(
+    denied.client.accountApi("/members/test", { method: "POST" }),
+    (e) =>
+      !(e instanceof denied.client.AccountResultUnconfirmedError) &&
+      /全店舗管理者/.test(e.message),
+  );
+  const server = harness("https://marugo-s.github.io/multiapp/", {
+    fetchResult: {
+      ok: false,
+      status: 503,
+      json: async () => ({ error: "communication" }),
+    },
+  });
+  await assert.rejects(
+    server.client.accountApi("/members/test", { method: "POST" }),
+    (e) => e instanceof server.client.AccountResultUnconfirmedError,
   );
 });

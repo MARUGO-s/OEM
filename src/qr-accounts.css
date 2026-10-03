@@ -1,3 +1,8 @@
+.qr-result-unknown {
+  background: #fff7df;
+  border-color: #ead8a1;
+  color: #785d25;
+}
 .qr-account-access h3 {
   margin: 0 0 20px;
   font-size: 21px;

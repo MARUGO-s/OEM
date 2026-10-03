@@ -142,7 +142,7 @@ export function QrAccountAccess({
         });
         if (failure)
           throw new Error(
-            "登録できませんでした。メール送信制限や接続を確認して、時間をおいてお試しください。",
+            "登録・メール送信の結果を確認できませんでした。確認メールや管理者の登録一覧をご確認ください。登録済みの場合はログインまたは確認メールの再送をお試しください。",
           );
         setPassword("");
         setConfirmation("");
@@ -181,7 +181,7 @@ export function QrAccountAccess({
         const { error: failure } = await qrAuth.auth.updateUser({ password });
         if (failure)
           throw new Error(
-            "パスワードを変更できませんでした。再設定メールを送信し直してください。",
+            "パスワードの変更結果を確認できませんでした。新しいパスワードでログインを確認し、必要であれば再設定メールを送信し直してください。",
           );
         recoveryAllowed.current = false;
         completeAccountRecovery();
