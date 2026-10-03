@@ -18,6 +18,9 @@ import {
 } from "./cloud";
 import { api } from "./api";
 import { ExternalApplications } from "./ExternalApplications";
+import { QrAccountAccess } from "./QrAccountAccess";
+import { isAccountNavigation } from "./qr-account-routing.mjs";
+import "./qr-accounts.css";
 
 export type Application = "kotonoha" | "qr";
 export function AuthGate({
@@ -28,8 +31,9 @@ export function AuthGate({
     chooseApplication: () => void,
   ) => ReactNode;
 }) {
-  const [selectedApplication, setSelectedApplication] =
-    useState<Application>("kotonoha");
+  const [selectedApplication, setSelectedApplication] = useState<Application>(
+    isAccountNavigation(location.search, location.hash) ? "qr" : "kotonoha",
+  );
   const [application, setApplication] = useState<Application | null>(null);
   const [session, setSession] = useState<SharedSession | null>(null);
   const [loading, setLoading] = useState(isCloud);
@@ -43,7 +47,8 @@ export function AuthGate({
     const sync = () => {
       const restored = getSession();
       setSession(restored);
-      if (!restored) setApplication(null);
+      if (!restored)
+        setApplication((current) => (current === "kotonoha" ? null : current));
       setLoading(false);
     };
     async function restore() {
@@ -110,7 +115,7 @@ export function AuthGate({
       setBusy(false);
     }
   }
-  if (application && (!isCloud || session))
+  if (application && (application === "qr" || !isCloud || session))
     return (
       <>
         {children(application, () => {
@@ -152,7 +157,7 @@ export function AuthGate({
         </span>
       </section>
       <section className="login-form-panel">
-        <form onSubmit={login}>
+        <div className="login-form-content">
           <span className="login-lock">
             <LockKeyhole size={25} />
           </span>
@@ -160,7 +165,7 @@ export function AuthGate({
           <p>
             {session
               ? "ログイン済みです。アプリを選んで開いてください。"
-              : "アプリを選び、共通のID・パスワードでログインしてください。"}
+              : "アプリを選んでログインしてください。QRは個人のメールアドレスで利用します。"}
           </p>
           <fieldset className="application-options" disabled={busy}>
             <legend>利用するアプリ</legend>
@@ -205,55 +210,64 @@ export function AuthGate({
               </label>
             ))}
           </fieldset>
-          {isCloud && !session && (
-            <>
-              <label className="field">
-                ログインID
-                <input
-                  type="text"
-                  autoComplete="username"
-                  value={loginId}
-                  onChange={(e) => setLoginId(e.target.value)}
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  required
-                  placeholder="ログインIDを入力"
-                />
-              </label>
-              <label className="field">
-                パスワード
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </label>
-            </>
+          {selectedApplication === "qr" ? (
+            <QrAccountAccess
+              onAuthenticated={() => setApplication("qr")}
+              onBusy={setBusy}
+            />
+          ) : (
+            <form onSubmit={login}>
+              {isCloud && !session && (
+                <>
+                  <label className="field">
+                    ログインID
+                    <input
+                      type="text"
+                      autoComplete="username"
+                      value={loginId}
+                      onChange={(e) => setLoginId(e.target.value)}
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      required
+                      placeholder="ログインIDを入力"
+                    />
+                  </label>
+                  <label className="field">
+                    パスワード
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </label>
+                </>
+              )}
+              {error && (
+                <div className="error-message" role="alert">
+                  {error}
+                </div>
+              )}
+              <button className="button primary" disabled={busy}>
+                {busy ? (
+                  <LoaderCircle size={17} className="spin" />
+                ) : (
+                  <ArrowRight size={17} />
+                )}
+                {busy
+                  ? "ログインしています…"
+                  : `kotonoha${session || !isCloud ? "を開く" : "にログイン"}`}
+              </button>
+              <div className="login-account-note">
+                <ShieldCheck size={17} />
+                <p>
+                  kotonohaはこれまでの共通IDで利用します。会議の記録はチームで共有されます。QRは個人アカウント・店舗別の管理です。共用端末では利用後にログアウトしてください。
+                </p>
+              </div>
+            </form>
           )}
-          {error && (
-            <div className="error-message" role="alert">
-              {error}
-            </div>
-          )}
-          <button className="button primary" disabled={busy}>
-            {busy ? (
-              <LoaderCircle size={17} className="spin" />
-            ) : (
-              <ArrowRight size={17} />
-            )}
-            {busy
-              ? "ログインしています…"
-              : `${selectedApplication === "qr" ? "MARUGO QR" : "kotonoha"}${session || !isCloud ? "を開く" : "にログイン"}`}
-          </button>
-          <div className="login-account-note">
-            <ShieldCheck size={17} />
-            <p>
-              両アプリは共通のID・パスワードで利用します。会議の記録とQRの登録・アクセス履歴はチームで共有されます。アプリの切り替えでログイン状態は変わりません。共用端末では利用後にログアウトしてください。
-            </p>
-          </div>
-        </form>
+        </div>
       </section>
     </div>
   );

@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { handler } from "../supabase/functions/marugo-qr/handler.ts";
-import { createToken } from "../supabase/functions/_shared/session.mjs";
 const id = "00000000-0000-4000-8000-000000000011";
 const owner = "00000000-0000-4000-8000-000000000012";
 const code = "fileTest0001";
-const token = createToken();
+const token = "test.valid.jwt";
 Deno.env.set("SUPABASE_URL", "https://file-test.invalid");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-only");
 const file = {
@@ -38,11 +37,16 @@ Deno.test(
   async () => {
     globalThis.fetch = async (input, init: any) => {
       const url = new URL(String(input));
+      if (url.pathname === "/auth/v1/user")
+        return Response.json({
+          id: owner,
+          email_confirmed_at: "2026-10-03T00:00:00Z",
+        });
       if (url.pathname.startsWith("/rest/v1/rpc/")) {
         const args = JSON.parse(init.body);
         const name = url.pathname.split("/").at(-1);
         calls.push({ name, args });
-        if (name === "kotonoha_auth")
+        if (name === "marugo_qr_accounts")
           return Response.json({ workspaceId: owner });
         if (name === "kotonoha_qr_lifecycle")
           return Response.json({ id, purged: true });

@@ -1,0 +1,128 @@
+.qr-account-access h3 {
+  margin: 0 0 20px;
+  font-size: 21px;
+}
+.qr-account-access form {
+  max-width: none;
+}
+.qr-account-access .field small {
+  color: #747789;
+  margin-top: 7px;
+}
+.qr-account-message {
+  padding: 16px 18px;
+  border: 1px solid #d9d2f7;
+  background: #f5f2fc;
+  border-radius: 12px;
+  color: #514774;
+  line-height: 1.8;
+  margin: 12px 0 20px;
+}
+.qr-account-message .button {
+  margin-left: 12px;
+}
+.qr-auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-top: 22px;
+}
+.qr-auth-links button {
+  background: none;
+  border: none;
+  color: #6553c7;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  padding: 4px 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+}
+.qr-store-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 24px 0;
+}
+.qr-store-heading h1 {
+  font-size: clamp(24px, 3vw, 34px);
+  margin: 6px 0;
+}
+.qr-store-heading p {
+  color: #747789;
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+.qr-store-heading .field {
+  min-width: 240px;
+}
+.qr-store-heading .eyebrow {
+  font-size: 12px;
+}
+.qr-admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 10px 0 26px;
+}
+.qr-affiliation-form {
+  max-width: 440px;
+}
+.qr-account-table {
+  overflow-x: auto;
+  border: 1px solid #e3def1;
+  border-radius: 14px;
+  background: white;
+}
+.qr-account-table table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 790px;
+}
+.qr-account-table th,
+.qr-account-table td {
+  text-align: left;
+  padding: 17px;
+  border-bottom: 1px solid #ede9f6;
+  vertical-align: top;
+}
+.qr-account-table th {
+  background: #f6f3fc;
+  font-size: 13px;
+}
+.qr-account-table td {
+  font-size: 14px;
+}
+.qr-account-table small {
+  display: block;
+  color: #747789;
+  font-size: 12px;
+  margin: 5px 0;
+}
+.qr-member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 310px;
+}
+.qr-member-actions .button {
+  font-size: 12px;
+  padding: 8px 10px;
+}
+.qr-account-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+@media (max-width: 600px) {
+  .qr-store-heading .field {
+    width: 100%;
+  }
+  .qr-account-message .button {
+    margin: 12px 0 0;
+  }
+}

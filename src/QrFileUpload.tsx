@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { FileUp, LoaderCircle } from "lucide-react";
-import { qrApi, type QrLink } from "./qr-api";
+import { useQrApi, type QrLink } from "./qr-api";
 import { isFileDrag, selectedQrFile } from "./qr-file-selection.mjs";
 import {
   fileSpecification,
@@ -48,6 +48,7 @@ export function QrFileUpload({
   onBusy: (busy: boolean) => void;
   busy: boolean;
 }) {
+  const qrApi = useQrApi();
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [confirmed, setConfirmed] = useState(false);

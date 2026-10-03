@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, TrendingUp } from "lucide-react";
-import { qrApi, type QrAnalyticsData } from "./qr-api";
+import { useQrApi, type QrAnalyticsData } from "./qr-api";
 import { chartGeometry } from "./qr-chart.mjs";
 import { sourceLabels, deviceLabels, browserLabels } from "./qr-labels.mjs";
 
@@ -88,6 +88,7 @@ export function QrAnalytics({
   linkId: string;
   refreshKey: number;
 }) {
+  const qrApi = useQrApi();
   const [days, setDays] = useState(30);
   const [source, setSource] = useState("all");
   const [view, setView] = useState<"chart" | "table">("chart");

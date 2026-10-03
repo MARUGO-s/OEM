@@ -1,17 +1,31 @@
 import { isTrackingNavigation } from "./qr-routing.mjs";
+import { isAccountNavigation } from "./qr-account-routing.mjs";
 
 const initialHash = location.hash;
+const accountNavigation = isAccountNavigation(location.search, initialHash);
 window.addEventListener("hashchange", () => {
   if (
-    location.hash !== initialHash &&
-    (isTrackingNavigation(initialHash) || isTrackingNavigation(location.hash))
+    !isAccountNavigation(location.search, location.hash) &&
+    (isTrackingNavigation(location.hash) ||
+      (!accountNavigation && isTrackingNavigation(initialHash)))
   ) {
     location.reload();
   }
 });
 
 // A tracking link must not load the workspace or require a shared login.
-if (isTrackingNavigation(location.hash)) {
+if (accountNavigation) {
+  for (const [name, content] of [
+    ["robots", "noindex, nofollow"],
+    ["referrer", "no-referrer"],
+  ]) {
+    const meta = document.createElement("meta");
+    meta.name = name;
+    meta.content = content;
+    document.head.append(meta);
+  }
+  void import("./Workspace");
+} else if (isTrackingNavigation(location.hash)) {
   document.title = "MARUGO QR — サイトへ移動";
   for (const [name, content] of [
     ["robots", "noindex, nofollow"],
