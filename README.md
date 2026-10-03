@@ -6,7 +6,7 @@
 
 ## アプリの入口
 
-multiappのトップページには、hibinowa（LINEレポート）・ajisai（レシピ管理）・meguri（貸借管理）・musubi（M-talk）・shiori（Journal Report）・mimiyori（口コミ／予約管理）へ移動する6つのリンクボタンがあります。機能名はサブタイトルに表示し、名前は入口での表示だけを変更します。各アプリのURL・アプリ内の名称は変更しません。ログイン前でも開けます。同じタブで各アプリへ移動し、ブラウザーの「戻る」で入口へ戻れます。移動先のログイン・アクセス権は各アプリの設定に従い、multiappのID・パスワードやセッションをURLに付けて渡しません。
+multiappのトップページには、hibinowa（LINEレポート）・ajisai（レシピ管理）・meguri（貸借管理）・musubi（M-talk）・shiori（Journal Report）・mimiyori（口コミ／予約管理）・Instatic TalksX（SNS一括管理）へ移動する7つのリンクボタンがあります。SNSの移動先は [Instatic TalksX](https://marugo-s.github.io/sns_management/) です。機能名はサブタイトルに表示し、名前は入口での表示だけを変更します。各アプリのURL・アプリ内の名称は変更しません。ログイン前でも開けます。同じタブで各アプリへ移動し、ブラウザーの「戻る」で入口へ戻れます。移動先のログイン・アクセス権は各アプリの設定に従い、multiappのID・パスワードやセッションをURLに付けて渡しません。
 
 「このページで開く」ではkotonohaまたはMARUGO QRを選びます。kotonohaは従来の共通ID、QRは個人メールアドレスでログインします。追加のリンクボタンは移動先の認証設定を変更しません。
 
