@@ -42,4 +42,11 @@ export const applicationLinks = [
     icon: "gourmet",
     href: "https://marugo-s.github.io/gourmet/",
   },
+  {
+    id: "sns",
+    name: "Instatic TalksX",
+    note: "SNS一括管理",
+    icon: "sns",
+    href: "https://marugo-s.github.io/sns_management/",
+  },
 ];

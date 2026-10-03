@@ -14,14 +14,15 @@ const expected = [
   "https://marugo-s.github.io/line_report/chat.html",
   "https://marugo-s.github.io/line_report/jnm/jnl2txt.html",
   "https://marugo-s.github.io/gourmet/",
+  "https://marugo-s.github.io/sns_management/",
 ];
 
-test("Application launcher preserves all six exact public destinations without credentials", () => {
+test("Application launcher preserves all seven exact public destinations without credentials", () => {
   assert.deepEqual(
     applicationLinks.map((app) => app.href),
     expected,
   );
-  assert.equal(new Set(applicationLinks.map((app) => app.id)).size, 6);
+  assert.equal(new Set(applicationLinks.map((app) => app.id)).size, 7);
   for (const app of applicationLinks) {
     const url = new URL(app.href);
     assert.equal(url.protocol, "https:");
@@ -34,7 +35,7 @@ test("Application launcher preserves all six exact public destinations without c
   }
 });
 
-test("Launcher renders six accessible, same-tab anchors independently of shared authentication", () => {
+test("Launcher renders seven accessible, same-tab anchors independently of shared authentication", () => {
   const source = readFileSync(
     new URL("../src/ExternalApplications.tsx", import.meta.url),
     "utf8",
@@ -63,7 +64,7 @@ test("Launcher renders six accessible, same-tab anchors independently of shared 
     [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1]),
     expected,
   );
-  assert.equal((html.match(/<a /g) || []).length, 6);
+  assert.equal((html.match(/<a /g) || []).length, 7);
   assert.match(html, /<nav[^>]+aria-labelledby="external-applications-title"/);
   assert.match(html, /id="external-applications-title"/);
   assert.ok(!html.includes('target="_blank"'));
@@ -72,4 +73,23 @@ test("Launcher renders six accessible, same-tab anchors independently of shared 
     assert.ok(html.includes(`<strong>${app.name}</strong>`));
     assert.ok(html.includes(`<small>${app.note}</small>`));
   }
+});
+
+test("SNS launcher opens Instatic TalksX without adding it to shared login", () => {
+  assert.deepEqual(
+    applicationLinks.find((app) => app.id === "sns"),
+    {
+      id: "sns",
+      name: "Instatic TalksX",
+      note: "SNS一括管理",
+      icon: "sns",
+      href: "https://marugo-s.github.io/sns_management/",
+    },
+  );
+  const authGate = readFileSync(
+    new URL("../src/AuthGate.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(authGate, /type Application = "kotonoha" \| "qr";/);
+  assert.ok(!authGate.includes("sns_management"));
 });

@@ -5,6 +5,7 @@ import {
   Landmark,
   MessageCircle,
   NotebookPen,
+  Share2,
   Star,
 } from "lucide-react";
 import { applicationLinks } from "./application-links.mjs";
@@ -16,6 +17,7 @@ const icons: Record<string, typeof FileText> = {
   chat: MessageCircle,
   journal: NotebookPen,
   gourmet: Star,
+  sns: Share2,
 };
 
 export function ExternalApplications() {
