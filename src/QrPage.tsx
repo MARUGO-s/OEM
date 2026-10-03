@@ -18,7 +18,7 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
-import { qrApi, type QrHistory, type QrLink, trackingUrl } from "./qr-api";
+import { useQrApi, type QrHistory, type QrLink, trackingUrl } from "./qr-api";
 import { isCloud } from "./cloud";
 import { QrAnalytics } from "./QrAnalytics";
 import { QrFileUpload } from "./QrFileUpload";
@@ -40,7 +40,14 @@ const dateTime = (value: string) =>
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : "通信結果を確認できませんでした。";
 
-export function QrPage({ notify }: { notify: (message: string) => void }) {
+export function QrPage({
+  notify,
+  onBusyChange,
+}: {
+  notify: (message: string) => void;
+  onBusyChange?: (busy: boolean) => void;
+}) {
+  const qrApi = useQrApi();
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [links, setLinks] = useState<QrLink[]>([]);
@@ -71,6 +78,10 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
   const mounted = useRef(true);
   const currentPage = useRef(page);
   const currentView = useRef(view);
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   const listRequest = useRef(0);
   currentPage.current = page;
   currentView.current = view;
@@ -109,7 +120,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
     } finally {
       if (current()) setLoading(false);
     }
-  }, [page, view]);
+  }, [page, view, qrApi]);
   useEffect(() => {
     if (!isCloud) {
       setLoading(false);
@@ -190,6 +201,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
         method: "POST",
         body: JSON.stringify(createRequest.current),
       });
+      if (!mounted.current) return;
       createRequest.current = null;
       setTitle("");
       setUrl("");
@@ -225,6 +237,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
         method: "PATCH",
         body: JSON.stringify({ active: !link.active }),
       });
+      if (!mounted.current) return;
       setSelected((prev) => (prev?.id === link.id ? updated : prev));
       await refresh();
       notify(
@@ -268,6 +281,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
         permanentConfirmed,
       );
       await qrApi(path, options);
+      if (!mounted.current) return;
       ++listRequest.current;
       setConfirmation(null);
       setSelected((previous) => (previous?.id === link.id ? null : previous));
@@ -352,6 +366,7 @@ export function QrPage({ notify }: { notify: (message: string) => void }) {
                 busy={busy}
                 onBusy={setBusy}
                 onCreated={(link) => {
+                  if (!mounted.current) return;
                   setSelected(link);
                   setHistoryPage(0);
                   setPage(0);

@@ -3,16 +3,12 @@ import {
   handler,
   normalizeTarget,
 } from "../supabase/functions/marugo-qr/handler.ts";
-import {
-  createToken,
-  hashToken,
-} from "../supabase/functions/_shared/session.mjs";
+import { createToken } from "../supabase/functions/_shared/session.mjs";
 
 const owner = "00000000-0000-4000-8000-000000000001";
 const id = "00000000-0000-4000-8000-000000000002";
 const eventId = "00000000-0000-4000-8000-000000000003";
-const token = createToken();
-const tokenHash = await hashToken(token);
+const token = "test.valid.jwt";
 const calls: { name: string; args: any }[] = [];
 const realFetch = globalThis.fetch;
 Deno.env.set("SUPABASE_URL", "https://qr-test.invalid");
@@ -22,6 +18,16 @@ let suspended = false;
 let lifecycleFailure = "";
 globalThis.fetch = async (input, init: any) => {
   const url = new URL(String(input));
+  if (url.pathname === "/auth/v1/user") {
+    assert.equal(
+      new Headers(init.headers).get("authorization"),
+      `Bearer ${token}`,
+    );
+    return Response.json({
+      id: owner,
+      email_confirmed_at: "2026-10-03T00:00:00Z",
+    });
+  }
   const args = JSON.parse(init!.body as string);
   const name = url.pathname.split("/").pop()!;
   calls.push({ name, args });
@@ -32,13 +38,8 @@ globalThis.fetch = async (input, init: any) => {
   if (failure) {
     return Response.json({ message: "internal failure" }, { status: 500 });
   }
-  if (name === "kotonoha_auth") {
-    return Response.json(
-      args.p_payload.tokenHash === tokenHash
-        ? { workspaceId: owner }
-        : { error: "INVALID_TOKEN" },
-    );
-  }
+  if (name === "marugo_qr_accounts")
+    return Response.json({ workspaceId: owner });
   if (name === "kotonoha_qr_scan") {
     assert.equal(args.p_owner, undefined);
     if (suspended) {
@@ -111,7 +112,7 @@ function request(
   });
 }
 Deno.test(
-  "QR API: public scan, shared authorization, validated URLs and safe failures",
+  "QR API: public scan, native authorization, validated URLs and safe failures",
   async () => {
     try {
       assert.equal((await handler(request("/links"))).status, 401);

@@ -68,7 +68,7 @@ function harness() {
       if (name.endsWith("qr-file-selection.mjs")) return selection;
       if (name === "./qr-api")
         return {
-          async qrApi(path, options) {
+          useQrApi: () => async (path, options) => {
             calls.push({ path, options });
             if (failure) throw new Error("test offline");
             return { link: { id: "test-only", code: "abcdefgh1234" } };

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { isTrackingNavigation } from "../src/qr-routing.mjs";
+import { isAccountNavigation } from "../src/qr-account-routing.mjs";
 
 const source = ts
   .transpileModule(
@@ -16,6 +17,7 @@ const source = ts
     },
   )
   .outputText.replace(/^import .*qr-routing.mjs.*;\s*/m, "")
+  .replace(/^import .*qr-account-routing.mjs.*;\s*/m, "")
   .replaceAll("import.meta.env.BASE_URL", JSON.stringify("/multiapp/"))
   .replaceAll("import(", "loadModule(");
 function boot(hash, search = "") {
@@ -49,6 +51,7 @@ function boot(hash, search = "") {
     },
     document,
     isTrackingNavigation,
+    isAccountNavigation,
     loadModule: (name) => {
       imports.push(name);
       return Promise.resolve();
@@ -88,4 +91,25 @@ test("Public file viewer bypasses login and does not load meeting workspace", ()
     state.metadata.find((item) => item.name === "robots").content,
     "noindex, nofollow",
   );
+});
+test("Auth callbacks take precedence over QR fragments and files without logging tokens", () => {
+  for (const [hash, search] of [
+    ["#access_token=secret&refresh_token=private&type=recovery", ""],
+    ["#abcdefgh1234", "?account=recovery&code=one-use&file=abcdefgh1234"],
+  ]) {
+    const state = boot(hash, search);
+    assert.deepEqual(state.imports, ["./Workspace"]);
+    assert.equal(state.scripts.length, 0);
+    assert.equal(
+      state.metadata.find((item) => item.name === "referrer").content,
+      "no-referrer",
+    );
+    state.location.hash = "";
+    state.handlers.hashchange();
+    assert.equal(state.location.reloads, 0);
+    state.location.search = "";
+    state.location.hash = "#abcdefgh1234";
+    state.handlers.hashchange();
+    assert.equal(state.location.reloads, 1);
+  }
 });

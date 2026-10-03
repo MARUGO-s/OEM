@@ -1,4 +1,4 @@
-import { hashToken, validTokenFormat } from "../_shared/session.mjs";
+import { AccountError, qrScope } from "../_shared/qr-account-auth.ts";
 import {
   FileError,
   publicFile,
@@ -233,23 +233,9 @@ export async function handler(req: Request): Promise<Response> {
       });
       return json({ targetUrl: normalizeTarget(data.targetUrl) });
     }
-    // All management requests use exactly the existing shared-session check.
-    const token = req.headers
-      .get("authorization")
-      ?.match(/^Bearer (.+)$/i)?.[1];
-    if (!validTokenFormat(token)) {
-      throw new ApiError(401, "ログインが必要です。");
-    }
-    const session = await rpc("kotonoha_auth", {
-      p_operation: "session",
-      p_payload: { tokenHash: await hashToken(token!) },
-    });
-    if (!session?.workspaceId || session.error) {
-      throw new ApiError(
-        401,
-        "ログインの有効期限が切れています。再度ログインしてください。",
-      );
-    }
+    // Auth verifies the JWT remotely; DB derives the allowed store, not the body.
+    // Legacy shared credentials never authorize store management.
+    const session = await qrScope(req, url);
     const args = { p_owner: session.workspaceId };
     if (route === "/uploads" && req.method === "POST") {
       const input = await body(req);
@@ -397,7 +383,11 @@ export async function handler(req: Request): Promise<Response> {
     }
     return json({ error: "ページが見つかりません。" }, 404);
   } catch (error) {
-    if (error instanceof ApiError || error instanceof FileError) {
+    if (
+      error instanceof ApiError ||
+      error instanceof FileError ||
+      error instanceof AccountError
+    ) {
       return json({ error: error.message }, error.status);
     }
     console.error(

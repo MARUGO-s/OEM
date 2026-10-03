@@ -1,10 +1,22 @@
-import {
-  clearSession,
-  getSession,
-  SUPABASE_PUBLISHABLE_KEY,
-  SUPABASE_URL,
-} from "./cloud";
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./cloud";
 import { buildTrackingUrl } from "./qr-routing.mjs";
+import { createContext, useContext, useMemo } from "react";
+import { qrAuth } from "./qr-account-client";
+import { scopedQrPath } from "./qr-account-routing.mjs";
+
+export const QrScopeContext = createContext<{
+  storeId: string;
+  userId: string;
+} | null>(null);
+export function useQrApi() {
+  const scope = useContext(QrScopeContext);
+  return useMemo(
+    () =>
+      <T>(path: string, options: RequestInit = {}) =>
+        qrApi<T>(path, options, scope),
+    [scope],
+  );
+}
 
 export type QrLink = {
   id: string;
@@ -58,25 +70,28 @@ export function trackingUrl(
 export async function qrApi<T>(
   path: string,
   options: RequestInit = {},
+  scope: { storeId: string; userId: string } | null = null,
 ): Promise<T> {
-  const session = getSession();
-  if (!session) {
-    throw new Error("QR管理には共有ワークスペースへのログインが必要です。");
+  const {
+    data: { session },
+    error,
+  } = await qrAuth.auth.getSession();
+  if (error || !session || !scope || session.user.id !== scope.userId) {
+    throw new Error("QR管理には所属店舗のアカウントでログインしてください。");
   }
   const response = await fetch(
-    `${SUPABASE_URL}/functions/v1/marugo-qr${path}`,
+    `${SUPABASE_URL}/functions/v1/marugo-qr${scopedQrPath(path, scope.storeId)}`,
     {
       ...options,
       headers: {
         "Content-Type": "application/json",
         apikey: SUPABASE_PUBLISHABLE_KEY,
-        Authorization: `Bearer ${session.token}`,
+        Authorization: `Bearer ${session.access_token}`,
       },
       signal: AbortSignal.timeout(15000),
     },
   );
   if (response.status === 401) {
-    clearSession();
     throw new Error("ログインの有効期限が切れました。");
   }
   const data = await response.json();
